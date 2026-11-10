@@ -27,8 +27,10 @@ server {
 
     set $backend_upstream ${BACKEND_UPSTREAM};
     set $keycloak_upstream ${KEYCLOAK_UPSTREAM};
+    # The backend scopes refresh cookies to /auth; expose them under the SPA base.
+    proxy_cookie_path /auth ${FRONTEND_BASE}/auth;
 
-    location = /api {
+    location = ${FRONTEND_BASE}/api {
         proxy_pass $backend_upstream/api;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -37,7 +39,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location ~ ^/api/(pods/[^/]+/[^/]+/logs/stream)$ {
+    location ~ ^${FRONTEND_BASE}/api/(pods/[^/]+/[^/]+/logs/stream)$ {
         proxy_pass $backend_upstream/api/$1$is_args$args;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -51,7 +53,7 @@ server {
         chunked_transfer_encoding on;
     }
 
-    location ~ ^/api/(operators/[^/]+/[^/]+/pods/[^/]+/logs/stream)$ {
+    location ~ ^${FRONTEND_BASE}/api/(operators/[^/]+/[^/]+/pods/[^/]+/logs/stream)$ {
         proxy_pass $backend_upstream/api/$1$is_args$args;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -65,7 +67,7 @@ server {
         chunked_transfer_encoding on;
     }
 
-    location ~ ^/api/(.*)$ {
+    location ~ ^${FRONTEND_BASE}/api/(.*)$ {
         proxy_pass $backend_upstream/api/$1$is_args$args;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -80,7 +82,7 @@ server {
         proxy_read_timeout    10m;
     }
 
-    location = /health {
+    location = ${FRONTEND_BASE}/health {
         proxy_pass $backend_upstream/health;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -89,7 +91,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location = /auth/me {
+    location = ${FRONTEND_BASE}/auth/me {
         proxy_pass $backend_upstream/auth/me;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -98,7 +100,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location = /auth/set-initial-password {
+    location = ${FRONTEND_BASE}/auth/set-initial-password {
         proxy_pass $backend_upstream/auth/set-initial-password;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -108,7 +110,7 @@ server {
     }
 
     # Backend-owned session endpoints (cookie-based login flow + status checks).
-    location = /auth/login {
+    location = ${FRONTEND_BASE}/auth/login {
         proxy_pass $backend_upstream/auth/login;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -117,7 +119,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location = /auth/refresh {
+    location = ${FRONTEND_BASE}/auth/refresh {
         proxy_pass $backend_upstream/auth/refresh;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -126,7 +128,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location = /auth/logout {
+    location = ${FRONTEND_BASE}/auth/logout {
         proxy_pass $backend_upstream/auth/logout;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -135,7 +137,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location = /auth/security-status {
+    location = ${FRONTEND_BASE}/auth/security-status {
         proxy_pass $backend_upstream/auth/security-status;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -144,7 +146,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location = /auth/realms {
+    location = ${FRONTEND_BASE}/auth/realms {
         proxy_pass $keycloak_upstream/realms;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -153,7 +155,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location ~ ^/auth/realms/(.*)$ {
+    location ~ ^${FRONTEND_BASE}/auth/realms/(.*)$ {
         proxy_pass $keycloak_upstream/realms/$1$is_args$args;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -162,7 +164,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location = /auth/resources {
+    location = ${FRONTEND_BASE}/auth/resources {
         proxy_pass $keycloak_upstream/resources;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -171,7 +173,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location ~ ^/auth/resources/(.*)$ {
+    location ~ ^${FRONTEND_BASE}/auth/resources/(.*)$ {
         proxy_pass $keycloak_upstream/resources/$1$is_args$args;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -180,7 +182,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location = /auth/js {
+    location = ${FRONTEND_BASE}/auth/js {
         proxy_pass $keycloak_upstream/js;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -189,7 +191,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location ~ ^/auth/js/(.*)$ {
+    location ~ ^${FRONTEND_BASE}/auth/js/(.*)$ {
         proxy_pass $keycloak_upstream/js/$1$is_args$args;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -198,7 +200,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location = /auth/admin {
+    location = ${FRONTEND_BASE}/auth/admin {
         proxy_pass $keycloak_upstream/admin;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -207,7 +209,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location ~ ^/auth/admin/(.*)$ {
+    location ~ ^${FRONTEND_BASE}/auth/admin/(.*)$ {
         proxy_pass $keycloak_upstream/admin/$1$is_args$args;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -216,12 +218,12 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location = /config.js {
+    location = ${FRONTEND_BASE}/config.js {
         add_header Cache-Control "no-store";
         try_files $uri =404;
     }
 
-    location / {
-        try_files $uri $uri/ /index.html;
+    location ${FRONTEND_BASE}/ {
+        try_files $uri $uri/ ${FRONTEND_BASE}/index.html;
     }
 }

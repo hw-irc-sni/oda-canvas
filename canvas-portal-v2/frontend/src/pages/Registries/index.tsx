@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 import React from 'react'
 import SectionedPage, { PageSection } from '@/components/SectionedPage'
 import AgentRegistry from './AgentRegistry'
@@ -7,14 +8,14 @@ import SkillRegistry from './SkillRegistry'
 const sections: PageSection[] = [
   {
     key: 'agents',
-    title: 'Agents',
-    description: 'Registry of AI agents available to the Canvas.',
+    title: t("Agents"),
+    description: t("Registry of AI agents available to the Canvas."),
     content: <AgentRegistry />,
   },
   {
     key: 'skills',
-    title: 'Skills',
-    description: 'Skills advertised by the agents in every configured registry.',
+    title: t("Skills"),
+    description: t("Skills advertised by the agents in every configured registry."),
     content: <SkillRegistry />,
   },
 ]
