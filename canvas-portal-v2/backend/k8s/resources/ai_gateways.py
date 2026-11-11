@@ -581,8 +581,17 @@ def _icon_probes(dump: dict[str, Any]) -> tuple[tuple[str, str], ...]:
             ):
                 continue
             scheme = "https" if _has_policy(resolved.policies, "backendTLS") else "http"
-            probes.append((name, f"{scheme}://{host}{path}"))
+            probes.append((name, f"{scheme}://{_in_gateway_namespace(host)}{path}"))
     return tuple(probes)
+
+
+def _in_gateway_namespace(host: str) -> str:
+    """A single-label service name resolves in the gateway's namespace, not the portal's."""
+    namespace = get_settings().AGENTGATEWAY_CONFIG_NAMESPACE
+    hostname, colon, port = host.partition(":")
+    if not namespace or "." in hostname or hostname.startswith("["):
+        return host
+    return f"{hostname}.{namespace}.svc{colon}{port}"
 
 
 def _server_icons(client: httpx.Client, url: str, deadline: float) -> list[Any]:
@@ -598,6 +607,7 @@ def _server_icons(client: httpx.Client, url: str, deadline: float) -> list[Any]:
     }
     headers = {"Accept": MCP_ACCEPT, "Accept-Encoding": "identity"}
     with client.stream("POST", url, json=payload, headers=headers) as response:
+        _refuse_local_peer(response)
         response.raise_for_status()
         body = _read_limited(response, deadline)
         session = response.headers.get("mcp-session-id", "")
@@ -619,6 +629,23 @@ def _data_uri(mime: str, data: bytes) -> str | None:
     return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
 
 
+# Addresses that carry an IPv4 address inside, which is_global doesn't look at: NAT64, IPv4-compatible,
+# 6to4 and Teredo. They're refused rather than unwrapped.
+_TRANSLATED_IPV6 = tuple(
+    ipaddress.ip_network(network) for network in ("64:ff9b::/96", "64:ff9b:1::/48", "::/96", "2002::/16", "2001::/32")
+)
+_IpAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
+
+
+def _is_public_address(address: _IpAddress) -> bool:
+    if isinstance(address, ipaddress.IPv6Address):
+        if address.ipv4_mapped:
+            address = address.ipv4_mapped
+        elif any(address in network for network in _TRANSLATED_IPV6):
+            return False
+    return address.is_global
+
+
 def _is_public_https(url: str) -> bool:
     """An https URL whose host only resolves to public internet addresses."""
     parts = urlsplit(url)
@@ -629,9 +656,26 @@ def _is_public_https(url: str) -> bool:
         addresses = [ipaddress.ip_address(info[4][0].split("%")[0]) for info in infos]
     except (socket.gaierror, UnicodeError, ValueError):
         return False
-    return bool(addresses) and all(
-        (getattr(address, "ipv4_mapped", None) or address).is_global for address in addresses
-    )
+    return bool(addresses) and all(_is_public_address(address) for address in addresses)
+
+
+def _peer_address(response: httpx.Response) -> _IpAddress | None:
+    """The address the connection really went to. A name can resolve differently when it's
+    checked and when it's connected to, so the address is checked again here."""
+    stream = response.extensions.get("network_stream")
+    try:
+        peer = stream.get_extra_info("server_addr") if stream is not None else None
+        return ipaddress.ip_address(str(peer[0]).split("%")[0]) if peer else None
+    except (AttributeError, IndexError, TypeError, ValueError):
+        return None
+
+
+def _refuse_local_peer(response: httpx.Response) -> None:
+    from k8s.resources.ai_gateway_config import _is_gateway_local
+
+    peer = _peer_address(response)
+    if peer is None or _is_gateway_local(peer):
+        raise ValueError("MCP server is on a local address")
 
 
 def _icon_data_uri(client: httpx.Client, src: str, server_url: str, deadline: float) -> str | None:
@@ -648,10 +692,17 @@ def _icon_data_uri(client: httpx.Client, src: str, server_url: str, deadline: fl
             return None
     url = urljoin(server_url, src)
     icon, server = urlsplit(url), urlsplit(server_url)
-    if (icon.scheme, icon.netloc) != (server.scheme, server.netloc) and not _is_public_https(url):
+    same_origin = (icon.scheme, icon.netloc) == (server.scheme, server.netloc)
+    if not same_origin and not _is_public_https(url):
         return None
     headers = {"Accept": ", ".join(sorted(_ICON_TYPES)), "Accept-Encoding": "identity"}
     with client.stream("GET", url, headers=headers) as response:
+        if same_origin:
+            _refuse_local_peer(response)
+        else:
+            peer = _peer_address(response)
+            if peer is None or not _is_public_address(peer):
+                return None
         response.raise_for_status()
         mime = response.headers.get("content-type", "").split(";")[0].strip().lower()
         if mime not in _ICON_TYPES:
