@@ -6,6 +6,7 @@ guarantee, so parsing is defensive. Only whitelisted fields leave this module.
 
 import base64
 import binascii
+import ipaddress
 import json
 import re
 import socket
@@ -618,9 +619,24 @@ def _data_uri(mime: str, data: bytes) -> str | None:
     return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
 
 
+def _is_public_https(url: str) -> bool:
+    """An https URL whose host only resolves to public internet addresses."""
+    parts = urlsplit(url)
+    if parts.scheme != "https" or not parts.hostname:
+        return False
+    try:
+        infos = socket.getaddrinfo(parts.hostname, parts.port or 443)
+        addresses = [ipaddress.ip_address(info[4][0].split("%")[0]) for info in infos]
+    except (socket.gaierror, UnicodeError, ValueError):
+        return False
+    return bool(addresses) and all(
+        (getattr(address, "ipv4_mapped", None) or address).is_global for address in addresses
+    )
+
+
 def _icon_data_uri(client: httpx.Client, src: str, server_url: str, deadline: float) -> str | None:
-    """An icon as a data: URI, or None. Fetches only from the server's own origin, so a server
-    can't make the portal request other addresses."""
+    """An icon as a data: URI, or None. Fetches from the server's own origin, or over https from
+    a public address: a server can't make the portal request other addresses in the cluster."""
     if src[:5].lower() == "data:":
         header, comma, payload = src[5:].partition(",")
         mime, _, encoding = header.partition(";")
@@ -632,7 +648,7 @@ def _icon_data_uri(client: httpx.Client, src: str, server_url: str, deadline: fl
             return None
     url = urljoin(server_url, src)
     icon, server = urlsplit(url), urlsplit(server_url)
-    if (icon.scheme, icon.netloc) != (server.scheme, server.netloc):
+    if (icon.scheme, icon.netloc) != (server.scheme, server.netloc) and not _is_public_https(url):
         return None
     headers = {"Accept": ", ".join(sorted(_ICON_TYPES)), "Accept-Encoding": "identity"}
     with client.stream("GET", url, headers=headers) as response:
