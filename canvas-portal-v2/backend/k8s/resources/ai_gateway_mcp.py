@@ -4,6 +4,8 @@ Unlike a model, a bad target still reloads cleanly. With the default failureMode
 fails every MCP request through the gateway, so each change is also checked by listing tools.
 """
 
+import base64
+import posixpath
 import secrets
 import time
 from typing import Any
@@ -11,6 +13,7 @@ from urllib.parse import urlsplit
 
 import httpx
 from kubernetes import client as k8s
+from kubernetes.client.exceptions import ApiException
 
 from config import get_settings
 from k8s.resources import ai_gateway_config as config_file
@@ -72,6 +75,31 @@ def list_mcp_targets(core: k8s.CoreV1Api | None = None) -> dict[str, Any]:
 def _token_file_path(entry: dict[str, Any] | None) -> str | None:
     key = as_dict(as_dict(as_dict(as_dict(entry).get("policies")).get("backendAuth")).get("key"))
     return key["file"] if isinstance(key.get("file"), str) else None
+
+
+def target_keys(core: k8s.CoreV1Api | None = None) -> dict[str, str]:
+    """The API key the gateway sends to each MCP target, by target name, for the targets whose key
+    is a file in the gateway's key Secret. Only for the portal's own requests to that same target,
+    such as asking for its icon: never sent to the page."""
+    settings = get_settings()
+    core = core or config_file.core_api()
+    files = {}
+    for entry in _entries(config_file.read_config(core)):
+        path = _token_file_path(entry) if isinstance(entry, dict) and _has_token(entry) else None
+        if path and isinstance(entry.get("name"), str) and posixpath.dirname(path) == settings.AGENTGATEWAY_KEYS_PATH:
+            files[entry["name"]] = posixpath.basename(path)
+    if not files:
+        return {}
+    try:
+        secret = core.read_namespaced_secret(settings.AGENTGATEWAY_KEYS_SECRET, settings.AGENTGATEWAY_CONFIG_NAMESPACE)
+    except ApiException as exc:
+        raise config_file._refusal(exc, "read the API key Secret") from exc
+    data = secret.data or {}
+    return {
+        name: base64.b64decode(data[file]).decode("utf-8").strip()
+        for name, file in files.items()
+        if isinstance(data.get(file), str)
+    }
 
 
 def _build_spec(request: dict[str, Any], existing: dict[str, Any] | None) -> dict[str, Any]:

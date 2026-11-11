@@ -558,12 +558,12 @@ def _has_policy(policies: list[Any], name: str) -> bool:
     return any(name in _as_dict(policy) for policy in policies)
 
 
-def _icon_probes(dump: dict[str, Any]) -> tuple[tuple[str, str], ...]:
-    """The MCP targets whose own initialize response the portal can read, as (name, URL).
+def _icon_probes(dump: dict[str, Any]) -> tuple[tuple[str, str, bool], ...]:
+    """The MCP targets whose own initialize response the portal can read, as (name, URL, needs key).
 
     The gateway's MCP endpoint answers with agentgateway's serverInfo, not the targets', so
-    each target is asked directly. Only streamable HTTP targets, and not those the gateway
-    sends credentials to: the portal doesn't hold them.
+    each target is asked directly. Only streamable HTTP targets. A target the gateway sends a
+    key to is asked with the same key, read from the gateway's key Secret when it's needed.
     """
     backends = _backend_index(dump)
     probes = []
@@ -577,11 +577,11 @@ def _icon_probes(dump: dict[str, Any]) -> tuple[tuple[str, str], ...]:
             if (
                 resolved.kind != "host"
                 or not all(isinstance(value, str) for value in (name, host, path))
-                or _has_policy(resolved.policies, "backendAuth")
             ):
                 continue
             scheme = "https" if _has_policy(resolved.policies, "backendTLS") else "http"
-            probes.append((name, f"{scheme}://{_in_gateway_namespace(host)}{path}"))
+            needs_key = _has_policy(resolved.policies, "backendAuth")
+            probes.append((name, f"{scheme}://{_in_gateway_namespace(host)}{path}", needs_key))
     return tuple(probes)
 
 
@@ -594,7 +594,7 @@ def _in_gateway_namespace(host: str) -> str:
     return f"{hostname}.{namespace}.svc{colon}{port}"
 
 
-def _server_icons(client: httpx.Client, url: str, deadline: float) -> list[Any]:
+def _server_icons(client: httpx.Client, url: str, deadline: float, auth: dict[str, str]) -> list[Any]:
     payload = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -605,7 +605,7 @@ def _server_icons(client: httpx.Client, url: str, deadline: float) -> list[Any]:
             "clientInfo": {"name": "canvas-portal", "version": "1"},
         },
     }
-    headers = {"Accept": MCP_ACCEPT, "Accept-Encoding": "identity"}
+    headers = {"Accept": MCP_ACCEPT, "Accept-Encoding": "identity", **auth}
     with client.stream("POST", url, json=payload, headers=headers) as response:
         _refuse_local_peer(response)
         response.raise_for_status()
@@ -616,7 +616,7 @@ def _server_icons(client: httpx.Client, url: str, deadline: float) -> list[Any]:
         # A stateful server keeps a session for each initialize. Ending it is best effort, and its
         # response body is never read, so it can't be made to send more than the limits allow.
         try:
-            with client.stream("DELETE", url, headers={"Mcp-Session-Id": session, "Accept-Encoding": "identity"}):
+            with client.stream("DELETE", url, headers={"Mcp-Session-Id": session, "Accept-Encoding": "identity", **auth}):
                 pass
         except httpx.HTTPError:
             pass
@@ -710,14 +710,28 @@ def _icon_data_uri(client: httpx.Client, src: str, server_url: str, deadline: fl
         return _data_uri(mime, _read_raw(response, deadline, MAX_MCP_ICON_BYTES))
 
 
-def _discover_icons(client: httpx.Client, probes: tuple[tuple[str, str], ...]) -> dict[str, str]:
+def _target_keys() -> dict[str, str]:
+    """The keys the gateway sends to MCP targets, or none when the portal can't read them."""
+    # Imported here: that module imports this one.
+    from kubernetes.client.exceptions import ApiException
+
+    from k8s.resources.ai_gateway_mcp import target_keys
+
+    try:
+        return target_keys()
+    except (GatewayRequestRefused, ApiException, OSError, ValueError):
+        return {}
+
+
+def _discover_icons(client: httpx.Client, probes: tuple[tuple[str, str, bool], ...]) -> dict[str, str]:
     """Icons are decoration: any failure leaves that server without one."""
     # Imported here: that module imports this one.
     from k8s.resources.ai_gateway_config import _points_at_gateway
 
     deadline = time.monotonic() + MCP_ICON_DEADLINE_SECONDS
     icons = {}
-    for name, url in probes:
+    keys: dict[str, str] | None = None
+    for name, url, needs_key in probes:
         if time.monotonic() > deadline:
             break
         # The portal makes these requests from its own pod. A target the gateway reaches on its
@@ -725,8 +739,19 @@ def _discover_icons(client: httpx.Client, probes: tuple[tuple[str, str], ...]) -
         # Icons are only fetched from this same origin, so this check covers them too.
         if _points_at_gateway(url):
             continue
+        auth = {}
+        if needs_key:
+            # Only read when a target needs one. The key goes to that target's MCP endpoint only,
+            # as the gateway sends it, and never with an icon request.
+            keys = _target_keys() if keys is None else keys
+            if not keys.get(name):
+                continue
+            auth = {"Authorization": f"Bearer {keys[name]}"}
         try:
-            candidates = [icon for icon in map(_as_dict, _server_icons(client, url, deadline)) if isinstance(icon.get("src"), str)]
+            candidates = [
+                icon for icon in map(_as_dict, _server_icons(client, url, deadline, auth))
+                if isinstance(icon.get("src"), str)
+            ]
             # The page has a light background, so an icon made for dark ones is the last choice.
             candidates.sort(key=lambda icon: icon.get("theme") == "dark")
             for icon in candidates[:MCP_ICON_CANDIDATES]:
@@ -739,7 +764,7 @@ def _discover_icons(client: httpx.Client, probes: tuple[tuple[str, str], ...]) -
     return icons
 
 
-def _cached_icons(client: httpx.Client, probes: tuple[tuple[str, str], ...]) -> dict[str, str]:
+def _cached_icons(client: httpx.Client, probes: tuple[tuple[str, str, bool], ...]) -> dict[str, str]:
     with _icon_lock:
         cached = _icon_cache.get(probes)
     if cached is not None:

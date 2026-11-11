@@ -1325,14 +1325,77 @@ def test_server_icon_failure_leaves_the_page_working():
     assert summary_icon(handler) is None
 
 
-def test_targets_the_gateway_sends_credentials_to_are_not_probed():
+def dump_with_backend_auth():
     dump = json.loads(json.dumps(DUMP))
     for entry in dump["backends"]:
         if entry["backend"].get("host", {}).get("name") == "mcp//mcp/0":
             entry["inlinePolicies"] = [{"backendAuth": {"key": {"value": "<redacted>"}}}]
+    return dump
 
-    assert ai_gateways._icon_probes(dump) == ()
-    assert ai_gateways._icon_probes(DUMP) == (("test-mcp", TARGET_URL),)
+
+def with_dump(dump, handler):
+    return lambda request: httpx.Response(200, json=dump) if request.url.path == "/config_dump" else handler(request)
+
+
+def test_targets_the_gateway_sends_a_key_to_are_marked():
+    assert ai_gateways._icon_probes(dump_with_backend_auth()) == (("test-mcp", TARGET_URL, True),)
+    assert ai_gateways._icon_probes(DUMP) == (("test-mcp", TARGET_URL, False),)
+
+
+def test_target_with_a_key_is_asked_with_the_gateways_key_and_icons_are_fetched_without_it(monkeypatch):
+    reads = []
+    monkeypatch.setattr(ai_gateways, "_target_keys", lambda: reads.append(1) or {"test-mcp": "s3cret"})
+    sent = []
+    handler, _ = target_with_icons(
+        [{"src": "/static/icon.png"}],
+        other=lambda request: image(PNG, "image/png"),
+        session="s-1",
+    )
+
+    def recording(request):
+        if request.url.host == TARGET_HOST:
+            sent.append((request.method, request.headers.get("authorization")))
+        return handler(request)
+
+    summary = get_ai_gateways_summary(client_for(with_dump(dump_with_backend_auth(), recording)))
+
+    assert summary["tools"][0]["icon"] == PNG_URI
+    assert sent == [("POST", "Bearer s3cret"), ("DELETE", "Bearer s3cret"), ("GET", None)]
+    assert reads == [1]
+    assert "s3cret" not in json.dumps(summary)
+
+
+def test_target_with_a_key_the_portal_cant_read_is_not_asked(monkeypatch):
+    monkeypatch.setattr(ai_gateways, "_target_keys", lambda: {})
+    handler, seen = target_with_icons([{"src": PNG_URI}])
+
+    summary = get_ai_gateways_summary(client_for(with_dump(dump_with_backend_auth(), handler)))
+
+    assert summary["tools"][0]["icon"] is None
+    assert seen == []
+
+
+def test_keys_are_not_read_when_no_target_needs_one(monkeypatch):
+    monkeypatch.setattr(ai_gateways, "_target_keys", lambda: pytest.fail("read the keys"))
+    handler, _ = target_with_icons([{"src": PNG_URI}])
+
+    assert summary_icon(handler) == PNG_URI
+
+
+def test_key_read_failure_leaves_the_page_working(monkeypatch):
+    from k8s.resources import ai_gateway_mcp
+
+    def refused():
+        raise ai_gateways.GatewayRequestRefused(502, "The portal isn't allowed to read the API key Secret.")
+
+    monkeypatch.setattr(ai_gateway_mcp, "target_keys", refused)
+    handler, seen = target_with_icons([{"src": PNG_URI}])
+
+    summary = get_ai_gateways_summary(client_for(with_dump(dump_with_backend_auth(), handler)))
+
+    assert summary["state"] == "ok"
+    assert summary["tools"][0]["icon"] is None
+    assert seen == []
 
 
 def test_server_icons_are_cached():
@@ -1421,5 +1484,5 @@ def test_single_label_targets_resolve_in_the_gateways_namespace(monkeypatch):
         if entry["backend"].get("host", {}).get("name") == "mcp//mcp/0":
             entry["backend"]["host"]["target"] = "agentgateway-test-mcp-server:8000"
 
-    assert ai_gateways._icon_probes(dump) == (("test-mcp", "http://agentgateway-test-mcp-server.canvas.svc:8000/mcp"),)
-    assert ai_gateways._icon_probes(DUMP) == (("test-mcp", TARGET_URL),)
+    assert ai_gateways._icon_probes(dump) == (("test-mcp", "http://agentgateway-test-mcp-server.canvas.svc:8000/mcp", False),)
+    assert ai_gateways._icon_probes(DUMP) == (("test-mcp", TARGET_URL, False),)

@@ -1,3 +1,4 @@
+import base64
 import json
 import socket
 from types import SimpleNamespace
@@ -467,3 +468,40 @@ def test_existing_special_auth_and_tunnel_stay_on_edit(core, http):
         http=http,
     )
     assert targets(core)[0]["policies"] == entry["policies"]
+
+
+class KeysCore:
+    def __init__(self, targets, data):
+        self.text = yaml.safe_dump({"mcp": {"targets": targets}})
+        self.data = data
+
+    def read_namespaced_config_map(self, name, namespace):
+        return SimpleNamespace(data={"config.yaml": self.text}, metadata=SimpleNamespace(resource_version="1"))
+
+    def read_namespaced_secret(self, name, namespace):
+        assert (name, namespace) == ("agentgateway-llm-keys", "canvas")
+        return SimpleNamespace(data=self.data)
+
+
+def b64(text):
+    return base64.b64encode(text.encode()).decode()
+
+
+def test_target_keys_reads_each_targets_key_file_from_the_secret():
+    targets = [
+        {"name": "a", "mcp": {"host": "http://a:1/mcp"}, "policies": {"backendAuth": {"key": {"file": "/llm-keys/a-key"}}}},
+        {"name": "b", "mcp": {"host": "http://b:1/mcp"}},
+        {"name": "c", "mcp": {"host": "http://c:1/mcp"}, "policies": {"backendAuth": {"key": {"file": "/etc/other/c"}}}},
+        {"name": "d", "mcp": {"host": "http://d:1/mcp"}, "policies": {"backendAuth": {"key": {"file": "/llm-keys/missing"}}}},
+    ]
+
+    keys = mcp.target_keys(KeysCore(targets, {"a-key": b64("alpha\n"), "other": b64("x")}))
+
+    assert keys == {"a": "alpha"}
+
+
+def test_target_keys_doesnt_read_the_secret_when_no_target_has_a_key():
+    core = KeysCore([{"name": "b", "mcp": {"host": "http://b:1/mcp"}}], {})
+    core.read_namespaced_secret = lambda *args: pytest.fail("read the Secret")
+
+    assert mcp.target_keys(core) == {}
