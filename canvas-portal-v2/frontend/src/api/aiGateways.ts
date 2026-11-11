@@ -72,6 +72,8 @@ export interface McpResource {
   uri: string
   description: string
   mimeType: string
+  /** The resource's icon as a data: URI, or null when it has none the portal accepts. */
+  icon?: string | null
 }
 
 export interface AiGatewayDiscovery {

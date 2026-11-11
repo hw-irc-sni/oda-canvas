@@ -1584,3 +1584,21 @@ def test_tool_icon_survives_for_non_admins():
     summary = ai_gateways.without_schema_values(get_ai_gateways_summary(client_for(handler)))
 
     assert summary["discovered"]["tools"][0]["icon"] == PNG_URI
+
+
+def test_resource_icons_are_kept_when_they_are_data_uris():
+    def handler(request):
+        if request.url.host != "gw.test" or request.url.path != "/mcp":
+            return gateway(request)
+        if json.loads(request.content)["method"] != "resources/list":
+            return streamed(mcp_body(request))
+        resources = [
+            {"name": "a", "uri": "x+canvas://a", "icons": [{"src": PNG_URI}]},
+            {"name": "b", "uri": "x+canvas://b", "icons": [{"src": "https://icons.test/b.png"}]},
+            {"name": "c", "uri": "x+canvas://c"},
+        ]
+        return streamed(json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"resources": resources}}))
+
+    resources = get_ai_gateways_summary(client_for(handler))["discovered"]["resources"]
+
+    assert [resource["icon"] for resource in resources] == [PNG_URI, None, None]

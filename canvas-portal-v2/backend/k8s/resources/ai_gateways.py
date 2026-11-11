@@ -523,7 +523,7 @@ def _discover_mcp(client: httpx.Client, url: str) -> dict[str, Any]:
                     "description": _mcp_description(t.get("description")),
                     "inputSchema": _input_schema(t.get("inputSchema")),
                     "annotations": _tool_annotations(t.get("annotations")),
-                    "icon": _tool_icon(t.get("icons")),
+                    "icon": _listed_icon(t.get("icons")),
                 }
                 for t in map(_as_dict, _as_list(tools.get("tools")))
             ],
@@ -533,6 +533,7 @@ def _discover_mcp(client: httpx.Client, url: str) -> dict[str, Any]:
                     "uri": _mcp_text(r.get("uri")),
                     "description": _mcp_description(r.get("description")),
                     "mimeType": _mcp_text(r.get("mimeType")),
+                    "icon": _listed_icon(r.get("icons")),
                 }
                 for r in map(_as_dict, _as_list(resources.get("resources")))
             ],
@@ -697,9 +698,9 @@ def _preferred_icons(icons: Any) -> list[dict[str, Any]]:
     return sorted(candidates, key=lambda icon: icon.get("theme") == "dark")
 
 
-def _tool_icon(icons: Any) -> str | None:
-    """A tool's icon, from data: URIs only. Tools are listed every 30 seconds, so their icons
-    aren't downloaded."""
+def _listed_icon(icons: Any) -> str | None:
+    """A tool's or resource's icon, from data: URIs only. They're listed every 30 seconds, so
+    their icons aren't downloaded."""
     for icon in _preferred_icons(icons)[:MCP_ICON_CANDIDATES]:
         uri = _checked_data_uri(icon["src"])
         if uri:
