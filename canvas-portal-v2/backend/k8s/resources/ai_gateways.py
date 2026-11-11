@@ -710,7 +710,21 @@ def _icon_data_uri(client: httpx.Client, src: str, server_url: str, deadline: fl
         return _data_uri(mime, _read_raw(response, deadline, MAX_MCP_ICON_BYTES))
 
 
-def _target_keys() -> dict[str, str]:
+def _upstream(url: str) -> tuple[str, str, int, str] | None:
+    """An address in a form that compares equal however it's written: scheme, host in the
+    gateway's namespace, port and path."""
+    try:
+        parts = urlsplit(url)
+        port = parts.port or {"http": 80, "https": 443}.get(parts.scheme)
+    except ValueError:
+        return None
+    if not parts.hostname or port is None:
+        return None
+    hostname = urlsplit(f"//{_in_gateway_namespace(parts.hostname)}").hostname or ""
+    return parts.scheme, hostname.rstrip(".").lower(), port, parts.path or "/"
+
+
+def _target_keys() -> dict[str, tuple[str, str]]:
     """The keys the gateway sends to MCP targets, or none when the portal can't read them."""
     # Imported here: that module imports this one.
     from kubernetes.client.exceptions import ApiException
@@ -730,7 +744,8 @@ def _discover_icons(client: httpx.Client, probes: tuple[tuple[str, str, bool], .
 
     deadline = time.monotonic() + MCP_ICON_DEADLINE_SECONDS
     icons = {}
-    keys: dict[str, str] | None = None
+    keys: dict[str, tuple[str, str]] | None = None
+    names = [name for name, _, _ in probes]
     for name, url, needs_key in probes:
         if time.monotonic() > deadline:
             break
@@ -742,11 +757,14 @@ def _discover_icons(client: httpx.Client, probes: tuple[tuple[str, str, bool], .
         auth = {}
         if needs_key:
             # Only read when a target needs one. The key goes to that target's MCP endpoint only,
-            # as the gateway sends it, and never with an icon request.
+            # as the gateway sends it, and never with an icon request. The names in the config file
+            # and in the running config can differ, during a reload for example, so the key is only
+            # sent to the address configured with it, and never for a name used twice.
             keys = _target_keys() if keys is None else keys
-            if not keys.get(name):
+            key, configured = keys.get(name, ("", ""))
+            if not key or names.count(name) != 1 or _upstream(configured) != _upstream(url):
                 continue
-            auth = {"Authorization": f"Bearer {keys[name]}"}
+            auth = {"Authorization": f"Bearer {key}"}
         try:
             candidates = [
                 icon for icon in map(_as_dict, _server_icons(client, url, deadline, auth))
