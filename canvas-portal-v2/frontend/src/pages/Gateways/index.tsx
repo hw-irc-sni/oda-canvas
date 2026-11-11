@@ -38,16 +38,18 @@ const renderMatches = (matches: string[]) => (
   </Space>
 )
 
+const ICON_SIZE = 32
+
 /** The server's icon, or its first letter when it has none. */
 function ServerAvatar({ name, icon }: { name: string; icon?: string | null }) {
   return (
     <Avatar
-      size={20}
+      size={ICON_SIZE}
       shape="square"
-      src={icon || undefined}
+      // contain, not the default cover: a logo that isn't square is shown whole.
+      src={icon ? <img src={icon} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : undefined}
       icon={name ? undefined : <ApiOutlined />}
-      alt=""
-      style={{ flex: 'none', fontSize: 12, backgroundColor: icon ? 'transparent' : colors.textMuted }}
+      style={{ flex: 'none', fontSize: 16, backgroundColor: icon ? 'transparent' : colors.textMuted }}
     >
       {name.charAt(0).toUpperCase()}
     </Avatar>
