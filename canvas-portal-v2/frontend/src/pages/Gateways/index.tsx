@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Avatar, Button, Empty, message, Popconfirm, Space, Spin, Table, Tag, Tooltip } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { ApiOutlined, PlusOutlined } from '@ant-design/icons'
+import { ApiOutlined, PlusOutlined, ToolOutlined } from '@ant-design/icons'
 import {
   fetchAiGateways,
   fetchMcpTargets,
@@ -53,6 +53,19 @@ function ServerAvatar({ name, icon }: { name: string; icon?: string | null }) {
     >
       {name.charAt(0).toUpperCase()}
     </Avatar>
+  )
+}
+
+/** A tool's icon, or a plain tool symbol so the names stay aligned. */
+function ToolAvatar({ icon }: { icon?: string | null }) {
+  return (
+    <Avatar
+      size={ICON_SIZE}
+      shape="square"
+      src={icon ? <img src={icon} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : undefined}
+      icon={icon ? undefined : <ToolOutlined />}
+      style={{ flex: 'none', fontSize: 16, backgroundColor: 'transparent', color: colors.textMuted }}
+    />
   )
 }
 
@@ -352,7 +365,10 @@ function LiveDiscovery({ data, onInspect }: { data: AiGatewaysSummary; onInspect
             title: 'Tool',
             dataIndex: 'name',
             render: (name: string, tool: McpTool) => (
-              <InspectLink label={name} kind="tool" onClick={() => onInspect({ kind: 'tool', tool })} />
+              <Space size={8}>
+                <ToolAvatar icon={tool.icon} />
+                <InspectLink label={name} kind="tool" onClick={() => onInspect({ kind: 'tool', tool })} />
+              </Space>
             ),
           },
           { title: 'Description', dataIndex: 'description' },

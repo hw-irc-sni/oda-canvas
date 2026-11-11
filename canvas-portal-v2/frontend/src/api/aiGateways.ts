@@ -55,6 +55,8 @@ export interface McpTool {
   name: string
   title: string
   description: string
+  /** The tool's icon as a data: URI, or null when it has none the portal accepts. */
+  icon?: string | null
   inputSchema: McpSchema | null
   annotations: {
     title?: string
