@@ -28,9 +28,9 @@ The chart uses `ghcr.io` for the image and dependency because some corporate pro
 ```bash
 docker pull ghcr.io/agentgateway/agentgateway:v1.7.0
 docker build --build-arg HTTP_PROXY --build-arg HTTPS_PROXY --build-arg NO_PROXY \
-  -t tmforumodacanvas/test-mcp-server:0.1.0 source/utilities/test-mcp-server
+  -t tmforumodacanvas/test-mcp-server:0.1.1 source/utilities/test-mcp-server
 kind load docker-image --name oda-canvas \
-  ghcr.io/agentgateway/agentgateway:v1.7.0 tmforumodacanvas/test-mcp-server:0.1.0
+  ghcr.io/agentgateway/agentgateway:v1.7.0 tmforumodacanvas/test-mcp-server:0.1.1
 
 helm dependency update charts/agentgateway
 helm install agentgateway charts/agentgateway -n canvas \

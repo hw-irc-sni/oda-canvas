@@ -9,12 +9,14 @@ A small MCP server that gives the AI gateway a real target in development cluste
 | `/flaky` | Returns 503 on odd-numbered calls, to exercise retries |
 | `/slow` | Responds after 5 seconds, to exercise timeouts |
 
+Its `serverInfo` includes an icon (the TM Forum logo, on an external HTTPS address) for clients that show one.
+
 The image isn't published. Build it and load it into kind:
 
 ```bash
 docker build --build-arg HTTP_PROXY --build-arg HTTPS_PROXY --build-arg NO_PROXY \
-  -t tmforumodacanvas/test-mcp-server:0.1.0 source/utilities/test-mcp-server
-kind load docker-image --name oda-canvas tmforumodacanvas/test-mcp-server:0.1.0
+  -t tmforumodacanvas/test-mcp-server:0.1.1 source/utilities/test-mcp-server
+kind load docker-image --name oda-canvas tmforumodacanvas/test-mcp-server:0.1.1
 ```
 
 The [agentgateway chart](../../../charts/agentgateway/README.md) deploys it when `testMcpServer.enabled` is `true`.

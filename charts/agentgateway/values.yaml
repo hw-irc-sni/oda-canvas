@@ -16,7 +16,7 @@ testMcpServer:
   port: 8000
   image:
     repository: tmforumodacanvas/test-mcp-server
-    tag: 0.1.0
+    tag: 0.1.1
     pullPolicy: IfNotPresent
 
 agentgateway-standalone:

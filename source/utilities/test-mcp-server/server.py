@@ -9,6 +9,7 @@ import asyncio
 import itertools
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import Icon
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -18,6 +19,14 @@ mcp = FastMCP(
     port=8000,
     stateless_http=True,
     json_response=True,
+    # Sent in serverInfo, so clients such as the Canvas Portal's AI Gateways page can show it.
+    icons=[
+        Icon(
+            src="https://1.92.124.203/assets/oda-organizations/tmforum.png",
+            mimeType="image/png",
+            sizes=["460x460"],
+        )
+    ],
 )
 
 _flaky_calls = itertools.count(1)

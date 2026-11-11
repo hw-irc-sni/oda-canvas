@@ -1209,11 +1209,53 @@ def test_server_icon_is_fetched_from_the_servers_origin():
     assert ("GET", "/static/icon.png", None) in seen
 
 
-def test_server_icon_on_another_origin_is_not_fetched():
-    handler, seen = target_with_icons([{"src": "https://elsewhere.test/icon.png"}])
+def resolving_to(monkeypatch, address):
+    real = ai_gateways.socket.getaddrinfo
 
-    assert summary_icon(handler) is None
-    assert [method for method, *_ in seen] == ["POST"]
+    def fake(host, port, *args, **kwargs):
+        if host == "icons.test":
+            return [(ai_gateways.socket.AF_INET, ai_gateways.socket.SOCK_STREAM, 6, "", (address, port))]
+        return real(host, port, *args, **kwargs)
+
+    monkeypatch.setattr(ai_gateways.socket, "getaddrinfo", fake)
+
+
+def icon_host(seen):
+    def handler(request):
+        if request.url.host != "icons.test":
+            return gateway(request)
+        seen.append(str(request.url))
+        return image(PNG, "image/png")
+
+    return handler
+
+
+def with_icon_host(target_handler, icon_handler):
+    return lambda request: icon_handler(request) if request.url.host == "icons.test" else target_handler(request)
+
+
+def test_server_icon_over_https_on_a_public_address_is_fetched(monkeypatch):
+    resolving_to(monkeypatch, "1.92.124.203")
+    fetched = []
+    handler, _ = target_with_icons([{"src": "https://icons.test/logo.png"}])
+
+    assert summary_icon(with_icon_host(handler, icon_host(fetched))) == PNG_URI
+    assert fetched == ["https://icons.test/logo.png"]
+
+
+@pytest.mark.parametrize("src, address", [
+    ("https://icons.test/logo.png", "10.96.0.10"),
+    ("https://icons.test/logo.png", "127.0.0.1"),
+    ("https://icons.test/logo.png", "169.254.169.254"),
+    ("http://icons.test/logo.png", "1.92.124.203"),
+])
+def test_server_icon_on_another_origin_is_only_fetched_over_https_from_a_public_address(monkeypatch, src, address):
+    resolving_to(monkeypatch, address)
+    fetched = []
+    handler, _ = target_with_icons([{"src": src}])
+
+    assert summary_icon(with_icon_host(handler, icon_host(fetched))) is None
+    assert fetched == []
 
 
 @pytest.mark.parametrize("icon", [
