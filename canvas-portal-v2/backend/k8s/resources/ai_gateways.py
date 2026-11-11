@@ -4,6 +4,8 @@ The source is agentgateway's /config_dump, a debug API with no stability
 guarantee, so parsing is defensive. Only whitelisted fields leave this module.
 """
 
+import base64
+import binascii
 import json
 import re
 import socket
@@ -30,6 +32,12 @@ MCP_CONNECT_TIMEOUT_SECONDS = 10.0
 MCP_CALL_DEADLINE_SECONDS = 60.0
 MCP_CLOSE_TIMEOUT_SECONDS = 2.0
 MAX_CONCURRENT_MCP_CALLS = 8
+# Server icons (serverInfo.icons) are new in this protocol version.
+MCP_ICON_PROTOCOL_VERSION = "2025-11-25"
+MCP_ICON_DEADLINE_SECONDS = 6.0
+MAX_MCP_ICON_BYTES = 64 * 1024
+MCP_ICON_CANDIDATES = 3
+MCP_ICON_CACHE_SECONDS = 300
 
 LLM_TEST_PROMPT = "PING"
 # Models that reason first can use most of this before replying: 64 nearly cut off a PING.
@@ -74,6 +82,11 @@ _POLICY_FIELDS = {
 
 _discovery_cache: TTLCache = TTLCache(maxsize=1, ttl=30)
 _discovery_lock = threading.Lock()
+# Keyed by the targets probed, so a config change probes again.
+_icon_cache: TTLCache = TTLCache(maxsize=1, ttl=MCP_ICON_CACHE_SECONDS)
+_icon_lock = threading.Lock()
+# The page's Content-Security-Policy only allows images from data: URIs, so icons are sent as one of these.
+_ICON_TYPES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"})
 # Calls run on the shared worker threads, so slow upstreams mustn't be able to take them all.
 _mcp_call_slots = threading.BoundedSemaphore(MAX_CONCURRENT_MCP_CALLS)
 
@@ -460,7 +473,7 @@ def _parse_mcp_message(body: str, content_type: str, request_id: int) -> dict[st
     return {}
 
 
-def _read_limited(response: httpx.Response, deadline: float) -> str:
+def _read_raw(response: httpx.Response, deadline: float, limit: int) -> bytes:
     """Limit what's read from upstream MCP servers. Count raw bytes and refuse compression,
     so the limit can't be passed by decompressing."""
     if response.headers.get("content-encoding", "identity").lower() != "identity":
@@ -468,11 +481,15 @@ def _read_limited(response: httpx.Response, deadline: float) -> str:
     body = bytearray()
     for chunk in response.iter_raw():
         body += chunk
-        if len(body) > MAX_MCP_RESPONSE_BYTES:
+        if len(body) > limit:
             raise ValueError("MCP response is too large")
         if time.monotonic() > deadline:
             raise ValueError("MCP response took too long")
-    return body.decode("utf-8", "replace")
+    return bytes(body)
+
+
+def _read_limited(response: httpx.Response, deadline: float) -> str:
+    return _read_raw(response, deadline, MAX_MCP_RESPONSE_BYTES).decode("utf-8", "replace")
 
 
 def _mcp_list(client: httpx.Client, url: str, method: str, deadline: float) -> dict[str, Any]:
@@ -536,6 +553,126 @@ def _cached_discovery(client: httpx.Client, url: str) -> dict[str, Any]:
     return result
 
 
+def _has_policy(policies: list[Any], name: str) -> bool:
+    return any(name in _as_dict(policy) for policy in policies)
+
+
+def _icon_probes(dump: dict[str, Any]) -> tuple[tuple[str, str], ...]:
+    """The MCP targets whose own initialize response the portal can read, as (name, URL).
+
+    The gateway's MCP endpoint answers with agentgateway's serverInfo, not the targets', so
+    each target is asked directly. Only streamable HTTP targets, and not those the gateway
+    sends credentials to: the portal doesn't hold them.
+    """
+    backends = _backend_index(dump)
+    probes = []
+    for backend in backends.values():
+        if backend.kind != "mcp":
+            continue
+        for target in map(_as_dict, _as_list(_as_dict(backend.body.get("target")).get("targets"))):
+            spec = _as_dict(target.get("mcp"))
+            resolved = backends.get(_backend_ref(_as_dict(spec.get("backend")).get("backend")), _MISSING_BACKEND)
+            name, host, path = target.get("name"), resolved.body.get("target"), spec.get("path") or ""
+            if (
+                resolved.kind != "host"
+                or not all(isinstance(value, str) for value in (name, host, path))
+                or _has_policy(resolved.policies, "backendAuth")
+            ):
+                continue
+            scheme = "https" if _has_policy(resolved.policies, "backendTLS") else "http"
+            probes.append((name, f"{scheme}://{host}{path}"))
+    return tuple(probes)
+
+
+def _server_icons(client: httpx.Client, url: str, deadline: float) -> list[Any]:
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": MCP_ICON_PROTOCOL_VERSION,
+            "capabilities": {},
+            "clientInfo": {"name": "canvas-portal", "version": "1"},
+        },
+    }
+    headers = {"Accept": MCP_ACCEPT, "Accept-Encoding": "identity"}
+    with client.stream("POST", url, json=payload, headers=headers) as response:
+        response.raise_for_status()
+        body = _read_limited(response, deadline)
+        session = response.headers.get("mcp-session-id", "")
+        message = _parse_mcp_message(body, response.headers.get("content-type", ""), 1)
+    if session and len(session) <= 256:
+        # A stateful server keeps a session for each initialize. Ending it is best effort.
+        try:
+            client.delete(url, headers={"Mcp-Session-Id": session})
+        except httpx.HTTPError:
+            pass
+    return _as_list(_as_dict(_as_dict(message.get("result")).get("serverInfo")).get("icons"))
+
+
+def _data_uri(mime: str, data: bytes) -> str | None:
+    if not data or len(data) > MAX_MCP_ICON_BYTES:
+        return None
+    return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+
+
+def _icon_data_uri(client: httpx.Client, src: str, server_url: str, deadline: float) -> str | None:
+    """An icon as a data: URI, or None. Fetches only from the server's own origin, so a server
+    can't make the portal request other addresses."""
+    if src[:5].lower() == "data:":
+        header, comma, payload = src[5:].partition(",")
+        mime, _, encoding = header.partition(";")
+        if not comma or encoding.lower() != "base64" or mime.lower() not in _ICON_TYPES:
+            return None
+        try:
+            return _data_uri(mime.lower(), base64.b64decode(payload, validate=True))
+        except binascii.Error:
+            return None
+    url = urljoin(server_url, src)
+    icon, server = urlsplit(url), urlsplit(server_url)
+    if (icon.scheme, icon.netloc) != (server.scheme, server.netloc):
+        return None
+    headers = {"Accept": ", ".join(sorted(_ICON_TYPES)), "Accept-Encoding": "identity"}
+    with client.stream("GET", url, headers=headers) as response:
+        response.raise_for_status()
+        mime = response.headers.get("content-type", "").split(";")[0].strip().lower()
+        if mime not in _ICON_TYPES:
+            return None
+        return _data_uri(mime, _read_raw(response, deadline, MAX_MCP_ICON_BYTES))
+
+
+def _discover_icons(client: httpx.Client, probes: tuple[tuple[str, str], ...]) -> dict[str, str]:
+    """Icons are decoration: any failure leaves that server without one."""
+    deadline = time.monotonic() + MCP_ICON_DEADLINE_SECONDS
+    icons = {}
+    for name, url in probes:
+        if time.monotonic() > deadline:
+            break
+        try:
+            candidates = [icon for icon in map(_as_dict, _server_icons(client, url, deadline)) if isinstance(icon.get("src"), str)]
+            # The page has a light background, so an icon made for dark ones is the last choice.
+            candidates.sort(key=lambda icon: icon.get("theme") == "dark")
+            for icon in candidates[:MCP_ICON_CANDIDATES]:
+                uri = _icon_data_uri(client, icon["src"], url, deadline)
+                if uri:
+                    icons[name] = uri
+                    break
+        except (httpx.HTTPError, ValueError, RecursionError):
+            continue
+    return icons
+
+
+def _cached_icons(client: httpx.Client, probes: tuple[tuple[str, str], ...]) -> dict[str, str]:
+    with _icon_lock:
+        cached = _icon_cache.get(probes)
+    if cached is not None:
+        return cached
+    icons = _discover_icons(client, probes) if probes else {}
+    with _icon_lock:
+        _icon_cache[probes] = icons
+    return icons
+
+
 def _read_runtime(client: httpx.Client, config_url: str, headers: dict[str, str]) -> dict[str, Any] | None:
     """Reload state is a nice-to-have: the page still works without it."""
     try:
@@ -584,10 +721,13 @@ def _summary(client: httpx.Client) -> dict[str, Any]:
     if not isinstance(dump, dict):
         return {"state": "unreachable", "message": "agentgateway returned an unexpected document."}
 
+    parsed = parse_config_dump(dump)
+    icons = _cached_icons(client, _icon_probes(dump))
+    parsed["tools"] = [{**tool, "icon": icons.get(tool["name"])} for tool in parsed["tools"]]
     return {
         "state": "ok",
         "message": "",
-        **parse_config_dump(dump),
+        **parsed,
         "runtime": _read_runtime(client, url, headers),
         **_cached_discovery(client, settings.AGENTGATEWAY_MCP_URL),
     }
