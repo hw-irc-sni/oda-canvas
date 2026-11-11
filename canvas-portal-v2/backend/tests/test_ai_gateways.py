@@ -1535,3 +1535,52 @@ def test_key_is_not_sent_for_a_name_used_twice(monkeypatch):
     get_ai_gateways_summary(client_for(with_dump(dump, handler)))
 
     assert seen == []
+
+
+def tools_with_icons(*icons_per_tool):
+    def handler(request):
+        if request.url.host != "gw.test" or request.url.path != "/mcp":
+            return gateway(request)
+        if json.loads(request.content)["method"] != "tools/list":
+            return streamed(mcp_body(request))
+        tools = [{"name": f"t{i}", "icons": icons} for i, icons in enumerate(icons_per_tool)]
+        return streamed(json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"tools": tools}}))
+
+    return handler
+
+
+def test_tool_icons_are_kept_when_they_are_data_uris():
+    svg = "data:image/svg+xml;base64," + base64.b64encode(b"<svg/>").decode()
+    dark = "data:image/gif;base64," + base64.b64encode(b"GIF89a").decode()
+    handler = tools_with_icons(
+        [{"src": svg, "mimeType": "image/svg+xml"}],
+        [{"src": dark, "theme": "dark"}, {"src": PNG_URI}],
+        [{"src": "https://icons.test/logo.png"}],
+        [{"src": "data:text/html;base64,PGI+"}],
+        None,
+    )
+
+    tools = get_ai_gateways_summary(client_for(handler))["discovered"]["tools"]
+
+    assert [tool["icon"] for tool in tools] == [svg, PNG_URI, None, None, None]
+
+
+def test_tool_icons_are_not_downloaded():
+    seen = []
+    handler = tools_with_icons([{"src": "https://icons.test/logo.png"}])
+
+    def recording(request):
+        seen.append(request.url.host)
+        return handler(request)
+
+    get_ai_gateways_summary(client_for(recording))
+
+    assert "icons.test" not in seen
+
+
+def test_tool_icon_survives_for_non_admins():
+    handler = tools_with_icons([{"src": PNG_URI}])
+
+    summary = ai_gateways.without_schema_values(get_ai_gateways_summary(client_for(handler)))
+
+    assert summary["discovered"]["tools"][0]["icon"] == PNG_URI

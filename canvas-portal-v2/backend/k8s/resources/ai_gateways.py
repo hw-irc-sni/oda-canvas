@@ -523,6 +523,7 @@ def _discover_mcp(client: httpx.Client, url: str) -> dict[str, Any]:
                     "description": _mcp_description(t.get("description")),
                     "inputSchema": _input_schema(t.get("inputSchema")),
                     "annotations": _tool_annotations(t.get("annotations")),
+                    "icon": _tool_icon(t.get("icons")),
                 }
                 for t in map(_as_dict, _as_list(tools.get("tools")))
             ],
@@ -678,18 +679,39 @@ def _refuse_local_peer(response: httpx.Response) -> None:
         raise ValueError("MCP server is on a local address")
 
 
+def _checked_data_uri(src: str) -> str | None:
+    """A data: URI icon, rebuilt from its decoded bytes, when it's a base64 image of a type the page shows."""
+    header, comma, payload = src[5:].partition(",")
+    mime, _, encoding = header.partition(";")
+    if src[:5].lower() != "data:" or not comma or encoding.lower() != "base64" or mime.lower() not in _ICON_TYPES:
+        return None
+    try:
+        return _data_uri(mime.lower(), base64.b64decode(payload, validate=True))
+    except binascii.Error:
+        return None
+
+
+def _preferred_icons(icons: Any) -> list[dict[str, Any]]:
+    """The icons with a src, best first: the page has a light background, so one made for dark ones goes last."""
+    candidates = [icon for icon in map(_as_dict, _as_list(icons)) if isinstance(icon.get("src"), str)]
+    return sorted(candidates, key=lambda icon: icon.get("theme") == "dark")
+
+
+def _tool_icon(icons: Any) -> str | None:
+    """A tool's icon, from data: URIs only. Tools are listed every 30 seconds, so their icons
+    aren't downloaded."""
+    for icon in _preferred_icons(icons)[:MCP_ICON_CANDIDATES]:
+        uri = _checked_data_uri(icon["src"])
+        if uri:
+            return uri
+    return None
+
+
 def _icon_data_uri(client: httpx.Client, src: str, server_url: str, deadline: float) -> str | None:
     """An icon as a data: URI, or None. Fetches from the server's own origin, or over https from
     a public address: a server can't make the portal request other addresses in the cluster."""
     if src[:5].lower() == "data:":
-        header, comma, payload = src[5:].partition(",")
-        mime, _, encoding = header.partition(";")
-        if not comma or encoding.lower() != "base64" or mime.lower() not in _ICON_TYPES:
-            return None
-        try:
-            return _data_uri(mime.lower(), base64.b64decode(payload, validate=True))
-        except binascii.Error:
-            return None
+        return _checked_data_uri(src)
     url = urljoin(server_url, src)
     icon, server = urlsplit(url), urlsplit(server_url)
     same_origin = (icon.scheme, icon.netloc) == (server.scheme, server.netloc)
@@ -766,13 +788,7 @@ def _discover_icons(client: httpx.Client, probes: tuple[tuple[str, str, bool], .
                 continue
             auth = {"Authorization": f"Bearer {key}"}
         try:
-            candidates = [
-                icon for icon in map(_as_dict, _server_icons(client, url, deadline, auth))
-                if isinstance(icon.get("src"), str)
-            ]
-            # The page has a light background, so an icon made for dark ones is the last choice.
-            candidates.sort(key=lambda icon: icon.get("theme") == "dark")
-            for icon in candidates[:MCP_ICON_CANDIDATES]:
+            for icon in _preferred_icons(_server_icons(client, url, deadline, auth))[:MCP_ICON_CANDIDATES]:
                 uri = _icon_data_uri(client, icon["src"], url, deadline)
                 if uri:
                     icons[name] = uri
