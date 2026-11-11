@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Avatar, Button, Empty, message, Popconfirm, Space, Spin, Table, Tag, Tooltip } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { ApiOutlined, PlusOutlined, ToolOutlined } from '@ant-design/icons'
+import { ApiOutlined, FileOutlined, PlusOutlined, ToolOutlined } from '@ant-design/icons'
 import {
   fetchAiGateways,
   fetchMcpTargets,
@@ -56,14 +56,14 @@ function ServerAvatar({ name, icon }: { name: string; icon?: string | null }) {
   )
 }
 
-/** A tool's icon, or a plain tool symbol so the names stay aligned. */
-function ToolAvatar({ icon }: { icon?: string | null }) {
+/** A tool's or resource's icon, or a plain symbol so the names stay aligned. */
+function ItemAvatar({ icon, fallback }: { icon?: string | null; fallback: React.ReactNode }) {
   return (
     <Avatar
       size={ICON_SIZE}
       shape="square"
       src={icon ? <img src={icon} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : undefined}
-      icon={icon ? undefined : <ToolOutlined />}
+      icon={icon ? undefined : fallback}
       style={{ flex: 'none', fontSize: 16, backgroundColor: 'transparent', color: colors.textMuted }}
     />
   )
@@ -366,7 +366,7 @@ function LiveDiscovery({ data, onInspect }: { data: AiGatewaysSummary; onInspect
             dataIndex: 'name',
             render: (name: string, tool: McpTool) => (
               <Space size={8}>
-                <ToolAvatar icon={tool.icon} />
+                <ItemAvatar icon={tool.icon} fallback={<ToolOutlined />} />
                 <InspectLink label={name} kind="tool" onClick={() => onInspect({ kind: 'tool', tool })} />
               </Space>
             ),
@@ -386,11 +386,14 @@ function LiveDiscovery({ data, onInspect }: { data: AiGatewaysSummary; onInspect
             title: 'Resource',
             dataIndex: 'name',
             render: (name: string, resource: McpResource) => (
-              <InspectLink
-                label={name || resource.uri}
-                kind="resource"
-                onClick={() => onInspect({ kind: 'resource', resource })}
-              />
+              <Space size={8}>
+                <ItemAvatar icon={resource.icon} fallback={<FileOutlined />} />
+                <InspectLink
+                  label={name || resource.uri}
+                  kind="resource"
+                  onClick={() => onInspect({ kind: 'resource', resource })}
+                />
+              </Space>
             ),
           },
           { title: 'URI', dataIndex: 'uri' },
