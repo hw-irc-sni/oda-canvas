@@ -497,7 +497,7 @@ def test_target_keys_reads_each_targets_key_file_from_the_secret():
 
     keys = mcp.target_keys(KeysCore(targets, {"a-key": b64("alpha\n"), "other": b64("x")}))
 
-    assert keys == {"a": "alpha"}
+    assert keys == {"a": ("alpha", "http://a:1/mcp")}
 
 
 def test_target_keys_doesnt_read_the_secret_when_no_target_has_a_key():
@@ -505,3 +505,14 @@ def test_target_keys_doesnt_read_the_secret_when_no_target_has_a_key():
     core.read_namespaced_secret = lambda *args: pytest.fail("read the Secret")
 
     assert mcp.target_keys(core) == {}
+
+
+def test_target_keys_leaves_out_names_used_twice_and_combines_the_address_fields():
+    key = {"backendAuth": {"key": {"file": "/llm-keys/k"}}}
+    targets = [
+        {"name": "a", "mcp": {"host": "http://a:1/mcp"}, "policies": key},
+        {"name": "a", "mcp": {"host": "http://evil:1/mcp"}, "policies": key},
+        {"name": "b", "mcp": {"host": "b", "port": 8000, "path": "/mcp"}, "policies": key},
+    ]
+
+    assert mcp.target_keys(KeysCore(targets, {"k": b64("x")})) == {"b": ("x", "http://b:8000/mcp")}

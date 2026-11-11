@@ -1344,7 +1344,7 @@ def test_targets_the_gateway_sends_a_key_to_are_marked():
 
 def test_target_with_a_key_is_asked_with_the_gateways_key_and_icons_are_fetched_without_it(monkeypatch):
     reads = []
-    monkeypatch.setattr(ai_gateways, "_target_keys", lambda: reads.append(1) or {"test-mcp": "s3cret"})
+    monkeypatch.setattr(ai_gateways, "_target_keys", lambda: reads.append(1) or {"test-mcp": ("s3cret", TARGET_URL)})
     sent = []
     handler, _ = target_with_icons(
         [{"src": "/static/icon.png"}],
@@ -1486,3 +1486,52 @@ def test_single_label_targets_resolve_in_the_gateways_namespace(monkeypatch):
 
     assert ai_gateways._icon_probes(dump) == (("test-mcp", "http://agentgateway-test-mcp-server.canvas.svc:8000/mcp", False),)
     assert ai_gateways._icon_probes(DUMP) == (("test-mcp", TARGET_URL, False),)
+
+
+@pytest.mark.parametrize("configured", [
+    "http://other.canvas.svc.cluster.local:8000/mcp",
+    "http://agentgateway-test-mcp-server.canvas.svc.cluster.local:9000/mcp",
+    "https://agentgateway-test-mcp-server.canvas.svc.cluster.local:8000/mcp",
+    "http://agentgateway-test-mcp-server.canvas.svc.cluster.local:8000/other",
+])
+def test_key_is_not_sent_to_an_address_other_than_its_own(monkeypatch, configured):
+    monkeypatch.setattr(ai_gateways, "_target_keys", lambda: {"test-mcp": ("s3cret", configured)})
+    handler, seen = target_with_icons([{"src": PNG_URI}])
+
+    summary = get_ai_gateways_summary(client_for(with_dump(dump_with_backend_auth(), handler)))
+
+    assert summary["tools"][0]["icon"] is None
+    assert seen == []
+
+
+def test_key_is_sent_when_the_address_is_written_differently(monkeypatch):
+    monkeypatch.setenv("AGENTGATEWAY_CONFIG_NAMESPACE", "canvas")
+    get_settings.cache_clear()
+    configured = "http://AGENTGATEWAY-TEST-MCP-SERVER.canvas.svc.cluster.local.:8000/mcp"
+    monkeypatch.setattr(ai_gateways, "_target_keys", lambda: {"test-mcp": ("s3cret", configured)})
+    handler, seen = target_with_icons([{"src": PNG_URI}])
+
+    summary = get_ai_gateways_summary(client_for(with_dump(dump_with_backend_auth(), handler)))
+
+    assert summary["tools"][0]["icon"] == PNG_URI
+
+
+def test_short_and_qualified_service_names_are_the_same_upstream(monkeypatch):
+    monkeypatch.setenv("AGENTGATEWAY_CONFIG_NAMESPACE", "canvas")
+    get_settings.cache_clear()
+
+    assert ai_gateways._upstream("http://svc:8000/mcp") == ai_gateways._upstream("http://svc.canvas.svc:8000/mcp")
+    assert ai_gateways._upstream("http://svc/mcp") == ai_gateways._upstream("http://svc.canvas.svc:80/mcp")
+
+
+def test_key_is_not_sent_for_a_name_used_twice(monkeypatch):
+    monkeypatch.setattr(ai_gateways, "_target_keys", lambda: {"test-mcp": ("s3cret", TARGET_URL)})
+    dump = dump_with_backend_auth()
+    mcp_backend = next(entry for entry in dump["backends"] if "mcp" in entry["backend"])
+    targets = mcp_backend["backend"]["mcp"]["target"]["targets"]
+    targets.append(json.loads(json.dumps(targets[0])))
+    handler, seen = target_with_icons([{"src": PNG_URI}])
+
+    get_ai_gateways_summary(client_for(with_dump(dump, handler)))
+
+    assert seen == []

@@ -77,17 +77,36 @@ def _token_file_path(entry: dict[str, Any] | None) -> str | None:
     return key["file"] if isinstance(key.get("file"), str) else None
 
 
-def target_keys(core: k8s.CoreV1Api | None = None) -> dict[str, str]:
-    """The API key the gateway sends to each MCP target, by target name, for the targets whose key
-    is a file in the gateway's key Secret. Only for the portal's own requests to that same target,
-    such as asking for its icon: never sent to the page."""
+def _configured_url(entry: dict[str, Any]) -> str | None:
+    """A streamable HTTP target's address as configured, such as http://host:8000/mcp."""
+    spec = as_dict(entry.get("mcp"))
+    host, port, path = spec.get("host"), spec.get("port"), spec.get("path")
+    if not isinstance(host, str) or not host:
+        return None
+    url = host if "://" in host else f"http://{host}"
+    parts = urlsplit(url)
+    netloc = parts.netloc if parts.port is not None or not isinstance(port, int) else f"{parts.netloc}:{port}"
+    return parts._replace(netloc=netloc, path=path if isinstance(path, str) and path else parts.path).geturl()
+
+
+def target_keys(core: k8s.CoreV1Api | None = None) -> dict[str, tuple[str, str]]:
+    """The API key the gateway sends to each MCP target, with the address it's configured for, by
+    target name. Only targets whose key is a file in the gateway's key Secret, and only names used
+    once. Only for the portal's own requests to that same address, such as asking for its icon:
+    never sent to the page."""
     settings = get_settings()
     core = core or config_file.core_api()
+    entries = [entry for entry in _entries(config_file.read_config(core)) if isinstance(entry, dict)]
+    names = [entry.get("name") for entry in entries]
     files = {}
-    for entry in _entries(config_file.read_config(core)):
-        path = _token_file_path(entry) if isinstance(entry, dict) and _has_token(entry) else None
-        if path and isinstance(entry.get("name"), str) and posixpath.dirname(path) == settings.AGENTGATEWAY_KEYS_PATH:
-            files[entry["name"]] = posixpath.basename(path)
+    for entry in entries:
+        name, url = entry.get("name"), _configured_url(entry)
+        path = _token_file_path(entry) if _has_token(entry) else None
+        if (
+            path and url and isinstance(name, str) and names.count(name) == 1
+            and posixpath.dirname(path) == settings.AGENTGATEWAY_KEYS_PATH
+        ):
+            files[name] = (posixpath.basename(path), url)
     if not files:
         return {}
     try:
@@ -96,8 +115,8 @@ def target_keys(core: k8s.CoreV1Api | None = None) -> dict[str, str]:
         raise config_file._refusal(exc, "read the API key Secret") from exc
     data = secret.data or {}
     return {
-        name: base64.b64decode(data[file]).decode("utf-8").strip()
-        for name, file in files.items()
+        name: (base64.b64decode(data[file]).decode("utf-8").strip(), url)
+        for name, (file, url) in files.items()
         if isinstance(data.get(file), str)
     }
 
