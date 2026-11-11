@@ -31,12 +31,30 @@ def gateway_settings(monkeypatch):
     get_settings.cache_clear()
     ai_gateways._discovery_cache.clear()
     ai_gateways._icon_cache.clear()
+    PEERS.clear()
     yield
     get_settings.cache_clear()
 
 
+# The address each mocked connection reports, by host. A real connection reports the address it went to.
+PEERS: dict[str, str] = {}
+
+
+class FakeNetworkStream:
+    def __init__(self, address):
+        self.address = address
+
+    def get_extra_info(self, info):
+        return (self.address, 443) if info == "server_addr" else None
+
+
 def client_for(handler):
-    return httpx.Client(transport=httpx.MockTransport(handler))
+    def with_peer(request):
+        response = handler(request)
+        response.extensions["network_stream"] = FakeNetworkStream(PEERS.get(request.url.host, "10.96.0.20"))
+        return response
+
+    return httpx.Client(transport=httpx.MockTransport(with_peer))
 
 
 def streamed(body, content_type="application/json"):
@@ -1218,6 +1236,7 @@ def resolving_to(monkeypatch, address):
         return real(host, port, *args, **kwargs)
 
     monkeypatch.setattr(ai_gateways.socket, "getaddrinfo", fake)
+    PEERS["icons.test"] = address
 
 
 def icon_host(seen):
@@ -1358,3 +1377,49 @@ def test_session_end_response_is_not_read():
 
     assert summary_icon(guarded) == PNG_URI
     assert ("DELETE", "/mcp", "s-1") in seen
+
+
+def test_server_icon_is_refused_when_the_connection_goes_elsewhere(monkeypatch):
+    resolving_to(monkeypatch, "1.92.124.203")
+    PEERS["icons.test"] = "10.96.0.10"  # The name resolved differently when connecting.
+    handler, _ = target_with_icons([{"src": "https://icons.test/logo.png"}])
+
+    assert summary_icon(with_icon_host(handler, icon_host([]))) is None
+
+
+def test_target_is_not_asked_when_the_connection_reaches_a_local_address():
+    PEERS[TARGET_HOST] = "127.0.0.1"
+    handler, seen = target_with_icons([{"src": PNG_URI}])
+
+    assert summary_icon(handler) is None
+    assert seen == [("POST", "/mcp", None)]  # Refused before the response is read.
+
+
+@pytest.mark.parametrize("address, public", [
+    ("1.92.124.203", True),
+    ("2606:4700::1111", True),
+    ("::ffff:1.92.124.203", True),
+    ("::ffff:10.0.0.1", False),
+    ("10.0.0.1", False),
+    ("64:ff9b::a00:1", False),
+    ("64:ff9b:1::a00:1", False),
+    ("::a00:1", False),
+    ("2002:a00:1::1", False),
+    ("2001:0:4136:e378:8000:63bf:f5ff:fffe", False),
+])
+def test_public_addresses_exclude_translated_ones(address, public):
+    import ipaddress
+
+    assert ai_gateways._is_public_address(ipaddress.ip_address(address)) is public
+
+
+def test_single_label_targets_resolve_in_the_gateways_namespace(monkeypatch):
+    monkeypatch.setenv("AGENTGATEWAY_CONFIG_NAMESPACE", "canvas")
+    get_settings.cache_clear()
+    dump = json.loads(json.dumps(DUMP))
+    for entry in dump["backends"]:
+        if entry["backend"].get("host", {}).get("name") == "mcp//mcp/0":
+            entry["backend"]["host"]["target"] = "agentgateway-test-mcp-server:8000"
+
+    assert ai_gateways._icon_probes(dump) == (("test-mcp", "http://agentgateway-test-mcp-server.canvas.svc:8000/mcp"),)
+    assert ai_gateways._icon_probes(DUMP) == (("test-mcp", TARGET_URL),)
