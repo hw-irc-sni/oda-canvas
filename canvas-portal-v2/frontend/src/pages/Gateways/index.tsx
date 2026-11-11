@@ -219,6 +219,74 @@ function InspectLink({ label, kind, onClick }: { label: string; kind: string; on
   )
 }
 
+interface ServerGroup<T> {
+  server: string
+  items: T[]
+}
+
+/** agentgateway names a tool `<target>_<tool>` and a resource URI `<target>+<scheme>://...`. A target name can hold the
+ * separator too, so the configured targets are matched first (longest first), then the text before the first separator. */
+function groupByServer<T>(
+  items: T[],
+  keyOf: (item: T) => string,
+  separator: string,
+  targets: string[],
+): ServerGroup<T>[] {
+  const known = [...targets].sort((a, b) => b.length - a.length)
+  const groups = new Map<string, T[]>()
+  for (const item of items) {
+    const key = keyOf(item)
+    const index = key.indexOf(separator)
+    const server = known.find((target) => key.startsWith(target + separator)) ?? (index > 0 ? key.slice(0, index) : '')
+    groups.set(server, [...(groups.get(server) ?? []), item])
+  }
+  return [...groups].map(([server, grouped]) => ({ server, items: grouped }))
+}
+
+function GroupedTable<T extends object>({
+  groups,
+  noun,
+  columns,
+  rowKey,
+  emptyText,
+}: {
+  groups: ServerGroup<T>[]
+  noun: string
+  columns: ColumnsType<T>
+  rowKey: (row: T) => string
+  emptyText: string
+}) {
+  if (groups.length === 0) {
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />
+  }
+  return (
+    <Table<ServerGroup<T>>
+      size="small"
+      pagination={false}
+      rowKey={(group) => group.server}
+      dataSource={groups}
+      columns={[
+        {
+          title: 'MCP server',
+          dataIndex: 'server',
+          render: (server: string) => server || <span style={{ color: colors.textMuted }}>No server prefix</span>,
+        },
+        {
+          title: noun,
+          key: 'count',
+          render: (_, group) => <Tag style={{ marginInlineEnd: 0 }}>{group.items.length}</Tag>,
+        },
+      ]}
+      expandable={{
+        expandRowByClick: true,
+        expandedRowRender: (group) => (
+          <Table size="small" pagination={false} rowKey={rowKey} columns={columns} dataSource={group.items} />
+        ),
+      }}
+    />
+  )
+}
+
 function LiveDiscovery({ data, onInspect }: { data: AiGatewaysSummary; onInspect: (item: InspectedItem) => void }) {
   const headingStyle = { fontSize: 12, fontWeight: 600, color: colors.textSecondary, margin: '16px 0 8px' }
   if (!data.discovered) {
@@ -233,11 +301,13 @@ function LiveDiscovery({ data, onInspect }: { data: AiGatewaysSummary; onInspect
     )
   }
   const { tools, resources, partial } = data.discovered
+  const targets = (data.tools ?? []).map((target) => target.name)
   return (
     <>
       <h4 style={headingStyle}>Tools available now</h4>
-      <ConfigTable
-        rows={tools}
+      <GroupedTable
+        groups={groupByServer(tools, (tool) => tool.name, '_', targets)}
+        noun="Tools"
         rowKey={(tool) => tool.name}
         emptyText="No tools available"
         columns={[
@@ -252,8 +322,9 @@ function LiveDiscovery({ data, onInspect }: { data: AiGatewaysSummary; onInspect
         ]}
       />
       <h4 style={headingStyle}>Resources available now</h4>
-      <ConfigTable
-        rows={resources}
+      <GroupedTable
+        groups={groupByServer(resources, (resource) => resource.uri, '+', targets)}
+        noun="Resources"
         rowKey={(resource) => resource.uri}
         emptyText="No resources available"
         columns={[
