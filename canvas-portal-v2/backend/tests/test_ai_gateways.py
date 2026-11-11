@@ -1282,3 +1282,37 @@ def test_server_icons_are_cached():
     get_ai_gateways_summary(client)
 
     assert len(seen) == 1
+
+
+@pytest.mark.parametrize("host", ["localhost:8000", "127.0.0.1:8000", "169.254.169.254", "[::1]:8000", "0x7f.1:80"])
+def test_targets_on_local_or_link_local_addresses_are_not_probed(host):
+    dump = json.loads(json.dumps(DUMP))
+    for entry in dump["backends"]:
+        if entry["backend"].get("host", {}).get("name") == "mcp//mcp/0":
+            entry["backend"]["host"]["target"] = host
+    seen = []
+
+    def handler(request):
+        if request.url.path == "/config_dump":
+            return httpx.Response(200, json=dump)
+        if request.url.host != "gw.test":
+            seen.append(request.url)
+        return gateway(request)
+
+    summary = get_ai_gateways_summary(client_for(handler))
+
+    assert summary["tools"][0]["icon"] is None
+    assert seen == []
+
+
+def test_session_end_response_is_not_read():
+    handler, seen = target_with_icons([{"src": PNG_URI}], session="s-1")
+
+    def guarded(request):
+        if request.method == "DELETE":
+            seen.append(("DELETE", request.url.path, request.headers.get("mcp-session-id")))
+            return httpx.Response(200, stream=httpx.ByteStream(b"x" * (10 * ai_gateways.MAX_MCP_RESPONSE_BYTES)))
+        return handler(request)
+
+    assert summary_icon(guarded) == PNG_URI
+    assert ("DELETE", "/mcp", "s-1") in seen

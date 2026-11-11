@@ -602,9 +602,11 @@ def _server_icons(client: httpx.Client, url: str, deadline: float) -> list[Any]:
         session = response.headers.get("mcp-session-id", "")
         message = _parse_mcp_message(body, response.headers.get("content-type", ""), 1)
     if session and len(session) <= 256:
-        # A stateful server keeps a session for each initialize. Ending it is best effort.
+        # A stateful server keeps a session for each initialize. Ending it is best effort, and its
+        # response body is never read, so it can't be made to send more than the limits allow.
         try:
-            client.delete(url, headers={"Mcp-Session-Id": session})
+            with client.stream("DELETE", url, headers={"Mcp-Session-Id": session, "Accept-Encoding": "identity"}):
+                pass
         except httpx.HTTPError:
             pass
     return _as_list(_as_dict(_as_dict(message.get("result")).get("serverInfo")).get("icons"))
@@ -643,11 +645,19 @@ def _icon_data_uri(client: httpx.Client, src: str, server_url: str, deadline: fl
 
 def _discover_icons(client: httpx.Client, probes: tuple[tuple[str, str], ...]) -> dict[str, str]:
     """Icons are decoration: any failure leaves that server without one."""
+    # Imported here: that module imports this one.
+    from k8s.resources.ai_gateway_config import _points_at_gateway
+
     deadline = time.monotonic() + MCP_ICON_DEADLINE_SECONDS
     icons = {}
     for name, url in probes:
         if time.monotonic() > deadline:
             break
+        # The portal makes these requests from its own pod. A target the gateway reaches on its
+        # loopback would reach the portal's instead, and a link-local one the cloud metadata service.
+        # Icons are only fetched from this same origin, so this check covers them too.
+        if _points_at_gateway(url):
+            continue
         try:
             candidates = [icon for icon in map(_as_dict, _server_icons(client, url, deadline)) if isinstance(icon.get("src"), str)]
             # The page has a light background, so an icon made for dark ones is the last choice.
