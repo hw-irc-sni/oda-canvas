@@ -17,6 +17,10 @@ from k8s.resources.ai_gateways import get_ai_gateways_summary, parse_config_dump
 CONFIG_URL = "http://gw.test:8081/config_dump"
 MCP_URL = "http://gw.test/mcp"
 DUMP = json.loads((Path(__file__).parent / "fixtures" / "config_dump.json").read_text())
+TARGET_HOST = "agentgateway-test-mcp-server.canvas.svc.cluster.local"
+TARGET_URL = f"http://{TARGET_HOST}:8000/mcp"
+PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 16
+PNG_URI = "data:image/png;base64," + base64.b64encode(PNG).decode()
 
 
 @pytest.fixture(autouse=True)
@@ -26,6 +30,7 @@ def gateway_settings(monkeypatch):
     monkeypatch.setenv("AGENTGATEWAY_API_KEY", "test-key")
     get_settings.cache_clear()
     ai_gateways._discovery_cache.clear()
+    ai_gateways._icon_cache.clear()
     yield
     get_settings.cache_clear()
 
@@ -279,7 +284,7 @@ def test_discovery_refuses_compressed_responses():
     seen = []
 
     def handler(request):
-        if request.url.path != "/mcp":
+        if request.url.host != "gw.test" or request.url.path != "/mcp":
             return gateway(request)
         seen.append(request.headers.get("accept-encoding"))
         return httpx.Response(200, content=b"\x1f\x8b", headers={"content-encoding": "gzip"})
@@ -305,14 +310,15 @@ def test_discovery_is_cached():
 
     def handler(request):
         if request.url.path == "/mcp":
-            calls.append(request)
+            calls.append(request.url.host)
         return gateway(request)
 
     client = client_for(handler)
     get_ai_gateways_summary(client)
     get_ai_gateways_summary(client)
 
-    assert len(calls) == 2  # tools/list and resources/list, once each
+    # tools/list and resources/list on the gateway, and initialize on the target for its icon, once each
+    assert sorted(calls) == [TARGET_HOST, "gw.test", "gw.test"]
 
 
 def test_discovery_rejects_oversized_responses():
@@ -1150,3 +1156,129 @@ def test_is_admin_matches_the_admin_requirement(monkeypatch):
     monkeypatch.setenv("AUTHZ_ALLOW_ALL_AUTHENTICATED", "true")
     get_settings.cache_clear()
     assert is_admin(other)
+
+
+def image(body, content_type):
+    return httpx.Response(200, headers={"content-type": content_type}, stream=httpx.ByteStream(body))
+
+
+def target_with_icons(icons, other=None, session=None):
+    """The gateway, with the MCP target answering initialize with these serverInfo icons."""
+    seen = []
+
+    def handler(request):
+        if request.url.host != TARGET_HOST:
+            return gateway(request)
+        seen.append((request.method, request.url.path, request.headers.get("mcp-session-id")))
+        if request.method == "POST":
+            body = json.loads(request.content)
+            assert body["method"] == "initialize"
+            assert body["params"]["protocolVersion"] == "2025-11-25"
+            info = {"name": "canvas-test-mcp", "version": "1", "icons": icons}
+            response = streamed(json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"serverInfo": info}}))
+            if session:
+                response.headers["mcp-session-id"] = session
+            return response
+        if request.method == "GET" and other:
+            return other(request)
+        return httpx.Response(200 if request.method == "DELETE" else 404)
+
+    return handler, seen
+
+
+def summary_icon(handler):
+    summary = get_ai_gateways_summary(client_for(handler))
+    assert summary["state"] == "ok"
+    return summary["tools"][0]["icon"]
+
+
+def test_server_icon_from_a_data_uri():
+    handler, seen = target_with_icons([{"src": PNG_URI, "mimeType": "image/png"}])
+
+    assert summary_icon(handler) == PNG_URI
+    assert seen == [("POST", "/mcp", None)]
+
+
+def test_server_icon_is_fetched_from_the_servers_origin():
+    handler, seen = target_with_icons(
+        [{"src": "/static/icon.png"}],
+        other=lambda request: image(PNG, "image/png"),
+    )
+
+    assert summary_icon(handler) == PNG_URI
+    assert ("GET", "/static/icon.png", None) in seen
+
+
+def test_server_icon_on_another_origin_is_not_fetched():
+    handler, seen = target_with_icons([{"src": "https://elsewhere.test/icon.png"}])
+
+    assert summary_icon(handler) is None
+    assert [method for method, *_ in seen] == ["POST"]
+
+
+@pytest.mark.parametrize("icon", [
+    "data:text/html;base64,PGI+aGk8L2I+",
+    "data:image/png,not-base64",
+    "data:image/png;base64,***",
+    "javascript:alert(1)",
+])
+def test_server_icon_refuses_what_is_not_an_image(icon):
+    handler, _ = target_with_icons([{"src": icon}])
+
+    assert summary_icon(handler) is None
+
+
+def test_server_icon_refuses_a_fetched_non_image_and_an_oversized_one():
+    handler, _ = target_with_icons(
+        [{"src": "/a.html"}, {"src": "/big.png"}],
+        other=lambda request: (
+            image(b"<b>hi</b>", "text/html")
+            if request.url.path == "/a.html"
+            else image(b"x" * (ai_gateways.MAX_MCP_ICON_BYTES + 1), "image/png")
+        ),
+    )
+
+    assert summary_icon(handler) is None
+
+
+def test_server_icon_prefers_one_not_made_for_dark_backgrounds():
+    dark = "data:image/gif;base64," + base64.b64encode(b"GIF89a").decode()
+    handler, _ = target_with_icons([{"src": dark, "theme": "dark"}, {"src": PNG_URI, "theme": "light"}])
+
+    assert summary_icon(handler) == PNG_URI
+
+
+def test_server_icon_ends_the_session_initialize_opened():
+    handler, seen = target_with_icons([{"src": PNG_URI}], session="s-1")
+
+    assert summary_icon(handler) == PNG_URI
+    assert ("DELETE", "/mcp", "s-1") in seen
+
+
+def test_server_icon_failure_leaves_the_page_working():
+    def handler(request):
+        if request.url.host == TARGET_HOST:
+            raise httpx.ConnectError("refused")
+        return gateway(request)
+
+    assert summary_icon(handler) is None
+
+
+def test_targets_the_gateway_sends_credentials_to_are_not_probed():
+    dump = json.loads(json.dumps(DUMP))
+    for entry in dump["backends"]:
+        if entry["backend"].get("host", {}).get("name") == "mcp//mcp/0":
+            entry["inlinePolicies"] = [{"backendAuth": {"key": {"value": "<redacted>"}}}]
+
+    assert ai_gateways._icon_probes(dump) == ()
+    assert ai_gateways._icon_probes(DUMP) == (("test-mcp", TARGET_URL),)
+
+
+def test_server_icons_are_cached():
+    handler, seen = target_with_icons([{"src": PNG_URI}])
+    client = client_for(handler)
+
+    get_ai_gateways_summary(client)
+    get_ai_gateways_summary(client)
+
+    assert len(seen) == 1

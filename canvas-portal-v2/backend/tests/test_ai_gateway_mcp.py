@@ -101,6 +101,7 @@ def gateway_settings(monkeypatch):
     monkeypatch.setattr(config_file, "NUDGED_DEADLINE_SECONDS", 0.05)
     get_settings.cache_clear()
     ai_gateways._discovery_cache.clear()
+    ai_gateways._icon_cache.clear()
     yield
     get_settings.cache_clear()
 

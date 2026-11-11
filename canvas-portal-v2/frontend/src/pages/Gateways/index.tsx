@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Empty, message, Popconfirm, Space, Spin, Table, Tag, Tooltip } from 'antd'
+import { Alert, Avatar, Button, Empty, message, Popconfirm, Space, Spin, Table, Tag, Tooltip } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { ApiOutlined, PlusOutlined } from '@ant-design/icons'
 import {
@@ -37,6 +37,31 @@ const renderMatches = (matches: string[]) => (
     ))}
   </Space>
 )
+
+/** The server's icon, or its first letter when it has none. */
+function ServerAvatar({ name, icon }: { name: string; icon?: string | null }) {
+  return (
+    <Avatar
+      size={20}
+      shape="square"
+      src={icon || undefined}
+      icon={name ? undefined : <ApiOutlined />}
+      alt=""
+      style={{ flex: 'none', fontSize: 12, backgroundColor: icon ? 'transparent' : colors.textMuted }}
+    >
+      {name.charAt(0).toUpperCase()}
+    </Avatar>
+  )
+}
+
+function ServerName({ name, icon, label }: { name: string; icon?: string | null; label?: React.ReactNode }) {
+  return (
+    <Space size={8}>
+      <ServerAvatar name={name} icon={icon} />
+      {label ?? name}
+    </Space>
+  )
+}
 
 function RemoveButton({
   name,
@@ -137,7 +162,7 @@ interface TargetActions {
 }
 
 const toolColumns = ({ configFor, onEdit, onRemove, removing, isLastTarget }: TargetActions): ColumnsType<AiGatewayTool> => [
-  { title: 'Target', dataIndex: 'name' },
+  { title: 'Target', dataIndex: 'name', render: (name: string, tool) => <ServerName name={name} icon={tool.icon} /> },
   { title: 'Upstream', dataIndex: 'upstream' },
   { title: 'Paths', dataIndex: 'matches', render: renderMatches },
   { title: 'Sessions', dataIndex: 'stateful', render: (stateful: boolean) => (stateful ? 'Stateful' : 'Stateless') },
@@ -245,12 +270,14 @@ function groupByServer<T>(
 
 function GroupedTable<T extends object>({
   groups,
+  icons,
   noun,
   columns,
   rowKey,
   emptyText,
 }: {
   groups: ServerGroup<T>[]
+  icons: Map<string, string | null | undefined>
   noun: string
   columns: ColumnsType<T>
   rowKey: (row: T) => string
@@ -269,7 +296,13 @@ function GroupedTable<T extends object>({
         {
           title: 'MCP server',
           dataIndex: 'server',
-          render: (server: string) => server || <span style={{ color: colors.textMuted }}>No server prefix</span>,
+          render: (server: string) => (
+            <ServerName
+              name={server}
+              icon={icons.get(server)}
+              label={server || <span style={{ color: colors.textMuted }}>No server prefix</span>}
+            />
+          ),
         },
         {
           title: noun,
@@ -302,11 +335,13 @@ function LiveDiscovery({ data, onInspect }: { data: AiGatewaysSummary; onInspect
   }
   const { tools, resources, partial } = data.discovered
   const targets = (data.tools ?? []).map((target) => target.name)
+  const icons = new Map((data.tools ?? []).map((target) => [target.name, target.icon]))
   return (
     <>
       <h4 style={headingStyle}>Tools available now</h4>
       <GroupedTable
         groups={groupByServer(tools, (tool) => tool.name, '_', targets)}
+        icons={icons}
         noun="Tools"
         rowKey={(tool) => tool.name}
         emptyText="No tools available"
@@ -324,6 +359,7 @@ function LiveDiscovery({ data, onInspect }: { data: AiGatewaysSummary; onInspect
       <h4 style={headingStyle}>Resources available now</h4>
       <GroupedTable
         groups={groupByServer(resources, (resource) => resource.uri, '+', targets)}
+        icons={icons}
         noun="Resources"
         rowKey={(resource) => resource.uri}
         emptyText="No resources available"

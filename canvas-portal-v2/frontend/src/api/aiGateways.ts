@@ -19,6 +19,8 @@ export interface AiGatewayTool {
   stateful: boolean
   failureMode: string
   matches: string[]
+  /** The server's own serverInfo icon as a data: URI, or null when it has none the portal could read. */
+  icon?: string | null
 }
 
 export interface AiGatewayAgent {
