@@ -102,6 +102,9 @@ _MISSING_BACKEND = _Backend("", {}, [])
 
 # What the form reads. Anything else in a schema is dropped.
 _SCHEMA_SCALAR_FIELDS = ("title", "minimum", "maximum")
+# An x-options lookup names a tool and the fields of its result to read.
+_OPTIONS_NAME = re.compile(r"[\w.-]{1,128}")
+MAX_OPTIONS_ARGUMENTS_BYTES = 8 * 1024
 _TOOL_ANNOTATION_HINTS = ("readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint")
 _PROTOCOL_VERSION_FORMAT = re.compile(r"[\w.-]{1,32}")
 _SSE_LINE_END = re.compile(r"\r\n|\r|\n")
@@ -196,6 +199,9 @@ def _filter_schema(schema: Any, depth: int = 0) -> dict[str, Any]:
     choices = _as_list(schema.get("enum"))
     if choices and all(_is_json_scalar(choice) for choice in choices):
         result["enum"] = _mask_prose_values(choices)
+    options = _options_source(schema.get("x-options"))
+    if options:
+        result["x-options"] = options
     for field in ("anyOf", "oneOf"):
         if field in schema:
             result[field] = [_filter_schema(item, depth + 1) for item in _as_list(schema[field])]
@@ -207,9 +213,36 @@ def _filter_schema(schema: Any, depth: int = 0) -> dict[str, Any]:
     return result
 
 
+def _options_source(value: Any) -> dict[str, Any] | None:
+    """An `x-options` lookup: the read-only tool that lists a field's valid values.
+
+    The form calls `tool` with `arguments` and shows the rows under `items` as a
+    select, using their `value` and `label` fields. The arguments aren't masked,
+    since they go back to the server as they are, and only people who can call
+    tools see them. Anything not in this shape is dropped.
+    """
+    if not isinstance(value, dict):
+        return None
+    arguments = value.get("arguments", {})
+    if not isinstance(arguments, dict) or not all(
+        isinstance(name, str) and _is_json_scalar(item) for name, item in arguments.items()
+    ):
+        return None
+    if len(json.dumps(arguments)) > MAX_OPTIONS_ARGUMENTS_BYTES:
+        return None
+    source: dict[str, Any] = {"arguments": arguments}
+    for field, required in (("tool", True), ("items", False), ("value", True), ("label", False)):
+        name = value.get(field)
+        if isinstance(name, str) and _OPTIONS_NAME.fullmatch(name):
+            source[field] = name
+        elif required or name is not None:
+            return None
+    return source
+
+
 def _without_schema_values(schema: dict[str, Any]) -> dict[str, Any]:
-    """Drop defaults and choices at every level. The result is bounded by _filter_schema's depth limit."""
-    result = {key: value for key, value in schema.items() if key not in ("default", "enum")}
+    """Drop defaults, choices and lookups at every level. The result is bounded by _filter_schema's depth limit."""
+    result = {key: value for key, value in schema.items() if key not in ("default", "enum", "x-options")}
     for field in ("anyOf", "oneOf"):
         if field in result:
             result[field] = [_without_schema_values(item) for item in result[field]]

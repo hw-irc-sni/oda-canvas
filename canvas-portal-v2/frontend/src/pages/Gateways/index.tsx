@@ -292,6 +292,12 @@ interface ServerGroup<T> {
   items: T[]
 }
 
+function serverOf(key: string, separator: string, targets: string[]): string {
+  const known = [...targets].sort((a, b) => b.length - a.length)
+  const index = key.indexOf(separator)
+  return known.find((target) => key.startsWith(target + separator)) ?? (index > 0 ? key.slice(0, index) : '')
+}
+
 /** agentgateway names a tool `<target>_<tool>` and a resource URI `<target>+<scheme>://...`. A target name can hold the
  * separator too, so the configured targets are matched first (longest first), then the text before the first separator. */
 function groupByServer<T>(
@@ -300,12 +306,9 @@ function groupByServer<T>(
   separator: string,
   targets: string[],
 ): ServerGroup<T>[] {
-  const known = [...targets].sort((a, b) => b.length - a.length)
   const groups = new Map<string, T[]>()
   for (const item of items) {
-    const key = keyOf(item)
-    const index = key.indexOf(separator)
-    const server = known.find((target) => key.startsWith(target + separator)) ?? (index > 0 ? key.slice(0, index) : '')
+    const server = serverOf(keyOf(item), separator, targets)
     groups.set(server, [...(groups.get(server) ?? []), item])
   }
   return [...groups].map(([server, grouped]) => ({ server, items: grouped }))
@@ -395,7 +398,11 @@ function LiveDiscovery({ data, onInspect }: { data: AiGatewaysSummary; onInspect
             render: (name: string, tool: McpTool) => (
               <Space size={8}>
                 <ItemAvatar icon={tool.icon} fallback={<ToolOutlined />} />
-                <InspectLink label={name} kind="tool" onClick={() => onInspect({ kind: 'tool', tool })} />
+                <InspectLink
+                  label={name}
+                  kind="tool"
+                  onClick={() => onInspect({ kind: 'tool', tool, server: serverOf(tool.name, '_', targets), tools })}
+                />
               </Space>
             ),
           },

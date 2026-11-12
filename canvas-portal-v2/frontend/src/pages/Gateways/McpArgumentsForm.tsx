@@ -3,6 +3,7 @@ import { Form, Input, InputNumber, Select, Switch } from 'antd'
 import type { McpSchema } from '@/api/aiGateways'
 import { colors } from '@/theme'
 import MarkdownText from './MarkdownText'
+import McpOptionsSelect, { type OptionsLookup } from './McpOptionsSelect'
 
 type FieldKind = 'string' | 'number' | 'integer' | 'choice' | 'json'
 
@@ -134,12 +135,14 @@ function ArgumentField({
   onChange,
   disabled,
   label,
+  lookup,
 }: {
   schema: McpSchema
   value: unknown
   onChange: (value: unknown) => void
   disabled: boolean
   label: string
+  lookup?: OptionsLookup
 }) {
   const kind = fieldKind(schema)
   if (kind === 'choice') {
@@ -168,6 +171,20 @@ function ArgumentField({
         precision={kind === 'integer' ? 0 : undefined}
         value={isEmpty(value) ? null : (value as number)}
         onChange={(next) => onChange(next ?? undefined)}
+      />
+    )
+  }
+  const source = withoutNull(schema)['x-options']
+  const sourceTool = kind === 'string' && source && lookup ? lookup(source) : null
+  if (source && sourceTool) {
+    return (
+      <McpOptionsSelect
+        tool={sourceTool}
+        source={source}
+        label={label}
+        disabled={disabled}
+        value={value}
+        onChange={onChange}
       />
     )
   }
@@ -200,11 +217,14 @@ export default function McpArgumentsForm({
   draft,
   onChange,
   disabled,
+  lookup,
 }: {
   schema: McpSchema | null
   draft: ArgumentsDraft
   onChange: (draft: ArgumentsDraft) => void
   disabled: boolean
+  /** Finds the tool that lists a field's choices, for fields whose schema has `x-options`. */
+  lookup?: OptionsLookup
 }) {
   const required = schema?.required ?? []
   const fields = fieldsOf(schema)
@@ -253,6 +273,7 @@ export default function McpArgumentsForm({
               <ArgumentField
                 schema={field}
                 label={name}
+                lookup={lookup}
                 disabled={disabled}
                 value={draft.values[name]}
                 onChange={(value) => onChange({ ...draft, values: { ...draft.values, [name]: value } })}
