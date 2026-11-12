@@ -2,6 +2,7 @@ import React from 'react'
 import { Form, Input, InputNumber, Select, Switch } from 'antd'
 import type { McpSchema } from '@/api/aiGateways'
 import { colors } from '@/theme'
+import MarkdownText from './MarkdownText'
 
 type FieldKind = 'string' | 'number' | 'integer' | 'choice' | 'json'
 
@@ -246,7 +247,7 @@ export default function McpArgumentsForm({
               key={name}
               required={required.includes(name)}
               label={withoutNull(field).title ?? name}
-              help={withoutNull(field).description}
+              help={withoutNull(field).description ? <MarkdownText source={withoutNull(field).description} summary /> : undefined}
               style={{ marginBottom: 10 }}
             >
               <ArgumentField

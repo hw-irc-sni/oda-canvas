@@ -23,6 +23,7 @@ import SectionedPage, { PageSection } from '@/components/SectionedPage'
 import { colors } from '@/theme'
 import { useAuth } from '@/hooks/useAuth'
 import { errorDetail } from './errorDetail'
+import MarkdownText from './MarkdownText'
 import McpInspectorModal, { type InspectedItem } from './McpInspectorModal'
 import McpTargetModal from './McpTargetModal'
 import ModelConfigModal, { type EditedModel } from './ModelConfigModal'
@@ -371,7 +372,11 @@ function LiveDiscovery({ data, onInspect }: { data: AiGatewaysSummary; onInspect
               </Space>
             ),
           },
-          { title: 'Description', dataIndex: 'description' },
+          {
+            title: 'Description',
+            dataIndex: 'description',
+            render: (description: string) => <MarkdownText source={description} summary />,
+          },
         ]}
       />
       <h4 style={headingStyle}>Resources available now</h4>
@@ -397,7 +402,11 @@ function LiveDiscovery({ data, onInspect }: { data: AiGatewaysSummary; onInspect
             ),
           },
           { title: 'URI', dataIndex: 'uri' },
-          { title: 'Description', dataIndex: 'description' },
+          {
+            title: 'Description',
+            dataIndex: 'description',
+            render: (description: string) => <MarkdownText source={description} summary />,
+          },
         ]}
       />
       {partial && (
