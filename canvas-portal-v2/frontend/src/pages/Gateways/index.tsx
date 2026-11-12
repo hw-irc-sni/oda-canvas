@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Avatar, Button, Empty, message, Popconfirm, Space, Spin, Table, Tag, Tooltip } from 'antd'
+import { Alert, Avatar, Button, Empty, message, Popconfirm, Popover, Space, Spin, Table, Tag, Tooltip } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { ApiOutlined, FileOutlined, PlusOutlined, ToolOutlined } from '@ant-design/icons'
 import {
@@ -54,6 +54,33 @@ function ServerAvatar({ name, icon }: { name: string; icon?: string | null }) {
     >
       {name.charAt(0).toUpperCase()}
     </Avatar>
+  )
+}
+
+/**
+ * A description's first paragraph; hovering it shows the whole description,
+ * formatted, in a popover that closes once the pointer leaves both.
+ */
+function DescriptionCell({ description }: { description: string | null | undefined }) {
+  if (!description) return null
+  return (
+    <Popover
+      placement="bottomLeft"
+      mouseEnterDelay={0.3}
+      mouseLeaveDelay={0.15}
+      destroyOnHidden
+      styles={{ body: { padding: '10px 14px' } }}
+      content={
+        <MarkdownText
+          source={description}
+          style={{ fontSize: 13, width: 'min(640px, 80vw)', maxHeight: '60vh', overflowY: 'auto' }}
+        />
+      }
+    >
+      <span style={{ cursor: 'help' }}>
+        <MarkdownText source={description} summary />
+      </span>
+    </Popover>
   )
 }
 
@@ -375,7 +402,7 @@ function LiveDiscovery({ data, onInspect }: { data: AiGatewaysSummary; onInspect
           {
             title: 'Description',
             dataIndex: 'description',
-            render: (description: string) => <MarkdownText source={description} summary />,
+            render: (description: string) => <DescriptionCell description={description} />,
           },
         ]}
       />
@@ -405,7 +432,7 @@ function LiveDiscovery({ data, onInspect }: { data: AiGatewaysSummary; onInspect
           {
             title: 'Description',
             dataIndex: 'description',
-            render: (description: string) => <MarkdownText source={description} summary />,
+            render: (description: string) => <DescriptionCell description={description} />,
           },
         ]}
       />
