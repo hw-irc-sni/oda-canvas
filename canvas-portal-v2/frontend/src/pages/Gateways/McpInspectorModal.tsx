@@ -12,6 +12,14 @@ import { useAuth } from '@/hooks/useAuth'
 import { colors } from '@/theme'
 import McpArgumentsForm, { buildArguments, initialDraft } from './McpArgumentsForm'
 import McpResultView from './McpResultView'
+import MarkdownText from './MarkdownText'
+
+const descriptionStyle: React.CSSProperties = {
+  fontSize: 13,
+  color: colors.textSecondary,
+  maxHeight: 360,
+  overflowY: 'auto',
+}
 
 export type InspectedItem = { kind: 'tool'; tool: McpTool } | { kind: 'resource'; resource: McpResource }
 
@@ -85,7 +93,7 @@ function ToolInspector({ tool }: { tool: McpTool }) {
 
   return (
     <Space direction="vertical" size={12} style={{ width: '100%' }}>
-      {tool.description && <div style={{ fontSize: 13, color: colors.textSecondary }}>{tool.description}</div>}
+      <MarkdownText source={tool.description} style={descriptionStyle} />
       {hints.length > 0 && (
         <Space size={4} wrap>
           {hints.map(([hint, label]) => (
@@ -128,7 +136,7 @@ function ResourceInspector({ resource }: { resource: McpResource }) {
 
   return (
     <Space direction="vertical" size={12} style={{ width: '100%' }}>
-      {resource.description && <div style={{ fontSize: 13, color: colors.textSecondary }}>{resource.description}</div>}
+      <MarkdownText source={resource.description} style={descriptionStyle} />
       <Space size={8} wrap>
         <code style={{ overflowWrap: 'anywhere' }}>{resource.uri}</code>
         {resource.mimeType && <Tag>{resource.mimeType}</Tag>}
