@@ -24,7 +24,7 @@ const descriptionStyle: React.CSSProperties = {
 
 /** A tool comes with its server's prefix and the tools the gateway lists, which can supply its fields' choices. */
 export type InspectedItem =
-  | { kind: 'tool'; tool: McpTool; server: string; tools: McpTool[] }
+  | { kind: 'tool'; tool: McpTool; server: string; tools: McpTool[]; targets: string[] }
   | { kind: 'resource'; resource: McpResource }
 
 type CallState =
@@ -87,10 +87,20 @@ const ANNOTATION_LABELS: [keyof McpTool['annotations'], string][] = [
   ['openWorldHint', 'Open world'],
 ]
 
-function ToolInspector({ tool, server, tools }: { tool: McpTool; server: string; tools: McpTool[] }) {
+function ToolInspector({
+  tool,
+  server,
+  tools,
+  targets,
+}: {
+  tool: McpTool
+  server: string
+  tools: McpTool[]
+  targets: string[]
+}) {
   const { isAdmin, isLoading: authLoading } = useAuth()
   // Only administrators can call tools, the ones that list choices included.
-  const lookup = useMemo(() => (isAdmin ? optionsLookup(server, tools) : undefined), [isAdmin, server, tools])
+  const lookup = useMemo(() => (isAdmin ? optionsLookup(server, tools, targets) : undefined), [isAdmin, server, tools, targets])
   const { state, run } = useMcpCall()
   const [draft, setDraft] = useState(() => initialDraft(tool.inputSchema))
   const built = buildArguments(tool.inputSchema, draft)
@@ -166,7 +176,7 @@ export default function McpInspectorModal({ item, onClose }: { item: InspectedIt
       footer={<Button onClick={onClose}>Close</Button>}
     >
       {item.kind === 'tool' ? (
-        <ToolInspector tool={item.tool} server={item.server} tools={item.tools} />
+        <ToolInspector tool={item.tool} server={item.server} tools={item.tools} targets={item.targets} />
       ) : <ResourceInspector resource={item.resource} />}
     </Modal>
   )

@@ -24,6 +24,7 @@ import { colors } from '@/theme'
 import { useAuth } from '@/hooks/useAuth'
 import { errorDetail } from './errorDetail'
 import MarkdownText from './MarkdownText'
+import { serverOf } from './mcpNames'
 import McpInspectorModal, { type InspectedItem } from './McpInspectorModal'
 import McpTargetModal from './McpTargetModal'
 import ModelConfigModal, { type EditedModel } from './ModelConfigModal'
@@ -292,14 +293,7 @@ interface ServerGroup<T> {
   items: T[]
 }
 
-function serverOf(key: string, separator: string, targets: string[]): string {
-  const known = [...targets].sort((a, b) => b.length - a.length)
-  const index = key.indexOf(separator)
-  return known.find((target) => key.startsWith(target + separator)) ?? (index > 0 ? key.slice(0, index) : '')
-}
-
-/** agentgateway names a tool `<target>_<tool>` and a resource URI `<target>+<scheme>://...`. A target name can hold the
- * separator too, so the configured targets are matched first (longest first), then the text before the first separator. */
+/** Groups items by the server their names belong to (see serverOf). */
 function groupByServer<T>(
   items: T[],
   keyOf: (item: T) => string,
@@ -401,7 +395,7 @@ function LiveDiscovery({ data, onInspect }: { data: AiGatewaysSummary; onInspect
                 <InspectLink
                   label={name}
                   kind="tool"
-                  onClick={() => onInspect({ kind: 'tool', tool, server: serverOf(tool.name, '_', targets), tools })}
+                  onClick={() => onInspect({ kind: 'tool', tool, server: serverOf(tool.name, '_', targets), tools, targets })}
                 />
               </Space>
             ),
