@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
 import { Alert, Button, Modal, Space, Spin, Tag } from 'antd'
 import {
@@ -13,6 +13,7 @@ import { colors } from '@/theme'
 import McpArgumentsForm, { buildArguments, initialDraft } from './McpArgumentsForm'
 import McpResultView from './McpResultView'
 import MarkdownText from './MarkdownText'
+import { optionsLookup } from './McpOptionsSelect'
 
 const descriptionStyle: React.CSSProperties = {
   fontSize: 13,
@@ -21,7 +22,10 @@ const descriptionStyle: React.CSSProperties = {
   overflowY: 'auto',
 }
 
-export type InspectedItem = { kind: 'tool'; tool: McpTool } | { kind: 'resource'; resource: McpResource }
+/** A tool comes with its server's prefix and the tools the gateway lists, which can supply its fields' choices. */
+export type InspectedItem =
+  | { kind: 'tool'; tool: McpTool; server: string; tools: McpTool[] }
+  | { kind: 'resource'; resource: McpResource }
 
 type CallState =
   | { status: 'idle' }
@@ -83,8 +87,10 @@ const ANNOTATION_LABELS: [keyof McpTool['annotations'], string][] = [
   ['openWorldHint', 'Open world'],
 ]
 
-function ToolInspector({ tool }: { tool: McpTool }) {
+function ToolInspector({ tool, server, tools }: { tool: McpTool; server: string; tools: McpTool[] }) {
   const { isAdmin, isLoading: authLoading } = useAuth()
+  // Only administrators can call tools, the ones that list choices included.
+  const lookup = useMemo(() => (isAdmin ? optionsLookup(server, tools) : undefined), [isAdmin, server, tools])
   const { state, run } = useMcpCall()
   const [draft, setDraft] = useState(() => initialDraft(tool.inputSchema))
   const built = buildArguments(tool.inputSchema, draft)
@@ -103,7 +109,7 @@ function ToolInspector({ tool }: { tool: McpTool }) {
           ))}
         </Space>
       )}
-      <McpArgumentsForm schema={tool.inputSchema} draft={draft} onChange={setDraft} disabled={running} />
+      <McpArgumentsForm schema={tool.inputSchema} draft={draft} onChange={setDraft} disabled={running} lookup={lookup} />
       {!authLoading && !isAdmin && (
         <Alert type="info" showIcon message="Only administrators can call tools." />
       )}
@@ -159,7 +165,9 @@ export default function McpInspectorModal({ item, onClose }: { item: InspectedIt
       onCancel={onClose}
       footer={<Button onClick={onClose}>Close</Button>}
     >
-      {item.kind === 'tool' ? <ToolInspector tool={item.tool} /> : <ResourceInspector resource={item.resource} />}
+      {item.kind === 'tool' ? (
+        <ToolInspector tool={item.tool} server={item.server} tools={item.tools} />
+      ) : <ResourceInspector resource={item.resource} />}
     </Modal>
   )
 }

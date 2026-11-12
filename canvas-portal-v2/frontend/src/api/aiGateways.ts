@@ -36,6 +36,18 @@ export interface AiGatewayTrafficPolicy {
   settings: Record<string, unknown>
 }
 
+/**
+ * A schema extension: the read-only tool that lists a field's valid values. Calling `tool` with `arguments`
+ * returns JSON whose rows, under `items` or at the top level, give a choice's `value` and `label` fields.
+ */
+export interface McpOptionsSource {
+  tool: string
+  arguments: Record<string, unknown>
+  items?: string
+  value: string
+  label?: string
+}
+
 /** The part of a JSON Schema that the backend passes on. Other fields are dropped. */
 export interface McpSchema {
   type?: string | string[]
@@ -49,6 +61,7 @@ export interface McpSchema {
   properties?: Record<string, McpSchema>
   anyOf?: McpSchema[]
   oneOf?: McpSchema[]
+  'x-options'?: McpOptionsSource
 }
 
 export interface McpTool {

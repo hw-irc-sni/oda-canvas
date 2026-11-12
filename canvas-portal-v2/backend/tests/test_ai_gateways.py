@@ -674,6 +674,59 @@ def test_input_schema_keeps_fields_with_secret_like_names():
     assert "abcdefghijklmnop" not in text and "drop me" not in text
 
 
+OPTIONS = {
+    "tool": "sparql_query",
+    "arguments": {"query": "SELECT ?value ?label WHERE { ?value a owl:Class } # Bearer abcdefghijklmnopqrstuvwx"},
+    "items": "results",
+    "value": "value",
+    "label": "label",
+}
+
+
+def test_input_schema_keeps_option_lookups_as_they_are():
+    schema = {
+        "properties": {
+            "class_uri": {"type": "string", "x-options": OPTIONS},
+            "agent": {"anyOf": [{"type": "string", "x-options": {"tool": "list_agents", "value": "agent_uri"}}, {"type": "null"}]},
+        },
+    }
+
+    filtered = ai_gateways._input_schema(schema)
+
+    assert filtered["properties"]["class_uri"]["x-options"] == OPTIONS
+    assert filtered["properties"]["agent"]["anyOf"][0]["x-options"] == {
+        "tool": "list_agents", "arguments": {}, "value": "agent_uri",
+    }
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        "sparql_query",
+        {"value": "value"},
+        {"tool": "a b", "value": "value"},
+        {"tool": "t"},
+        {"tool": "t", "value": "value", "label": 3},
+        {"tool": "t", "value": "value", "arguments": {"query": {"nested": True}}},
+        {"tool": "t", "value": "value", "arguments": ["query"]},
+        {"tool": "t", "value": "value", "arguments": {"query": "x" * 9000}},
+    ],
+)
+def test_input_schema_drops_malformed_option_lookups(options):
+    filtered = ai_gateways._input_schema({"properties": {"field": {"type": "string", "x-options": options}}})
+
+    assert filtered["properties"]["field"] == {"type": "string"}
+
+
+def test_option_lookups_are_left_out_for_people_who_cant_call_tools():
+    schema = {"properties": {"field": {"anyOf": [{"type": "string", "x-options": OPTIONS}, {"type": "null"}]}}}
+    summary = {"discovered": {"tools": [{"name": "t", "inputSchema": ai_gateways._input_schema(schema)}]}}
+
+    stripped = ai_gateways.without_schema_values(summary)
+
+    assert "x-options" not in json.dumps(stripped)
+
+
 VALUES_SCHEMA = {
     "type": "object",
     "required": ["passphrase"],
