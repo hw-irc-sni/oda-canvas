@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Input, Select } from 'antd'
 import { callMcpTool, type McpCallOutcome, type McpOptionsSource, type McpTool } from '@/api/aiGateways'
 import { colors } from '@/theme'
+import { serverOf } from './mcpNames'
 
 export interface McpOption {
   value: string
@@ -15,13 +16,15 @@ export type OptionsLookup = (source: McpOptionsSource) => string | null
 const MAX_OPTIONS = 1000
 
 /**
- * The gateway name of the tool an `x-options` source names, which is on the same server as the tool being
- * tested. Only tools the gateway lists and that say they are read-only are called, since opening a form
- * must never change anything.
+ * The gateway name of the tool an `x-options` source names, which must be on the same server as the tool
+ * being tested: a source can't reach another server's tools, even one whose name extends this server's.
+ * Only tools the gateway lists and that say they are read-only are called, since opening a form must never
+ * change anything.
  */
-export function optionsLookup(server: string, tools: McpTool[]): OptionsLookup {
+export function optionsLookup(server: string, tools: McpTool[], targets: string[]): OptionsLookup {
   return (source) => {
     const name = server ? `${server}_${source.tool}` : source.tool
+    if (serverOf(name, '_', targets) !== server) return null
     const tool = tools.find((candidate) => candidate.name === name)
     return tool?.annotations.readOnlyHint === true ? name : null
   }
