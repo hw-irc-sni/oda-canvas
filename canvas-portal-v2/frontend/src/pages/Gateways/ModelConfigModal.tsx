@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { Alert, Button, Checkbox, Collapse, Form, Input, message, Modal, Select, Spin, Switch } from 'antd'
+import { Alert, Button, Checkbox, Collapse, Form, Input, message, Modal, Select, Space, Spin, Switch, Tooltip } from 'antd'
+import { UnorderedListOutlined } from '@ant-design/icons'
 import {
   addModelConfig,
   updateModelConfig,
@@ -11,6 +12,7 @@ import {
 } from '@/api/aiGateways'
 import { colors } from '@/theme'
 import { errorDetail } from './errorDetail'
+import UpstreamModelsModal, { type UpstreamQuery } from './UpstreamModelsModal'
 
 /** config is null when adding a new model. */
 export interface EditedModel {
@@ -41,6 +43,9 @@ const PROVIDER_OPTIONS = [
     ],
   },
 ]
+
+// Providers whose model list isn't GET {baseUrl}/models, as the OpenAI API has it.
+const NOT_LISTABLE = new Set(['anthropic', 'gemini', 'vertex', 'bedrock', 'azure', 'copilot'])
 
 const options = (...values: string[]) => values.map((value) => ({ value, label: value }))
 
@@ -145,6 +150,10 @@ export default function ModelConfigModal({
   const [formError, setFormError] = useState('')
   const provider = Form.useWatch('provider', form)
   const removeApiKey = Form.useWatch('removeApiKey', form)
+  const baseUrl = Form.useWatch('baseUrl', form)
+  const apiKey = Form.useWatch('apiKey', form)
+  const upstreamModel = Form.useWatch('model', form)
+  const [browsing, setBrowsing] = useState<UpstreamQuery | null>(null)
   // A custom or referenced provider can be any kind, so it can use any of these settings.
   const anyProvider = provider === CUSTOM || provider === REFERENCE
 
@@ -157,6 +166,15 @@ export default function ModelConfigModal({
     },
     onError: (error) => setFormError(errorDetail(error)),
   })
+
+  // Why Browse can't list models yet, if it can't.
+  let browseBlocked: string | undefined
+  if (!provider || NOT_LISTABLE.has(provider)) browseBlocked = `Listing the models of ${provider ?? 'this provider'} isn't supported.`
+  else if (provider !== 'openAI' && !baseUrl?.trim()) browseBlocked = 'Enter the base URL to list the models.'
+  else if (config?.apiKeySet && !removeApiKey && !apiKey?.trim())
+    browseBlocked = "Enter the API key to list the models. The stored key can't be read back."
+
+  const browse = () => setBrowsing({ provider, baseUrl: baseUrl?.trim(), apiKey: removeApiKey ? undefined : apiKey?.trim() })
 
   const submit = (values: FormValues) => {
     setFormError('')
@@ -218,13 +236,6 @@ export default function ModelConfigModal({
             </Form.Item>
           )}
           <Form.Item
-            name="model"
-            label="Upstream model"
-            extra={help('The model to send to the provider. If empty, the requested name is sent.')}
-          >
-            <Input autoComplete="off" />
-          </Form.Item>
-          <Form.Item
             name="baseUrl"
             label="Base URL"
             extra={help('For example https://api.openai.com/v1. Endpoint paths are added after this.')}
@@ -247,6 +258,26 @@ export default function ModelConfigModal({
               <Checkbox>Remove the current key</Checkbox>
             </Form.Item>
           )}
+          <Form.Item
+            label="Upstream model"
+            extra={help('The model to send to the provider. If empty, the requested name is sent.')}
+          >
+            <Space.Compact style={{ width: '100%' }}>
+              <Form.Item name="model" noStyle>
+                <Input autoComplete="off" />
+              </Form.Item>
+              <Tooltip title={browseBlocked ?? 'Browse the models the provider offers'}>
+                <Button
+                  aria-label="Browse the provider's models"
+                  icon={<UnorderedListOutlined />}
+                  disabled={Boolean(browseBlocked)}
+                  onClick={browse}
+                >
+                  Browse
+                </Button>
+              </Tooltip>
+            </Space.Compact>
+          </Form.Item>
           {(provider === 'bedrock' || anyProvider) && (
             <>
               <Form.Item name="awsRegion" label="AWS region">
@@ -329,6 +360,17 @@ export default function ModelConfigModal({
           {formError && <Alert style={{ marginTop: 12 }} type="error" showIcon message={formError} />}
         </Form>
       </Spin>
+      {browsing && (
+        <UpstreamModelsModal
+          query={browsing}
+          current={upstreamModel}
+          onSelect={(id) => {
+            form.setFieldValue('model', id)
+            setBrowsing(null)
+          }}
+          onClose={() => setBrowsing(null)}
+        />
+      )}
     </Modal>
   )
 }

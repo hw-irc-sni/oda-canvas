@@ -219,6 +219,30 @@ export async function updateModelConfig(
   return data
 }
 
+/** One model a provider offers. id is always present; the other properties depend on the provider. */
+export type UpstreamModel = { id: string } & Record<string, string | number | boolean | null>
+
+export interface UpstreamModels {
+  baseUrl: string
+  models: UpstreamModel[]
+  truncated: boolean
+}
+
+/** Lists the models of an OpenAI-compatible provider. Only a key typed in the form can be used. */
+export async function fetchUpstreamModels(
+  provider: ModelProvider,
+  baseUrl: string | undefined,
+  apiKey: string | undefined,
+  signal: AbortSignal,
+): Promise<UpstreamModels> {
+  const { data } = await apiClient.post<UpstreamModels>(
+    '/api/ai-gateways/models/upstream',
+    { provider, baseUrl: baseUrl || null, apiKey: apiKey || null },
+    { signal },
+  )
+  return data
+}
+
 export async function removeModelConfig(name: string): Promise<ModelChangeResult> {
   const { data } = await apiClient.delete<ModelChangeResult>('/api/ai-gateways/models/config', { params: { name } })
   return data
