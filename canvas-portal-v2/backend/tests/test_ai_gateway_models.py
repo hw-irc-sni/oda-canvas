@@ -681,3 +681,108 @@ def test_advanced_settings_can_not_reach_the_gateway_or_its_identity(core, http,
         models.save_model(request(advanced=advanced), core=core, http=http)
     assert refused.value.status_code == 422
     assert core.writes == []
+
+
+def _upstream(handler):
+    return httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=False)
+
+
+def test_upstream_models_are_listed_from_the_openai_default_with_the_typed_key():
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(200, json={"object": "list", "data": [
+            {"id": "gpt-b", "object": "model", "created": 1700000000, "owned_by": "openai"},
+            {"id": "gpt-a", "object": "model", "created": 1690000000, "owned_by": "system", "meta": {"x": [1]}},
+            42,
+            {"object": "model"},
+        ]})
+
+    result = models.list_upstream_models("openAI", None, " sk-typed ", http=_upstream(handler))
+    assert str(seen[0].url) == "https://api.openai.com/v1/models"
+    assert seen[0].headers["authorization"] == "Bearer sk-typed"
+    assert [row["id"] for row in result["models"]] == ["gpt-a", "gpt-b"]
+    assert result["models"][0]["meta"] == '{"x": [1]}'
+    assert result["models"][1]["created"] == 1700000000
+    assert result["truncated"] is False
+
+
+def test_upstream_models_use_the_base_url_and_send_no_key_when_none_is_typed():
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(200, json={"data": [{"id": "llama3"}]})
+
+    result = models.list_upstream_models("ollama", "http://llm.test/v1/", "", http=_upstream(handler))
+    assert str(seen[0].url) == "http://llm.test/v1/models"
+    assert "authorization" not in seen[0].headers
+    assert result["models"] == [{"id": "llama3"}]
+
+
+@pytest.mark.parametrize(
+    "provider, base_url, message",
+    [
+        ("anthropic", "https://llm.test/v1", "isn't supported"),
+        ("ollama", None, "Enter the base URL"),
+        ({"custom": {}}, "", "Enter the base URL"),
+        ("openAI", "ftp://llm.test", "must start with http"),
+        ("openAI", "http://127.0.0.1:15000", "points at the gateway"),
+    ],
+)
+def test_upstream_models_refuse_requests_they_cant_make(provider, base_url, message):
+    def handler(request):
+        raise AssertionError("no request expected")
+
+    with pytest.raises(GatewayRequestRefused, match=message):
+        models.list_upstream_models(provider, base_url, None, http=_upstream(handler))
+
+
+def test_upstream_models_hide_the_error_body_which_can_echo_the_key():
+    def handler(request):
+        return httpx.Response(401, json={"error": {"message": "Incorrect API key provided: sk-secret1234"}})
+
+    with pytest.raises(GatewayRequestRefused) as refused:
+        models.list_upstream_models("openAI", "https://llm.test/v1", "sk-secret1234", http=_upstream(handler))
+    assert refused.value.status_code == 502
+    assert "sk-" not in refused.value.message and "401" in refused.value.message
+
+
+def test_upstream_models_dont_follow_redirects():
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(302, headers={"Location": "http://127.0.0.1:15000/quitquitquit"})
+
+    with pytest.raises(GatewayRequestRefused, match="redirected"):
+        models.list_upstream_models("openAI", "https://llm.test/v1", "sk-typed", http=_upstream(handler))
+    assert len(seen) == 1
+
+
+@pytest.mark.parametrize(
+    "response, message",
+    [
+        (httpx.Response(200, text="<html>"), "isn't JSON"),
+        (httpx.Response(200, text="[" * 100000), "isn't JSON"),
+        (httpx.Response(200, json={"object": "list"}), "no model list"),
+        (httpx.Response(200, content=b"[" + b'"m",' * (models.MAX_UPSTREAM_LIST_BYTES // 4) + b'"m"]'), "too large"),
+    ],
+)
+def test_upstream_models_refuse_answers_that_arent_a_model_list(response, message):
+    with pytest.raises(GatewayRequestRefused, match=message):
+        models.list_upstream_models("openAI", "https://llm.test/v1", None, http=_upstream(lambda request: response))
+
+
+def test_upstream_models_report_a_provider_that_cant_be_reached():
+    def handler(request):
+        raise httpx.ConnectError("refused")
+
+    with pytest.raises(GatewayRequestRefused, match="Couldn't reach the provider: refused"):
+        models.list_upstream_models("openAI", "https://llm.test/v1", None, http=_upstream(handler))
+
+
+def test_upstream_models_ask_for_a_key_when_none_was_sent():
+    with pytest.raises(GatewayRequestRefused, match="needs an API key"):
+        models.list_upstream_models("openAI", "https://llm.test/v1", None, http=_upstream(lambda r: httpx.Response(401)))
