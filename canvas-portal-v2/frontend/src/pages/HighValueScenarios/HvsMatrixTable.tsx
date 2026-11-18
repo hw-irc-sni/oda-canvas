@@ -2,7 +2,7 @@ import React from 'react'
 import { Tooltip } from 'antd'
 import { AppstoreOutlined, AuditOutlined } from '@ant-design/icons'
 import { colors } from '@/theme'
-import type { HvsCell, HvsColumn, HvsMatrix } from './hvsMatrix'
+import type { HvsCell, HvsColumn, HvsMatrix, HvsPendingLayer } from './hvsMatrix'
 import { cellKey, type PlacedPackage } from './packagePlacement'
 
 const hvsColor = colors.statusDown
@@ -10,6 +10,8 @@ const hvsBg = colors.statusDownBg
 const stageColor = colors.tmfText
 const stageBg = colors.tmfBg
 
+const stageWidth = 104
+const rowWidth = 200
 const cellPad = 4
 const tableStyle: React.CSSProperties = {
   width: '100%',
@@ -204,8 +206,6 @@ interface HvsMatrixTableProps {
 export function HvsMatrixTable({ matrix, packages, selected, onSelect }: HvsMatrixTableProps) {
   const columns = matrix.columnGroups.flatMap((g) => g.columns)
   const grouped = matrix.columnGroups.some((g) => g.label)
-  const stageWidth = 104
-  const rowWidth = 200
 
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -307,6 +307,46 @@ export function HvsMatrixTable({ matrix, packages, selected, onSelect }: HvsMatr
               )
             }),
           )}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** A layer without scenarios yet, aligned with the title column of the matrices below it. */
+export function HvsPendingLayerTable({ layer }: { layer: HvsPendingLayer }) {
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={tableStyle} aria-label={`${layer.title} high-value scenarios`}>
+        <colgroup>
+          <col style={{ width: stageWidth }} />
+          <col style={{ width: rowWidth }} />
+          <col />
+        </colgroup>
+        <tbody>
+          <tr>
+            <th
+              colSpan={2}
+              scope="row"
+              style={{ ...headerBase, fontSize: 13, fontWeight: 700, background: colors.surfaceInsetStrong }}
+            >
+              {layer.title}
+            </th>
+            <td
+              style={{
+                height: 34,
+                borderRadius: 6,
+                border: `1px dashed ${colors.border}`,
+                background: colors.surfaceSubtle,
+                color: colors.textMuted,
+                textAlign: 'center',
+                fontWeight: 600,
+                letterSpacing: 0.5,
+              }}
+            >
+              {layer.content}
+            </td>
+          </tr>
         </tbody>
       </table>
     </div>
