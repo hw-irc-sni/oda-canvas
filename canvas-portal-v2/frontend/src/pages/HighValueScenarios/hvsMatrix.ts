@@ -170,3 +170,24 @@ export const networkMatrix: HvsMatrix = {
 
 export const hvsMatrices: HvsMatrix[] = [businessMatrix, serviceMatrix, networkMatrix]
 
+
+/** An end-to-end experience and the map cells its autonomous flow runs through. */
+export interface HvsExperience {
+  key: string
+  label: string
+  /** Cells as `${rowKey}:${columnKey}`, the format of cellKey. */
+  cells: string[]
+}
+
+export const hvsExperiences: HvsExperience[] = [
+  {
+    key: 'live-streaming-event',
+    label: 'Live Streaming Event Experience',
+    cells: [
+      'experience-management:individual-sla',
+      'service-assurance:4g5g',
+      'quality-optimization:wireless',
+      'energy-efficiency:wireless',
+    ],
+  },
+]

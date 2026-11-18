@@ -1,16 +1,22 @@
 import React, { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Select } from 'antd'
 import { ThunderboltOutlined } from '@ant-design/icons'
 import SectionedPage, { PageSection } from '@/components/SectionedPage'
 import { fetchSolutionPackages } from '@/api/solutionPackages'
-import { HvsLegend, HvsMatrixTable, type CellSelection } from './HvsMatrixTable'
-import { hvsMatrices } from './hvsMatrix'
+import { colors } from '@/theme'
+import { ExperienceLegend, HvsLegend, HvsMatrixTable, type CellSelection } from './HvsMatrixTable'
+import { hvsExperiences, hvsMatrices } from './hvsMatrix'
 import { packagesByCell, placePackage, type PlacedPackage } from './packagePlacement'
 import SolutionPackagesTable from './SolutionPackagesTable'
 
 const allCells = hvsMatrices.flatMap((m) => m.stages.flatMap((s) => s.rows.flatMap((r) => r.cells)))
 const hvsCount = allCells.filter((c) => c.mark !== 'none').length
 const anlCount = allCells.filter((c) => c.mark === 'hvs-anl').length
+const experienceOptions = [
+  { value: '', label: <span style={{ color: colors.textMuted }}>None</span> },
+  ...hvsExperiences.map((e) => ({ value: e.key, label: e.label })),
+]
 
 function selectionLabel(selection: CellSelection): string {
   for (const matrix of hvsMatrices) {
@@ -31,12 +37,42 @@ interface AutonomousFlowsProps {
 }
 
 function AutonomousFlows({ packages, packageCount, selected, onSelect }: AutonomousFlowsProps) {
+  const [experienceKey, setExperienceKey] = useState('')
+  const experience = hvsExperiences.find((e) => e.key === experienceKey) ?? null
+
+  function chooseExperience(key: string) {
+    setExperienceKey(key)
+    // The map cells cannot be clicked while an experience is shown, so drop the package filter.
+    if (key) onSelect(null)
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <label style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 12, color: colors.textSecondary }}>
+        Experience
+        <Select
+          value={experienceKey}
+          onChange={chooseExperience}
+          options={experienceOptions}
+          style={{ width: 280, maxWidth: '100%' }}
+          aria-label="Experience"
+        />
+      </label>
       {hvsMatrices.map((matrix) => (
-        <HvsMatrixTable key={matrix.key} matrix={matrix} packages={packages} selected={selected} onSelect={onSelect} />
+        <HvsMatrixTable
+          key={matrix.key}
+          matrix={matrix}
+          packages={packages}
+          selected={selected}
+          onSelect={onSelect}
+          experience={experience}
+        />
       ))}
-      <HvsLegend hvsCount={hvsCount} anlCount={anlCount} packageCount={packageCount} />
+      {experience ? (
+        <ExperienceLegend experience={experience} />
+      ) : (
+        <HvsLegend hvsCount={hvsCount} anlCount={anlCount} packageCount={packageCount} />
+      )}
     </div>
   )
 }

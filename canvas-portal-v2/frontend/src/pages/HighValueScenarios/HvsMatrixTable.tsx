@@ -2,11 +2,13 @@ import React from 'react'
 import { Tooltip } from 'antd'
 import { AppstoreOutlined, AuditOutlined } from '@ant-design/icons'
 import { colors } from '@/theme'
-import type { HvsCell, HvsColumn, HvsMatrix } from './hvsMatrix'
+import type { HvsCell, HvsColumn, HvsExperience, HvsMatrix } from './hvsMatrix'
 import { cellKey, type PlacedPackage } from './packagePlacement'
 
 const hvsColor = colors.statusDown
 const hvsBg = colors.statusDownBg
+const flowColor = colors.statusLive
+const flowBg = colors.statusLiveBg
 const stageColor = colors.tmfText
 const stageBg = colors.tmfBg
 
@@ -32,7 +34,7 @@ const headerBase: React.CSSProperties = {
   lineHeight: 1.25,
 }
 
-function HvsDot() {
+function HvsDot({ color = hvsColor }: { color?: string }) {
   return (
     <span
       aria-hidden
@@ -40,7 +42,7 @@ function HvsDot() {
         width: 10,
         height: 10,
         borderRadius: '50%',
-        border: `2px solid ${hvsColor}`,
+        border: `2px solid ${color}`,
         background: colors.bgCard,
         display: 'inline-block',
       }}
@@ -128,11 +130,17 @@ interface MatrixCellProps {
   packages: PlacedPackage[]
   selected: boolean
   onSelect?: () => void
+  /** Set when an experience is shown: the map marks give way to the cells of its flow. */
+  experience?: { label: string; inFlow: boolean }
 }
 
-function MatrixCell({ cell, row, columns, packages, selected, onSelect }: MatrixCellProps) {
-  const label = describe(cell, row, columns)
-  const highlighted = cell.mark !== 'none'
+function MatrixCell({ cell, row, columns, packages: cellPackages, selected, onSelect, experience }: MatrixCellProps) {
+  const packages = experience ? [] : cellPackages
+  const label = experience
+    ? `${row} × ${columnLabels(columns)}: ${experience.inFlow ? 'part' : 'not part'} of the ${experience.label} flow`
+    : describe(cell, row, columns)
+  const highlighted = experience ? experience.inFlow : cell.mark !== 'none'
+  const color = experience ? flowColor : hvsColor
   const clickable = packages.length > 0 && !!onSelect
   const fullLabel = packages.length ? `${label}. ${packages.length} solution packages` : label
   return (
@@ -162,13 +170,13 @@ function MatrixCell({ cell, row, columns, packages, selected, onSelect }: Matrix
             justifyContent: 'center',
             gap: 8,
             cursor: clickable ? 'pointer' : 'default',
-            border: highlighted ? `1.5px solid ${hvsColor}` : `1px dashed ${colors.border}`,
-            background: highlighted ? hvsBg : colors.surfaceSubtle,
+            border: highlighted ? `1.5px solid ${color}` : `1px dashed ${colors.border}`,
+            background: highlighted ? (experience ? flowBg : hvsBg) : colors.surfaceSubtle,
             boxShadow: selected ? `0 0 0 2px ${colors.bgCard}, 0 0 0 4px ${colors.primary}` : undefined,
           }}
         >
-          {cell.mark === 'hvs-anl' && <AnlIcon />}
-          {highlighted ? <HvsDot /> : <EmptyDot />}
+          {!experience && cell.mark === 'hvs-anl' && <AnlIcon />}
+          {highlighted ? <HvsDot color={color} /> : <EmptyDot />}
           {packages.length > 0 && <PackageCount count={packages.length} />}
         </div>
       </Tooltip>
@@ -201,9 +209,11 @@ interface HvsMatrixTableProps {
   packages?: Map<string, PlacedPackage[]>
   selected?: CellSelection | null
   onSelect?: (selection: CellSelection | null) => void
+  /** Shows this experience's flow instead of the high-value scenario marks. */
+  experience?: HvsExperience | null
 }
 
-export function HvsMatrixTable({ matrix, packages, selected, onSelect }: HvsMatrixTableProps) {
+export function HvsMatrixTable({ matrix, packages, selected, onSelect, experience }: HvsMatrixTableProps) {
   const columns = matrix.columnGroups.flatMap((g) => g.columns)
   const grouped = matrix.columnGroups.some((g) => g.label)
 
@@ -295,7 +305,15 @@ export function HvsMatrixTable({ matrix, packages, selected, onSelect }: HvsMatr
                         row={row.label}
                         columns={covered}
                         packages={cellPackages}
-                        selected={isSelected}
+                        selected={!experience && isSelected}
+                        experience={
+                          experience
+                            ? {
+                                label: experience.label,
+                                inFlow: covered.some((c) => experience.cells.includes(cellKey(row.key, c.key))),
+                              }
+                            : undefined
+                        }
                         onSelect={
                           onSelect &&
                           (() => onSelect(isSelected ? null : { rowKey: row.key, columnKeys: covered.map((c) => c.key) }))
@@ -309,6 +327,32 @@ export function HvsMatrixTable({ matrix, packages, selected, onSelect }: HvsMatr
           )}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+/** The legend while an experience is shown. */
+export function ExperienceLegend({ experience }: { experience: HvsExperience }) {
+  const item: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 8 }
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: '8px 24px',
+        fontSize: 12,
+        color: colors.textSecondary,
+      }}
+    >
+      <span style={item}>
+        <HvsDot color={flowColor} />
+        {experience.label} flow ({experience.cells.length})
+      </span>
+      <span style={item}>
+        <EmptyDot />
+        Not in this flow
+      </span>
     </div>
   )
 }
