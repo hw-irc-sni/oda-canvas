@@ -1,0 +1,165 @@
+[
+  {
+    "id": "3b984a28-1765-4905-afee-2ca3f99241d7",
+    "name": "IG1503A_AN_L4_Individual_Services_Service_Assurance_Solution_Package",
+    "description": "Auto-generated from SPG IG1503A_AN_L4_Individual_Services_Service_Assurance_Solution_Package.pdf, chapter '5. Interaction Flow'",
+    "created_at": "2026-10-15T06:42:29.307870Z",
+    "steps": [
+      {
+        "name": "step1",
+        "type": "AllSuccess",
+        "subtasks": [
+          {
+            "task_id": "09fbf1d0-f0bf-4899-9efb-eb929452fabc",
+            "description": "Report performance KPIs and QoE indicators to the Service Assurance Agent",
+            "agent": "Live Streaming Agent",
+            "skill": "KQI Monitoring",
+            "status": "pending"
+          }
+        ],
+        "next": [
+          {
+            "step": "step2",
+            "condition": ""
+          }
+        ],
+        "layer": 0,
+        "context_from": null
+      },
+      {
+        "name": "step2",
+        "type": "AllSuccess",
+        "subtasks": [
+          {
+            "task_id": "70d70f24-fe8d-43b3-9bcf-1a44bea3d504",
+            "description": "Identify poor QoE",
+            "agent": "Service Assurance Agent",
+            "skill": "Service Quality Monitoring",
+            "status": "pending"
+          }
+        ],
+        "next": [
+          {
+            "step": "step3",
+            "condition": ""
+          }
+        ],
+        "layer": 0,
+        "context_from": null
+      },
+      {
+        "name": "step3",
+        "type": "AllSuccess",
+        "subtasks": [
+          {
+            "task_id": "954c963b-0b3d-46ef-842b-bab385cafc90",
+            "description": "Correlate relevant KPIs and faults",
+            "agent": "Service Assurance Agent",
+            "skill": "Service Assurance Root Cause Analysis",
+            "status": "pending"
+          }
+        ],
+        "next": [
+          {
+            "step": "step4",
+            "condition": ""
+          }
+        ],
+        "layer": 0,
+        "context_from": null
+      }
+    ],
+    "user_intent": "# 5. Interaction Flow\n\nThe interaction flow for Individual Service Assurance follows the IAADE sequence (Perception, Analysis, Decision, Execution). Functional modules exchange KPIs, events, and recom",
+    "tags": [
+      "spg",
+      "solution-package"
+    ]
+  },
+  {
+    "id": "fe7f297b-bf43-4748-a63f-ffa899449394",
+    "name": "IG1523D_AN_L4_Transport_Network_Fault_Management_Solution_Package",
+    "description": "Auto-generated from SPG IG1523D_AN_L4_Transport_Network_Fault_Management_Solution_Package.pdf, chapter '5. Interaction Flow'",
+    "created_at": "2026-10-15T07:13:56.139862Z",
+    "steps": [
+      {
+        "name": "step1",
+        "type": "AnySuccess",
+        "subtasks": [
+          {
+            "task_id": "b1079331-28db-4046-9d6f-c5a7af3697ba",
+            "description": "Continuously monitor network performance metrics and alarm information in real-time",
+            "agent": "Transport Network Fault Management Agent",
+            "skill": "Transport Network Fault Identification",
+            "status": "pending"
+          },
+          {
+            "task_id": "72bf7447-d55e-44aa-8086-432132391c16",
+            "description": "Receive a complaint or troubleshooting ticket",
+            "agent": "AN L4 Cross-Domain Fault Management Agent",
+            "skill": "Fault Incident Receiving and Distribution",
+            "status": "pending"
+          }
+        ],
+        "next": [
+          {
+            "step": "step2",
+            "condition": "Anomaly detected by monitoring"
+          },
+          {
+            "step": "step6",
+            "condition": "Complaint/ticket received"
+          }
+        ],
+        "layer": 0,
+        "context_from": null
+      },
+      {
+        "name": "step2",
+        "type": "AllSuccess",
+        "subtasks": [
+          {
+            "task_id": "41652e58-babd-4a16-8905-b799444de3eb",
+            "description": "Automatically identify faults and potential network anomalies, diagnose root causes and locations, generate corresponding repair solutions, automatically execute and verify the result based on collected data",
+            "agent": "Transport Network Fault Management Agent",
+            "skill": "Transport Network Fault Handling",
+            "status": "pending"
+          }
+        ],
+        "next": [
+          {
+            "step": "step3",
+            "condition": ""
+          }
+        ],
+        "layer": 0,
+        "context_from": null
+      },
+      {
+        "name": "step3",
+        "type": "AllSuccess",
+        "subtasks": [
+          {
+            "task_id": "c67d817b-a46b-406a-b3b6-d34fac6a47f1",
+            "description": "Report identified anomaly details (including root causes and locations) to the cross-domain OSS system's Fault Agent for oversight",
+            "agent": "Transport Network Fault Management Agent",
+            "skill": "Transport Network Fault Diagnosis",
+            "status": "pending"
+          }
+        ],
+        "next": [
+          {
+            "step": "step4",
+            "condition": ""
+          }
+        ],
+        "layer": 0,
+        "context_from": null
+      }
+    ],
+    "user_intent": "# 5. Interaction Flow\n\nThe management of transport network faults involves an end-to-end process that includes the perception, diagnosis, repair, and verification testing of anomalies (including fault",
+    "tags": [
+      "spg",
+      "solution-package"
+    ]
+  }
+]
