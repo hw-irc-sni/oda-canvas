@@ -1,0 +1,15 @@
+# Connects the portal to an OpenAN installation in the `components` namespace.
+# Use on top of your other values:
+#   helm upgrade canvas-portal . -n canvas-portal -f values-openan.yaml
+backend:
+  # Backs High Value Scenarios > Solution Packages.
+  orchestrationCenter:
+    url: http://openan-orchestration-center-orchestration-center.components.svc.cluster.local:5001
+    username: admin
+    # Created by the OpenAN operator. The chart grants the backend `get` on this Secret only.
+    passwordSecret:
+      namespace: components
+      name: openan-orchestration-runtime
+      key: OC_ADMIN_INITIAL_PASSWORD
+    # The workflow viewer as a browser reaches it. Change it for another installation.
+    pageUrl: https://openan.boyle-rc.org/orchestration
