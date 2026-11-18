@@ -134,3 +134,12 @@ export const networkMatrix: HvsMatrix = {
 }
 
 export const hvsMatrices: HvsMatrix[] = [serviceMatrix, networkMatrix]
+
+/** A layer shown above the matrices whose scenarios are not defined yet. */
+export interface HvsPendingLayer {
+  key: string
+  title: string
+  content: string
+}
+
+export const businessLayer: HvsPendingLayer = { key: 'business', title: 'Business-oriented', content: 'TBD' }
