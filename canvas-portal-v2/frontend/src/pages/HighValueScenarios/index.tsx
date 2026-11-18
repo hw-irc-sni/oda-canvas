@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { ThunderboltOutlined } from '@ant-design/icons'
 import SectionedPage, { PageSection } from '@/components/SectionedPage'
 import { fetchSolutionPackages } from '@/api/solutionPackages'
-import { HvsLegend, HvsMatrixTable, HvsPendingLayerTable, type CellSelection } from './HvsMatrixTable'
-import { businessLayer, hvsMatrices } from './hvsMatrix'
+import { HvsLegend, HvsMatrixTable, type CellSelection } from './HvsMatrixTable'
+import { hvsMatrices } from './hvsMatrix'
 import { packagesByCell, placePackage, type PlacedPackage } from './packagePlacement'
 import SolutionPackagesTable from './SolutionPackagesTable'
 
@@ -33,7 +33,6 @@ interface AutonomousFlowsProps {
 function AutonomousFlows({ packages, packageCount, selected, onSelect }: AutonomousFlowsProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <HvsPendingLayerTable layer={businessLayer} />
       {hvsMatrices.map((matrix) => (
         <HvsMatrixTable key={matrix.key} matrix={matrix} packages={packages} selected={selected} onSelect={onSelect} />
       ))}
