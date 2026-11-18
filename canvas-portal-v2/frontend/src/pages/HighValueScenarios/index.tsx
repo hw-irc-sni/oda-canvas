@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Select } from 'antd'
 import { ThunderboltOutlined } from '@ant-design/icons'
@@ -9,12 +9,13 @@ import { ExperienceLegend, HvsLegend, HvsMatrixTable, type CellSelection } from 
 import { hvsExperiences, hvsMatrices } from './hvsMatrix'
 import { packagesByCell, placePackage, type PlacedPackage } from './packagePlacement'
 import SolutionPackagesTable from './SolutionPackagesTable'
+import FlowLine from './FlowLine'
 
 const allCells = hvsMatrices.flatMap((m) => m.stages.flatMap((s) => s.rows.flatMap((r) => r.cells)))
 const hvsCount = allCells.filter((c) => c.mark !== 'none').length
 const anlCount = allCells.filter((c) => c.mark === 'hvs-anl').length
 const experienceOptions = [
-  { value: '', label: <span style={{ color: colors.textMuted }}>None</span> },
+  { value: '', label: '--' },
   ...hvsExperiences.map((e) => ({ value: e.key, label: e.label })),
 ]
 
@@ -39,6 +40,7 @@ interface AutonomousFlowsProps {
 function AutonomousFlows({ packages, packageCount, selected, onSelect }: AutonomousFlowsProps) {
   const [experienceKey, setExperienceKey] = useState('')
   const experience = hvsExperiences.find((e) => e.key === experienceKey) ?? null
+  const tablesRef = useRef<HTMLDivElement>(null)
 
   function chooseExperience(key: string) {
     setExperienceKey(key)
@@ -49,25 +51,28 @@ function AutonomousFlows({ packages, packageCount, selected, onSelect }: Autonom
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <label style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 12, color: colors.textSecondary }}>
-        Experience
+        Flow
         <Select
           value={experienceKey}
           onChange={chooseExperience}
           options={experienceOptions}
           style={{ width: 280, maxWidth: '100%' }}
-          aria-label="Experience"
+          aria-label="Flow"
         />
       </label>
-      {hvsMatrices.map((matrix) => (
-        <HvsMatrixTable
-          key={matrix.key}
-          matrix={matrix}
-          packages={packages}
-          selected={selected}
-          onSelect={onSelect}
-          experience={experience}
-        />
-      ))}
+      <div ref={tablesRef} style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {hvsMatrices.map((matrix) => (
+          <HvsMatrixTable
+            key={matrix.key}
+            matrix={matrix}
+            packages={packages}
+            selected={selected}
+            onSelect={onSelect}
+            experience={experience}
+          />
+        ))}
+        {experience && <FlowLine container={tablesRef} flowKey={experience.key} />}
+      </div>
       {experience ? (
         <ExperienceLegend experience={experience} />
       ) : (
