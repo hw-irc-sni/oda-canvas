@@ -18,6 +18,7 @@ A web management portal for an ODA Canvas. It is the successor to the Spring Boo
 - **Conformance:** run the Canvas BDD tests from the repo, view logs, and download the cucumber and HTML reports.
 - **Model gateway:** create, edit and delete `ModelGatewayService` resources, and proxy chat requests through them.
 - **Registries:** list agents and skills from the in-cluster OpenAN Registry Center and from external registries added by admins.
+- **High Value Scenarios:** the TM Forum AN L4 high-value scenario map, and the solution packages from an OpenAN Orchestration Center placed on it.
 - **Cluster overview and observability:** a cluster summary, plus Grafana and Prometheus links if configured.
 - **Authentication:** Keycloak or Entra ID (`IDM_PROVIDER`). The backend validates the JWT and the browser keeps a refresh cookie.
 
@@ -150,6 +151,7 @@ The backend runs as one ServiceAccount, and the chart grants it these permission
 | `canvas-install-rbac.yaml` (`rbac.canvasInstallAccess`) | Per namespace in `targetNamespaces` | A `RoleBinding` of the ClusterRole named by `clusterRoleName` (default `admin`) to the backend ServiceAccount. A ClusterRole aggregated into `admin` adds `oda.tmforum.org/*`. |
 | `backend-model-gateway-rbac.yaml` (`rbac.modelGatewayAccess`) | Per namespace | Write access on `modelgatewayservices.oda.tmforum.org`. |
 | `backend-conformance-rbac.yaml` (`rbac.canvasConformanceAccess`) | Cluster roles plus per-namespace roles | What the BDD runner needs. |
+| `backend-orchestration-center-rbac.yaml` (`backend.orchestrationCenter`) | The password Secret's namespace | `get` on the Orchestration Center password Secret only. Created when `url` and `passwordSecret.name` are both set. |
 
 How this fits together:
 
@@ -224,6 +226,39 @@ Things to know when operating this:
 - **Lockouts.** Registry Center bans a client for 5 minutes after 5 failed logins. After a rejection, the portal stops calling that registry for 5 minutes, including for connection tests. To retry sooner, save the registry with new credentials. Saving it with the same ones doesn't lift the lockout.
 - **Freshness.** Results from external registries are cached for 30 seconds. **Refresh** skips the cache for admins only. A registry that fails or doesn't answer within about 6 seconds shows as a warning without affecting the others.
 - **Limits.** Each call to an external registry has a 5-second overall limit and a 10 MB response limit. Compressed responses are refused.
+
+## High Value Scenarios page
+
+`/high-value-scenarios` has two sections. Any logged-in user can see them.
+
+- **Autonomous Flows** shows the TM Forum AN L4 high-value scenarios for 2025-2027 as two tables: service-oriented scenarios by service type, and network-oriented scenarios by network domain. Cells mark the high-value scenarios and those that also have an ANL evaluation. The map is reference data in `frontend/src/pages/HighValueScenarios/hvsMatrix.ts`; edit that file to change it.
+- **Solution Packages** lists the workflows tagged `solution-package` in an OpenAN Orchestration Center, from `GET /api/solution-packages`. Each row expands to the workflow's steps, with each task's agent and skill.
+
+The Orchestration Center has no scenario field, so the page places each package on the map from its TM Forum name, such as `IG1503B_AN_L4_Home_Broadband_Service_Assurance_Solution_Package`. Map cells show how many packages cover them, and clicking a cell filters the table to those packages. A package whose name has no recognised scenario and domain is listed but not placed. The keywords are in `frontend/src/pages/HighValueScenarios/packagePlacement.ts`.
+
+To connect an OpenAN installation in the `components` namespace, use the `helm/canvas-portal/values-openan.yaml` overlay. Change its `pageUrl` for your installation first.
+
+```bash
+helm upgrade canvas-portal ./helm/canvas-portal -n <ns> --reset-then-reuse-values \
+  -f helm/canvas-portal/values-openan.yaml
+```
+
+`--reset-then-reuse-values` (Helm 3.14 or later) keeps your earlier `--set` values and takes new defaults from the chart. Without `backend.orchestrationCenter.url`, the Solution Packages section reports that it is not configured.
+
+| Chart value | Environment variable | Purpose |
+|---|---|---|
+| `backend.orchestrationCenter.url` | `ORCHESTRATION_CENTER_URL` | The Orchestration Center on port 5001, for example `http://openan-orchestration-center-orchestration-center.components.svc.cluster.local:5001`. Empty turns the section off |
+| `backend.orchestrationCenter.username` | `ORCHESTRATION_CENTER_USERNAME` | The user the backend logs in as. Default `admin` |
+| `backend.orchestrationCenter.passwordSecret.namespace`, `name`, `key` | `ORCHESTRATION_CENTER_PASSWORD_SECRET_NAMESPACE`, `_NAME`, `_KEY` | The Secret holding that user's password. The OpenAN operator creates `openan-orchestration-runtime` with the key `OC_ADMIN_INITIAL_PASSWORD`. The namespace defaults to the release namespace |
+| `backend.orchestrationCenter.pageUrl` | `ORCHESTRATION_CENTER_PAGE_URL` | Optional. The workflow viewer as a browser reaches it, opened by the **Workflow viewer** button |
+| | `ORCHESTRATION_CENTER_PASSWORD` | The password itself. Only used when no Secret is named, for local development |
+
+Things to know when operating this:
+
+- **Credentials.** The Orchestration Center's workflow API only accepts a user session and has no static token option, so the backend logs in with `POST /api/v1/auth/token`. The chart lets the backend read only the named Secret. The backend reads it at each login, so a regenerated password is picked up without a restart. Neither the password nor the session token reaches the browser.
+- **Logins.** The Orchestration Center allows 5 logins a minute per client and keeps sessions in memory, so they end when its pod restarts. The backend reuses its token, and logs in again once if a request returns 401. After a rejected login it waits 60 seconds before trying again.
+- **Freshness.** Results are cached for 60 seconds, and the page reloads them every minute.
+- **Errors.** A failure upstream returns 502 with a fixed message, never 401, so it can't log the user out of the portal. The backend logs the details.
 
 ## Backend tests
 

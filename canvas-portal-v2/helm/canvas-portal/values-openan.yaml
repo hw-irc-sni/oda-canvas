@@ -1,6 +1,6 @@
 # Connects the portal to an OpenAN installation in the `components` namespace.
-# Use on top of your other values:
-#   helm upgrade canvas-portal . -n canvas-portal -f values-openan.yaml
+# Use on top of your other values. --reset-then-reuse-values (Helm 3.14+) keeps earlier --set values:
+#   helm upgrade canvas-portal . -n canvas-portal --reset-then-reuse-values -f values-openan.yaml
 backend:
   # Backs High Value Scenarios > Solution Packages.
   orchestrationCenter:
