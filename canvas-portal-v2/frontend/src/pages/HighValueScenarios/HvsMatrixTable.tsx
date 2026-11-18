@@ -1,8 +1,9 @@
 import React from 'react'
 import { Tooltip } from 'antd'
-import { AuditOutlined } from '@ant-design/icons'
+import { AppstoreOutlined, AuditOutlined } from '@ant-design/icons'
 import { colors } from '@/theme'
 import type { HvsCell, HvsColumn, HvsMatrix } from './hvsMatrix'
+import { cellKey, type PlacedPackage } from './packagePlacement'
 
 const hvsColor = colors.statusDown
 const hvsBg = colors.statusDownBg
@@ -76,15 +77,81 @@ function describe(cell: HvsCell, row: string, columns: HvsColumn[]): string {
   return `${where}: not a high-value scenario`
 }
 
-function MatrixCell({ cell, row, columns }: { cell: HvsCell; row: string; columns: HvsColumn[] }) {
+export function PackageCount({ count }: { count: number }) {
+  return (
+    <span
+      aria-hidden
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 3,
+        padding: '0 6px',
+        height: 18,
+        borderRadius: 999,
+        background: colors.primary,
+        color: '#fff',
+        fontSize: 11,
+        fontWeight: 600,
+      }}
+    >
+      <AppstoreOutlined style={{ fontSize: 10 }} />
+      {count}
+    </span>
+  )
+}
+
+function TooltipBody({ label, packages }: { label: string; packages: PlacedPackage[] }) {
+  if (packages.length === 0) return <>{label}</>
+  return (
+    <div>
+      <div>{label}</div>
+      <div style={{ marginTop: 6, fontWeight: 600 }}>
+        {packages.length} solution package{packages.length > 1 ? 's' : ''}:
+      </div>
+      {packages.map(({ pkg, placement }) => (
+        <div key={pkg.id}>
+          {placement.code ? `${placement.code} ` : ''}
+          {placement.title}
+        </div>
+      ))}
+      <div style={{ marginTop: 6, opacity: 0.75 }}>Click to filter the solution packages.</div>
+    </div>
+  )
+}
+
+interface MatrixCellProps {
+  cell: HvsCell
+  row: string
+  columns: HvsColumn[]
+  packages: PlacedPackage[]
+  selected: boolean
+  onSelect?: () => void
+}
+
+function MatrixCell({ cell, row, columns, packages, selected, onSelect }: MatrixCellProps) {
   const label = describe(cell, row, columns)
   const highlighted = cell.mark !== 'none'
+  const clickable = packages.length > 0 && !!onSelect
+  const fullLabel = packages.length ? `${label}. ${packages.length} solution packages` : label
   return (
     <td colSpan={cell.span ?? 1} style={{ padding: 0 }}>
-      <Tooltip title={label} mouseEnterDelay={0.2}>
+      <Tooltip title={<TooltipBody label={label} packages={packages} />} mouseEnterDelay={0.2}>
         <div
-          role="img"
-          aria-label={label}
+          role={clickable ? 'button' : 'img'}
+          tabIndex={clickable ? 0 : undefined}
+          aria-label={fullLabel}
+          aria-pressed={clickable ? selected : undefined}
+          onClick={clickable ? onSelect : undefined}
+          onKeyDown={
+            clickable
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onSelect?.()
+                  }
+                }
+              : undefined
+          }
           style={{
             height: 34,
             borderRadius: 6,
@@ -92,12 +159,15 @@ function MatrixCell({ cell, row, columns }: { cell: HvsCell; row: string; column
             alignItems: 'center',
             justifyContent: 'center',
             gap: 8,
+            cursor: clickable ? 'pointer' : 'default',
             border: highlighted ? `1.5px solid ${hvsColor}` : `1px dashed ${colors.border}`,
             background: highlighted ? hvsBg : colors.surfaceSubtle,
+            boxShadow: selected ? `0 0 0 2px ${colors.bgCard}, 0 0 0 4px ${colors.primary}` : undefined,
           }}
         >
           {cell.mark === 'hvs-anl' && <AnlIcon />}
           {highlighted ? <HvsDot /> : <EmptyDot />}
+          {packages.length > 0 && <PackageCount count={packages.length} />}
         </div>
       </Tooltip>
     </td>
@@ -117,7 +187,21 @@ function ColumnHeader({ column }: { column: HvsColumn }) {
   return <th style={{ ...headerBase, fontWeight: 500, color: colors.textSecondary }}>{column.label}</th>
 }
 
-export function HvsMatrixTable({ matrix }: { matrix: HvsMatrix }) {
+/** Identifies a map cell, which may cover several columns. */
+export interface CellSelection {
+  rowKey: string
+  columnKeys: string[]
+}
+
+interface HvsMatrixTableProps {
+  matrix: HvsMatrix
+  /** Solution packages keyed by cellKey(row, column). */
+  packages?: Map<string, PlacedPackage[]>
+  selected?: CellSelection | null
+  onSelect?: (selection: CellSelection | null) => void
+}
+
+export function HvsMatrixTable({ matrix, packages, selected, onSelect }: HvsMatrixTableProps) {
   const columns = matrix.columnGroups.flatMap((g) => g.columns)
   const grouped = matrix.columnGroups.some((g) => g.label)
   const stageWidth = 104
@@ -202,7 +286,22 @@ export function HvsMatrixTable({ matrix }: { matrix: HvsMatrix }) {
                   {row.cells.map((cell) => {
                     const covered = columns.slice(col, col + (cell.span ?? 1))
                     col += cell.span ?? 1
-                    return <MatrixCell key={covered[0].key} cell={cell} row={row.label} columns={covered} />
+                    const cellPackages = covered.flatMap((c) => packages?.get(cellKey(row.key, c.key)) ?? [])
+                    const isSelected = selected?.rowKey === row.key && selected.columnKeys[0] === covered[0].key
+                    return (
+                      <MatrixCell
+                        key={covered[0].key}
+                        cell={cell}
+                        row={row.label}
+                        columns={covered}
+                        packages={cellPackages}
+                        selected={isSelected}
+                        onSelect={
+                          onSelect &&
+                          (() => onSelect(isSelected ? null : { rowKey: row.key, columnKeys: covered.map((c) => c.key) }))
+                        }
+                      />
+                    )
                   })}
                 </tr>
               )
@@ -214,7 +313,7 @@ export function HvsMatrixTable({ matrix }: { matrix: HvsMatrix }) {
   )
 }
 
-export function HvsLegend({ hvsCount, anlCount }: { hvsCount: number; anlCount: number }) {
+export function HvsLegend({ hvsCount, anlCount, packageCount }: { hvsCount: number; anlCount: number; packageCount?: number }) {
   const item: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 8 }
   return (
     <div
@@ -239,6 +338,12 @@ export function HvsLegend({ hvsCount, anlCount }: { hvsCount: number; anlCount: 
         <EmptyDot />
         Not targeted
       </span>
+      {packageCount !== undefined && packageCount > 0 && (
+        <span style={item}>
+          <PackageCount count={packageCount} />
+          Solution packages
+        </span>
+      )}
     </div>
   )
 }

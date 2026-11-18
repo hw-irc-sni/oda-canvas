@@ -8,6 +8,8 @@ metadata:
 {{- $conformance := .Values.backend.conformance | default dict }}
 {{- $canvasBDD := $conformance.canvasBDD | default dict }}
 {{- $canvasBDDEnv := $canvasBDD.env | default dict }}
+{{- $orchestration := .Values.backend.orchestrationCenter | default dict }}
+{{- $orchestrationSecret := $orchestration.passwordSecret | default dict }}
 data:
   APP_ENV: {{ .Values.backend.env.APP_ENV | quote }}
   LOG_LEVEL: {{ .Values.backend.env.LOG_LEVEL | quote }}
@@ -54,3 +56,9 @@ data:
   AUTHZ_ADMIN_GROUPS: {{ ((.Values.backend.auth | default dict).adminGroups | default list) | toJson | quote }}
   AUTHZ_ALLOW_ALL_AUTHENTICATED: {{ ((.Values.backend.auth | default dict).allowAllAuthenticated | default false) | quote }}
   AUTH_COOKIE_SAMESITE: {{ ((.Values.backend.auth | default dict).cookieSameSite | default "strict") | quote }}
+  ORCHESTRATION_CENTER_URL: {{ $orchestration.url | default "" | quote }}
+  ORCHESTRATION_CENTER_USERNAME: {{ $orchestration.username | default "admin" | quote }}
+  ORCHESTRATION_CENTER_PASSWORD_SECRET_NAMESPACE: {{ $orchestrationSecret.namespace | default .Release.Namespace | quote }}
+  ORCHESTRATION_CENTER_PASSWORD_SECRET_NAME: {{ $orchestrationSecret.name | default "" | quote }}
+  ORCHESTRATION_CENTER_PASSWORD_SECRET_KEY: {{ $orchestrationSecret.key | default "OC_ADMIN_INITIAL_PASSWORD" | quote }}
+  ORCHESTRATION_CENTER_PAGE_URL: {{ $orchestration.pageUrl | default "" | quote }}

@@ -75,6 +75,19 @@ class Settings(BaseSettings):
     REGISTRY_CREDENTIALS_SECRET: str = ""
     REGISTRY_CREDENTIALS_NAMESPACE: str = ""
 
+    # OpenAN Orchestration Center backing High Value Scenarios > Solution Packages.
+    # Its workflow API needs a user session, so the backend logs in as this user.
+    # The password is read from the Secret below, or taken from
+    # ORCHESTRATION_CENTER_PASSWORD when no Secret is named.
+    ORCHESTRATION_CENTER_URL: str = ""
+    ORCHESTRATION_CENTER_USERNAME: str = "admin"
+    ORCHESTRATION_CENTER_PASSWORD: str = ""
+    ORCHESTRATION_CENTER_PASSWORD_SECRET_NAMESPACE: str = ""
+    ORCHESTRATION_CENTER_PASSWORD_SECRET_NAME: str = ""
+    ORCHESTRATION_CENTER_PASSWORD_SECRET_KEY: str = "OC_ADMIN_INITIAL_PASSWORD"
+    # The workflow viewer as a browser reaches it. Optional.
+    ORCHESTRATION_CENTER_PAGE_URL: str = ""
+
     @property
     def allowed_chart_sources(self) -> list[str]:
         import json

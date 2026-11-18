@@ -193,6 +193,22 @@ backend:
     # url: http://openan-registry-center-registry-center.components.svc.cluster.local:5000
     # The registry's portal page as a browser reaches it, linked from the Manage Registries card. Optional.
     pageUrl: ""
+  # OpenAN Orchestration Center backing High Value Scenarios > Solution Packages.
+  # Leave url empty when OpenAN is not installed.
+  orchestrationCenter:
+    url: ""
+    # url: http://openan-orchestration-center-orchestration-center.components.svc.cluster.local:5001
+    # The workflow API only accepts a user session, so the backend logs in as this user.
+    username: admin
+    # Secret holding that user's password, read by the backend at runtime. The chart
+    # grants the backend ServiceAccount `get` on this one Secret only.
+    passwordSecret:
+      namespace: ""
+      name: ""
+      # name: openan-orchestration-runtime
+      key: OC_ADMIN_INITIAL_PASSWORD
+    # The Orchestration Center's workflow viewer as a browser reaches it. Optional.
+    pageUrl: ""
   secretEnv:
     KEYCLOAK_ADMIN_CLIENT_SECRET: ""
     ENTRAID_CLIENT_SECRET: ""
