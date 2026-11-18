@@ -4,6 +4,7 @@ import { AppstoreOutlined, AuditOutlined } from '@ant-design/icons'
 import { colors } from '@/theme'
 import type { HvsCell, HvsColumn, HvsExperience, HvsMatrix } from './hvsMatrix'
 import { cellKey, type PlacedPackage } from './packagePlacement'
+import { FLOW_STEP_ATTR } from './FlowLine'
 
 const hvsColor = colors.statusDown
 const hvsBg = colors.statusDownBg
@@ -34,11 +35,15 @@ const headerBase: React.CSSProperties = {
   lineHeight: 1.25,
 }
 
-function HvsDot({ color = hvsColor }: { color?: string }) {
+function HvsDot({ color = hvsColor, flowStep }: { color?: string; flowStep?: number }) {
   return (
     <span
       aria-hidden
+      {...(flowStep !== undefined ? { [FLOW_STEP_ATTR]: flowStep } : {})}
       style={{
+        // Above the flow line, which is drawn over the tables.
+        position: 'relative',
+        zIndex: 2,
         width: 10,
         height: 10,
         borderRadius: '50%',
@@ -131,7 +136,7 @@ interface MatrixCellProps {
   selected: boolean
   onSelect?: () => void
   /** Set when an experience is shown: the map marks give way to the cells of its flow. */
-  experience?: { label: string; inFlow: boolean }
+  experience?: { label: string; inFlow: boolean; step: number }
 }
 
 function MatrixCell({ cell, row, columns, packages: cellPackages, selected, onSelect, experience }: MatrixCellProps) {
@@ -176,7 +181,7 @@ function MatrixCell({ cell, row, columns, packages: cellPackages, selected, onSe
           }}
         >
           {!experience && cell.mark === 'hvs-anl' && <AnlIcon />}
-          {highlighted ? <HvsDot color={color} /> : <EmptyDot />}
+          {highlighted ? <HvsDot color={color} flowStep={experience?.inFlow ? experience.step : undefined} /> : <EmptyDot />}
           {packages.length > 0 && <PackageCount count={packages.length} />}
         </div>
       </Tooltip>
@@ -195,6 +200,14 @@ function ColumnHeader({ column }: { column: HvsColumn }) {
     )
   }
   return <th style={{ ...headerBase, fontWeight: 500, color: colors.textSecondary }}>{column.label}</th>
+}
+
+/** Whether a cell is on the experience's flow, and its position along it. */
+function flowCell(experience: HvsExperience, rowKey: string, covered: HvsColumn[]) {
+  const step = Math.min(
+    ...covered.map((c) => experience.cells.indexOf(cellKey(rowKey, c.key))).filter((i) => i >= 0),
+  )
+  return { label: experience.label, inFlow: Number.isFinite(step), step }
 }
 
 /** Identifies a map cell, which may cover several columns. */
@@ -306,14 +319,7 @@ export function HvsMatrixTable({ matrix, packages, selected, onSelect, experienc
                         columns={covered}
                         packages={cellPackages}
                         selected={!experience && isSelected}
-                        experience={
-                          experience
-                            ? {
-                                label: experience.label,
-                                inFlow: covered.some((c) => experience.cells.includes(cellKey(row.key, c.key))),
-                              }
-                            : undefined
-                        }
+                        experience={experience ? flowCell(experience, row.key, covered) : undefined}
                         onSelect={
                           onSelect &&
                           (() => onSelect(isSelected ? null : { rowKey: row.key, columnKeys: covered.map((c) => c.key) }))
