@@ -22,6 +22,9 @@ export interface PackagePlacement {
 }
 
 const SCENARIO_KEYWORDS: Array<[RegExp, string]> = [
+  [/product definition/, 'product-definition'],
+  [/product marketing/, 'product-marketing'],
+  [/experience management/, 'experience-management'],
   [/fault management/, 'fault-management'],
   [/service assurance/, 'service-assurance'],
   [/complaint handling/, 'complaint-handling'],
@@ -37,6 +40,15 @@ const SCENARIO_KEYWORDS: Array<[RegExp, string]> = [
 
 /** Domain keywords per matrix, so "mobile" means 4G/5G for services and wireless for networks. */
 const DOMAIN_KEYWORDS: Record<string, Array<[RegExp, string]>> = {
+  business: [
+    [/smart home/, 'smart-home'],
+    [/highly secure|secure/, 'highly-secure'],
+    [/slicing/, 'slicing-private-line'],
+    [/\bnaas\b/, 'naas'],
+    [/enterprise/, 'enterprise-sla'],
+    [/home/, 'home-sla'],
+    [/individual/, 'individual-sla'],
+  ],
   service: [
     [/private line/, 'private-line'],
     [/5g2b/, '5g2b'],

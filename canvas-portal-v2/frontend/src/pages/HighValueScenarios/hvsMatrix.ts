@@ -1,8 +1,8 @@
 /**
  * AN L4 high-value scenarios for 2025-2027 (reference map).
  *
- * Each matrix crosses lifecycle scenarios (rows) with service or network
- * domains (columns). A cell is either out of scope, an AN L4 high-value
+ * Each matrix crosses lifecycle scenarios (rows) with product, service or
+ * network domains (columns). A cell is either out of scope, an AN L4 high-value
  * scenario, or a high-value scenario that also has an ANL evaluation.
  */
 
@@ -50,6 +50,41 @@ const _: HvsCell = { mark: 'none' }
 const H: HvsCell = { mark: 'hvs' }
 const A: HvsCell = { mark: 'hvs-anl' }
 const span = (cell: HvsCell, n: number): HvsCell => ({ ...cell, span: n })
+
+export const businessMatrix: HvsMatrix = {
+  key: 'business',
+  title: 'Business-oriented',
+  columnGroups: [
+    { label: 'Individual', columns: [{ key: 'individual-sla', label: 'SLA-guaranteed Products' }] },
+    {
+      label: 'Home',
+      columns: [
+        { key: 'home-sla', label: 'SLA-guaranteed Products' },
+        { key: 'smart-home', label: 'Smart Home' },
+      ],
+    },
+    {
+      label: 'Enterprise',
+      columns: [
+        { key: 'enterprise-sla', label: 'SLA-guaranteed Products' },
+        { key: 'highly-secure', label: 'Highly Secure Products' },
+        { key: 'slicing-private-line', label: 'Slicing Private Line' },
+        { key: 'naas', label: 'NaaS Products' },
+      ],
+    },
+  ],
+  stages: [
+    {
+      key: 'business-innovation',
+      label: 'Business Innovation',
+      rows: [
+        { key: 'product-definition', label: 'Product definition', cells: [_, _, H, H, _, _, _] },
+        { key: 'product-marketing', label: 'Product marketing', cells: [_, _, _, _, _, _, _] },
+        { key: 'experience-management', label: 'Experience management', cells: [H, H, _, _, _, _, _] },
+      ],
+    },
+  ],
+}
 
 export const serviceMatrix: HvsMatrix = {
   key: 'service',
@@ -133,13 +168,5 @@ export const networkMatrix: HvsMatrix = {
   ],
 }
 
-export const hvsMatrices: HvsMatrix[] = [serviceMatrix, networkMatrix]
+export const hvsMatrices: HvsMatrix[] = [businessMatrix, serviceMatrix, networkMatrix]
 
-/** A layer shown above the matrices whose scenarios are not defined yet. */
-export interface HvsPendingLayer {
-  key: string
-  title: string
-  content: string
-}
-
-export const businessLayer: HvsPendingLayer = { key: 'business', title: 'Business-oriented', content: 'TBD' }
