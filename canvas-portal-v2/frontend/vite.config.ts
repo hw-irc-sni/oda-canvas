@@ -20,8 +20,8 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': toBackend,
         '/health': toBackend,
-        // Backend-owned session endpoints (cookie login flow + status checks).
-        // Keep in sync with the /auth/* locations in nginx/default.conf.template.
+        // Backend-owned session endpoints. Keep in sync with the /auth/*
+        // locations in nginx/default.conf.template.
         '/auth/me': toBackend,
         '/auth/login': toBackend,
         '/auth/refresh': toBackend,
