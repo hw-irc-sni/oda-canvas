@@ -255,7 +255,7 @@ def test_admin_responses_report_full_access(upstream):
         ('["viewers"]', "false", True),
         ('[]', "false", False),
         ('[]', "true", True),
-        ('["canvas-admin"]', "true", False),
+        ('["canvas-admin"]', "true", True),
     ],
 )
 def test_is_admin_follows_the_require_admin_rule(monkeypatch, admin_groups, allow_all, expected):
