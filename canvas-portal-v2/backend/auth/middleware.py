@@ -1,4 +1,5 @@
 import logging
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from auth.jwt_validator import validate_token, extract_groups
@@ -26,14 +27,19 @@ def _normalize_group(group: str) -> str:
 
 
 async def require_admin(user: AuthUser = Depends(get_current_user)) -> AuthUser:
-    required = {_normalize_group(g) for g in get_settings().AUTHZ_ADMIN_GROUPS if g.strip()}
+    """Allow only users in one of AUTHZ_ADMIN_GROUPS (group or realm role). Fails closed.
+
+    AUTHZ_ALLOW_ALL_AUTHENTICATED=true turns the check off and allows any authenticated user.
+    """
+    settings = get_settings()
+    if settings.AUTHZ_ALLOW_ALL_AUTHENTICATED:
+        return user
+    required = {_normalize_group(g) for g in settings.AUTHZ_ADMIN_GROUPS if g.strip()}
     if not required:
-        if get_settings().AUTHZ_ALLOW_ALL_AUTHENTICATED:
-            return user
-        logger.error("AUTHZ_ADMIN_GROUPS is not configured; denying admin route access to user=%s", user.username)
+        logger.error("AUTHZ_ADMIN_GROUPS is empty; denying admin route access to user=%s", user.username)
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access is not configured.")
     if required.isdisjoint(_normalize_group(g) for g in user.groups):
-        logger.warning("Access denied: user=%s is not in any of the groups %s", user.username, sorted(required))
+        logger.warning("Access denied: user=%s is not in any of %s", user.username, sorted(required))
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to perform this action.",
