@@ -13,9 +13,9 @@ A web management portal for an ODA Canvas. It is the successor to the Spring Boo
 - **Components:** list ODA Components with status, pods, APIs and events (`/api/components`).
 - **APIs:** browse exposed and dependent APIs, with an API relationship graph and resource map.
 - **Gateway:** view Istio, Kong or APISIX resources. The backend detects the gateway at startup from the deployment names in the `canvas` namespace.
-- **Operators and pods:** view operators and pods, with live log streaming.
-- **Helm:** manage chart repositories, then install, uninstall and view history and values for releases. Installs are limited to configured namespaces and, optionally, allowed chart sources.
-- **Conformance:** run the Canvas BDD tests from the repo, view logs, and download the cucumber and HTML reports.
+- **Operators and pods:** view operators and pods, with live log streaming. See [how operators are discovered](#operators-page-how-operators-are-discovered).
+- **Helm** (admins only): manage chart repositories, then install, uninstall and view history and values for releases. Installs are limited to configured namespaces and, optionally, allowed chart sources.
+- **Conformance** (admins only): run the Canvas BDD tests from the repo, view logs, and download the cucumber and HTML reports.
 - **Model gateway:** create, edit and delete `ModelGatewayService` resources, and proxy chat requests through them.
 - **Cluster overview and observability:** a cluster summary, plus Grafana and Prometheus links if configured.
 - **Authentication:** Keycloak or Entra ID (`IDM_PROVIDER`). The backend validates the JWT and the browser keeps a refresh cookie.
@@ -58,7 +58,7 @@ uv venv && uv pip install -r requirements-dev.txt
 ## Prerequisites
 
 - A running ODA Canvas. The `canvas` namespace must exist for gateway detection.
-- A Keycloak realm with a `canvas-portal` client and a `canvas-portal-admin` service client. The chart's `keycloak.init` job creates the groups and service-account permissions and needs an admin password.
+- A Keycloak realm with a `canvas-portal` client and a `canvas-portal-admin` service client. The chart does not create the realm or the clients. Its `keycloak.init` job (which needs the Keycloak master admin password) creates the admin group and realm role (see [Admin access](#admin-access)) and grants the `canvas-portal-admin` service account its permissions.
 - Persistent storage: 5Gi for the backend (Helm repo catalog and conformance runs) and 1Gi for the frontend.
 
 ## Deploy with Helm
@@ -79,32 +79,6 @@ Images default to `tmforumodacanvas/canvas-portal` (tags `frontend-0.1.0` and `b
 - Both Services are `LoadBalancer` by default.
 - `backend.auth.cookieSecure` is `false`. Set it to `true` when serving over HTTPS.
 - The Keycloak realm defaults to `odari` in the chart, but to `canvas` in `frontend/.env.example` and the frontend entrypoint.
-
-## Local development
-
-**Backend**
-
-```bash
-cd backend
-pip install -r requirements.txt
-export APP_ENV=development K8S_MODE=outofcluster \
-       K8S_REMOTE_API_URL=... K8S_REMOTE_SA_TOKEN=... K8S_REMOTE_CA_CERT=... \
-       KEYCLOAK_URL=https://<keycloak>/auth KEYCLOAK_REALM=<realm> \
-       CORS_ORIGINS='["http://localhost:3000"]'
-uvicorn main:app --port 8080
-```
-
-Settings come from environment variables or a `.env` file (see `backend/config.py`). With `APP_ENV=development`, Swagger is served at `/docs`.
-
-**Frontend**
-
-```bash
-cd frontend
-cp .env.example .env   # set VITE_KEYCLOAK_URL and VITE_KEYCLOAK_REALM
-npm ci && npm run dev  # http://localhost:3000
-```
-
-Vite proxies `/api`, `/health` and the backend `/auth/*` endpoints to `localhost:8080`, and the Keycloak paths to the target in `VITE_DEV_KEYCLOAK_PROXY_TARGET`. Set that variable in `.env`. It falls back to a hardcoded IP. The production nginx image is configured with `APP_*` variables, which its entrypoint writes into `config.js`.
 
 ## Build the images
 
@@ -131,9 +105,21 @@ First-login flow: if Keycloak answers "Account is not fully set up", `/auth/logi
 
 Entra ID is selectable with `IDM_PROVIDER=entraid`, but `/auth/login`, `/auth/refresh` and `set-initial-password` use the Keycloak token endpoint only. With Entra ID, only bearer-token validation on the API is covered.
 
+### Admin access
+
+`/api/helm/*` and `/api/conformance/*` require the user to hold one of the names in `backend.auth.adminGroups` (env `AUTHZ_ADMIN_GROUPS`, a JSON list, default `["canvas-admin"]`). Everyone else gets 403.
+
+- With Keycloak, the backend checks both the `groups` claim and the realm roles (`realm_access.roles`). A leading `/` in group paths is ignored, so `/canvas-admin` matches `canvas-admin`.
+- On install and upgrade, the `keycloak.init` job creates a group **and** a realm role for each name (top-level names only), and gives the group that role. It does not assign users.
+- To grant access, add the user to the `canvas-admin` group or assign them the `canvas-admin` realm role. Realm roles are in the access token by default, so no extra Keycloak mapper is needed.
+- The check fails closed: an empty `adminGroups` list denies everyone.
+- `backend.auth.allowAllAuthenticated: true` (env `AUTHZ_ALLOW_ALL_AUTHENTICATED`) turns the check off, so any logged-in user can use Helm and conformance again.
+- **Upgrading an existing install:** after the upgrade, Helm and conformance return 403 until users are in the group or have the role. To keep the old behaviour, set `backend.auth.allowAllAuthenticated: true`.
+- The UI does not hide these pages from other users. They see an error when the API returns 403.
+
 ### Security notes
 
-- **Role check on Helm and conformance only.** Users must be in a group or realm role listed in `backend.auth.adminGroups` (env `AUTHZ_ADMIN_GROUPS`, a JSON list, default `["canvas-admin"]`) to use `/api/helm/*` and `/api/conformance/*`. Others get 403. A leading `/` in Keycloak group paths is ignored. Create the group in Keycloak and add users before upgrading, or those features will return 403. The check fails closed: an empty list denies everyone unless `backend.auth.allowAllAuthenticated` (env `AUTHZ_ALLOW_ALL_AUTHENTICATED`) is `true`. All other routes (components, gateway, pods, model gateway and so on) have no role check.
+- **Role check on Helm and conformance only.** See [Admin access](#admin-access). All other routes (components, gateway, pods, operators, model gateway and so on) are open to any authenticated user.
 - **Backend service account for everything.** `get_impersonated_client()` ignores the user and returns the shared backend client. Kubernetes audit logs show the portal service account, not the person. The Helm router logs the username.
 - **TLS verification is off for Keycloak.** The backend calls Keycloak with `httpx.AsyncClient(verify=False)`, and the `keycloak-init` job disables certificate checks.
 - **Audience is not verified** (`verify_aud` is false), so tokens issued to any client in the realm are accepted.
@@ -155,7 +141,7 @@ How this fits together:
 - `INSTALL_TARGET_NAMESPACES_JSON` in the backend ConfigMap comes from `rbac.canvasInstallAccess.targetNamespaces`. The Helm install and uninstall routes return 403 for other namespaces if the list is non-empty, so the app check and the RoleBindings stay in sync.
 - To allow a new namespace, add it to `targetNamespaces` and run `helm upgrade`. With `createNamespaces: false` it must already exist.
 - `create_namespace` in the install request only works if the service account may create namespaces. The error handler hints at this.
-- The namespaced `admin` role is powerful inside those namespaces (secrets, workloads, RBAC). Pair it with an app-level authorization check if the portal is exposed to more than cluster admins.
+- The namespaced `admin` role is powerful inside those namespaces (secrets, workloads, RBAC). Only users with the admin role can reach the Helm routes (see [Admin access](#admin-access)), so keep that role to people you would trust with those namespaces.
 
 ## Helm install flow
 
@@ -173,7 +159,7 @@ Helm operations run by shelling out to the `helm` v3.15.4 binary baked into the 
 
 ## Deploying the portal itself
 
-On `helm install` or `helm upgrade`, a `post-install`/`post-upgrade` hook Job (`keycloak-init`) runs a Python script. It logs in to Keycloak's `master` realm as `keycloak.init.adminUser`, finds the `canvas-portal-admin` client's service account, and grants it `manage-users`, `view-users` and `query-users` from `realm-management`. It retries 5 times and warns if the client is missing.
+On `helm install` or `helm upgrade`, a `post-install`/`post-upgrade` hook Job (`keycloak-init`) runs a Python script. It logs in to Keycloak's `master` realm as `keycloak.init.adminUser`, creates a group and a realm role for each `backend.auth.adminGroups` entry (if missing) and maps the role onto the group, finds the `canvas-portal-admin` client's service account, and grants it `manage-users`, `view-users` and `query-users` from `realm-management`. It retries 5 times and warns if the client is missing.
 
 Order of work:
 
@@ -185,9 +171,64 @@ Order of work:
 
 The frontend gets its runtime settings (`APP_API_BASE_URL`, `APP_KEYCLOAK_*`) from `config.js`, which the nginx entrypoint writes at container start. nginx proxies `/api/*` and the session endpoints to `BACKEND_UPSTREAM`, and Keycloak paths under `/auth/realms|resources|js|admin` to `KEYCLOAK_UPSTREAM`.
 
-## Local development against a cluster
+## Operators page: how operators are discovered
 
-The backend only needs a Kubernetes API URL and a token, so you can run it on your machine against any cluster.
+The **Operators** page (`/operators`, backed by `GET /api/operators`) shows one card per Canvas operator. The backend scans the Deployments it can read and decides which ones are operators:
+
+1. **Labels (preferred).** A Deployment that carries the opt-in label `oda.tmforum.org/operator: "true"` or an `oda.tmforum.org/operatorId` label is listed as one operator.
+2. **Built-in signatures (fallback).** Otherwise, the backend matches the container names, images and Deployment name against a built-in list of known Canvas operators (`OPERATOR_SIGNATURES` in `backend/k8s/resources/operators.py`). A Deployment that hosts several known operators produces one card per operator.
+3. Deployments that match neither are ignored.
+
+Labelled operators therefore appear on the page as soon as they are installed. The portal needs no code change and no rebuild.
+
+### Label contract
+
+All keys go on the Deployment's own `metadata`, not on the Pod template.
+
+| Key | Kind | Meaning |
+|---|---|---|
+| `oda.tmforum.org/operator` | label | `"true"` (any case) opts the Deployment in. |
+| `oda.tmforum.org/operatorName` | label | Operator name, used in the detail page URL. Defaults to the Deployment name. The card shows a readable form of it (see below). |
+| `oda.tmforum.org/operatorId` | label | TMF operator ID shown as a badge (for example `TMFOP001`). Also opts the Deployment in. When it is set, the badge tooltip shows the readable operator name. |
+| `oda.tmforum.org/operatorContainer` | annotation | Container used for the image and readiness when the Deployment has several containers. Defaults to the container named after the operator or the Deployment, else the first container. |
+
+Label values must be 63 characters or fewer and may contain only letters, digits, `-`, `_` and `.`, so use a slug such as `api-operator-kong` for `operatorName`. The portal turns it into a readable name for the card title, the detail page heading and the badge tooltip: it splits the slug on `-`, `_` and `.`, starts each word with a capital letter, and writes a few known abbreviations (API, APISIX, AI, PDB, ODA, TMF, OAuth2) in their usual case. For example, `api-operator-kong` becomes **API Operator Kong**. The portal doesn't use its built-in list of operator names for labelled operators.
+
+### Example
+
+Add the labels to the operator's Deployment template in its Helm chart:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: acme-operator
+  labels:
+    oda.tmforum.org/operator: "true"
+    oda.tmforum.org/operatorName: acme-operator   # shown as "Acme Operator"
+    oda.tmforum.org/operatorId: TMFOP0xx   # optional badge
+  annotations:
+    oda.tmforum.org/operatorContainer: acme-operator   # optional
+```
+
+To try it on a running operator without changing its chart:
+
+```bash
+kubectl label deployment acme-operator -n canvas oda.tmforum.org/operator=true
+```
+
+### Notes
+
+- The labels affect only what the portal displays. They grant no privileges, and the backend reads Deployments with its usual credentials.
+- The backend first lists Deployments in all namespaces. If it isn't allowed to (403/404), it scans only a built-in list of Canvas namespaces (`CANVAS_OPERATOR_NAMESPACES` in `backend/k8s/resources/operators.py`). An operator in any other namespace then stays hidden until the backend's service account can list Deployments cluster-wide.
+- Label discovery covers Deployments only. Operators that run as a StatefulSet or DaemonSet are not listed.
+- Operators that share a single Deployment should keep relying on the built-in signatures, because the label path produces one card per Deployment.
+- The detail page, pod list and logs work the same way for operators found by either path.
+- Operators found by the built-in signatures keep their built-in name (for example `component-operator`) and the full TMF name in the badge tooltip.
+
+## Local development
+
+The backend only needs a Kubernetes API URL and a token, so you can run the backend and frontend on your machine against any cluster.
 
 1. **Make a service account for the portal.** Reuse the chart's RBAC by installing the chart once, then read the backend service account's token:
    ```bash
@@ -210,9 +251,25 @@ The backend only needs a Kubernetes API URL and a token, so you can run it on yo
    uvicorn main:app --port 8080 --reload
    ```
    The `CONFORMANCE_*` defaults point at `/app/data` and `/var/conformance-scratch`, which only exist in the container.
-4. **Run the frontend** from `frontend/` with `npm run dev`. It serves on port 3000 and proxies to the backend on port 8080.
+   Settings come from environment variables or a `.env` file (see `backend/config.py`). With `APP_ENV=development`, Swagger is served at `/docs`. To use the Helm and conformance pages, log in as a user with the admin role (see [Admin access](#admin-access)), or set `AUTHZ_ALLOW_ALL_AUTHENTICATED=true` for local testing.
+4. **Run the frontend** from `frontend/`:
+   ```bash
+   cp .env.example .env   # set VITE_KEYCLOAK_*, VITE_DEV_KEYCLOAK_PROXY_TARGET; remove VITE_API_URL
+   npm ci && npm run dev  # http://localhost:3000
+   ```
+   The production nginx image is configured instead with `APP_*` variables, which its entrypoint writes into `config.js`.
 5. **Gotchas.**
    - The Vite dev server proxies `/api`, `/health` and all `/auth/*` session endpoints to the backend (`VITE_DEV_BACKEND_URL`, default `http://localhost:8080`), and `/auth/realms|resources|js|admin` to Keycloak (`VITE_DEV_KEYCLOAK_PROXY_TARGET`). Leave `VITE_API_URL` unset in dev so requests stay same-origin and the cookie works.
    - The refresh cookie has `SameSite=strict` and path `/auth`. For a cross-origin dev setup, use `AUTH_COOKIE_SAMESITE=lax` or run both on `localhost`.
    - A port-forward also works: `kubectl port-forward svc/<backend-svc> 8080:8080` lets you run only the frontend locally.
    - The Keycloak realm must be reachable from the backend host.
+
+## Tests
+
+Backend unit tests use `pytest`:
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest
+```

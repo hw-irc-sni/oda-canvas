@@ -1,4 +1,5 @@
 import logging
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from auth.jwt_validator import validate_token, extract_groups
@@ -25,26 +26,33 @@ def _normalize_group(group: str) -> str:
     return group.strip().lstrip("/")
 
 
-def _required_admin_groups() -> set[str]:
+def _admin_groups() -> set[str]:
     return {_normalize_group(g) for g in get_settings().AUTHZ_ADMIN_GROUPS if g.strip()}
 
 
 def is_admin(user: AuthUser) -> bool:
-    required = _required_admin_groups()
-    if not required:
-        return get_settings().AUTHZ_ALLOW_ALL_AUTHENTICATED
-    return not required.isdisjoint(_normalize_group(g) for g in user.groups)
+    """The rule require_admin enforces, for routes that vary their response by role."""
+    if get_settings().AUTHZ_ALLOW_ALL_AUTHENTICATED:
+        return True
+    required = _admin_groups()
+    return bool(required) and not required.isdisjoint(_normalize_group(g) for g in user.groups)
 
 
 async def require_admin(user: AuthUser = Depends(get_current_user)) -> AuthUser:
-    if is_admin(user):
+    """Allow only users in one of AUTHZ_ADMIN_GROUPS (group or realm role). Fails closed.
+
+    AUTHZ_ALLOW_ALL_AUTHENTICATED=true turns the check off and allows any authenticated user.
+    """
+    if get_settings().AUTHZ_ALLOW_ALL_AUTHENTICATED:
         return user
-    required = _required_admin_groups()
+    required = _admin_groups()
     if not required:
-        logger.error("AUTHZ_ADMIN_GROUPS is not configured; denying admin route access to user=%s", user.username)
+        logger.error("AUTHZ_ADMIN_GROUPS is empty; denying admin route access to user=%s", user.username)
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access is not configured.")
-    logger.warning("Access denied: user=%s is not in any of the groups %s", user.username, sorted(required))
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="You do not have permission to perform this action.",
-    )
+    if required.isdisjoint(_normalize_group(g) for g in user.groups):
+        logger.warning("Access denied: user=%s is not in any of %s", user.username, sorted(required))
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to perform this action.",
+        )
+    return user
