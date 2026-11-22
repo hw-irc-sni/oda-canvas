@@ -31,7 +31,20 @@ The API is mounted under `/{COMPONENT_NAME}/tmf-api/knowledgeManagement/v5`.
 | `AUTH_ENABLED` | `true` | `false` skips token validation and grants every role. Local development only: refused in Kubernetes |
 | `OAS_PATH` | `api/TMFxxx-KnowledgeManagement-v5.0.0.oas.yaml` | The OAS whose `x-required-roles` drive the guards |
 | `HEALTH_CHECK_TIMEOUT` | `2.0` | Seconds per dependency check |
+| `QUERY_TIMEOUT_DEFAULT`, `QUERY_TIMEOUT_MAX` | `30`, `120` | Read-only SPARQL timeout in seconds: the default, and the cap on the client's `timeout` |
+| `QUERY_ROW_CAP` | `10000` | Maximum SELECT rows (or CONSTRUCT triples); beyond it the result is flagged truncated |
 | `DB_STARTUP_TIMEOUT` | `120` | Seconds the API retries Postgres at startup (backoff 1–10 s) before it exits |
+
+## RDF store and queries
+
+- [`app/graphstore.py`](app/graphstore.py): the single-writer pyoxigraph store, with one named graph per module
+  (`urn:tmfc060:module:{id}`), per knowledge-base (`urn:tmfc060:kb:{id}`) and a governance graph. Graph Store
+  Protocol operations in Turtle or JSON-LD.
+- [`app/dataset.py`](app/dataset.py): a knowledge-base query sees its own graph, plus the modules it conforms to and
+  their transitive imports, **published (or deprecated) modules only**.
+- [`app/query.py`](app/query.py): read-only SPARQL (spike S3). An rdflib pre-check rejects updates, parse failures and
+  non-allowlisted or variable `SERVICE` targets. Each query then runs in **its own spawned process** on
+  `Store.read_only`, which is killed at the timeout (504).
 
 ## PostgreSQL schema
 

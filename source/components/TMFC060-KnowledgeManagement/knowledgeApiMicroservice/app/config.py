@@ -38,6 +38,11 @@ class Settings(BaseSettings):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
 
+    # Read-only SPARQL (/query): each query runs in its own process, killed at the timeout
+    query_timeout_default: int = 30
+    query_timeout_max: int = 120
+    query_row_cap: int = 10000
+
     # How long the API keeps retrying Postgres at startup before it exits (migrations need it)
     db_startup_timeout: float = 120.0
 

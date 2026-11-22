@@ -17,6 +17,7 @@ dependencies = [
     "PyYAML==6.0.4",
     "SQLAlchemy[asyncio]==2.1.9",
     "alembic==1.20.1",
+    "rdflib==7.6.0",
 ]
 
 [dependency-groups]
