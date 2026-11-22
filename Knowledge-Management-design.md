@@ -76,7 +76,7 @@ The component lives in `source/components/TMFC060-KnowledgeManagement/`, one fol
 | PostgreSQL | Plain StatefulSet on the official `postgres` image | Jobs, document metadata and blobs, governance state and hub subscriptions |
 | `DataResourceConfig` (provider) | Custom resource | Declares the component's vector and graph stores to the Canvas |
 
-The Component CR is `oda.tmforum.org/v1`. It exposes `knowledgemanagement` (openapi, TMFxxx), `processflow` (TMF701) and `knowledgemcp` (mcp), the way the reference ProductCatalog exposes a separate `mcp` API. It carries the `oda.tmforum.org/componentId: TMFC060` label for discovery.
+The Component CR is `oda.tmforum.org/v1`. It exposes `knowledgemanagement` (openapi, TMFxxx), `processflow` (TMF701 Process Management v5) and `knowledgemcp` (mcp), the way the reference ProductCatalog exposes a separate `mcp` API. It carries the `oda.tmforum.org/componentId: TMFC060` label for discovery.
 
 ### Single-writer rationale
 
@@ -86,7 +86,7 @@ This one-writer limit is the reason for the split between the API and the worker
 
 ## Data model
 
-The API follows TMF630 v5 conventions: `@type`/`@baseType`/`href`, `fields`/`offset`/`limit`, a `/hub` for subscriptions, four events per resource (Create, AttributeValueChange, StateChange, Delete) and RFC 7807 errors.
+The API is specified in [`TMFxxx-KnowledgeManagement-v5.0.0.oas.yaml`](source/components/TMFC060-KnowledgeManagement/knowledgeApiMicroservice/api/TMFxxx-KnowledgeManagement-v5.0.0.oas.yaml) (OpenAPI 3.0.1). It follows TMF630 v5 conventions: `@type`/`@baseType`/`href`, `fields`/`offset`/`limit`, a `/hub` for subscriptions, and four events per resource (Create, AttributeValueChange, StateChange, Delete). Errors use the TMF630 `Error` extended with the RFC 7807 members (`type`, `title`, `detail`, `instance`), served as `application/json` or `application/problem+json`.
 
 ### `knowledge` (a knowledge-base)
 
@@ -108,7 +108,7 @@ Sub-resources:
 * `/knowledge/{id}/search`: hybrid dense and sparse search, filterable by ontology IRI.
 * `/knowledge/{id}/recommend`: ranked recommendations (KM-FX-06).
 * `/knowledge/{id}/document`: multipart upload, list, get and delete.
-* `/knowledge/{id}/ingest`: starts a TMF701 `process` and returns it.
+* `/knowledge/{id}/ingest`: starts a TMF701 v5 `process` (one `task` per KM-FX function) and returns a reference to it.
 
 ### `knowledgeSpecification` (an ontology module)
 
@@ -130,7 +130,7 @@ Sub-resources:
 * `/knowledgeSpecification/{id}/mapping`: bridge statements, each with subject, predicate, object, status (agreed or proposed), confidence (high, medium or low) and rationale. This is FTO's reified `bridge:mapping`.
 * `/knowledgeSpecification/{id}/review`: proposals, review comments, and rulings with approver and date.
 * `/knowledgeSpecification/{id}/validation`: the structural check results and the SHACL report.
-* `/knowledgeSpecification/term?iri=|q=`: describe, search and layer-chain lookups, equivalent to the FTO MCP tools `fto_describe`, `fto_search` and `fto_layer_of`.
+* `/knowledgeTerm?iri=|q=`: describe, search and layer-chain lookups, equivalent to the FTO MCP tools `fto_describe`, `fto_search` and `fto_layer_of`. It is a separate path so that it cannot collide with a module id under `/knowledgeSpecification/{id}`.
 
 ### Storage
 
@@ -312,6 +312,21 @@ The component declares its roles as `securityFunction.componentRole` in the Comp
 | `ontology-reviewer` | Move proposals to review and comment on them |
 | `ontology-approver` | Rule items agreed or rejected, publish and deprecate |
 | `canvasSystemRole` | Used by Canvas operators and provisioning, for example TMFOP012 |
+
+### Role matrix
+
+Every operation of the API lists the roles allowed to call it in an `x-required-roles` extension; any one of them is enough. The matrix:
+
+| Operations | Roles |
+|---|---|
+| Read knowledge-bases: list, get, graph GET, query, search, recommend and its feedback, documents, `/hub` | `knowledge-viewer`, `knowledge-editor`, `canvasSystemRole` |
+| Change knowledge-bases: create, patch, delete, graph PUT/POST/DELETE, document upload and delete, ingest | `knowledge-editor`, `canvasSystemRole` |
+| Read the ontology: modules, content, mappings, review history, validation report, `/knowledgeTerm` | all five component roles and `canvasSystemRole` |
+| Author: create a module, change its fields or content, create or change mappings | `ontology-editor` |
+| Review: comment, run validation | `ontology-reviewer` (editors and approvers may also run validation) |
+| Rule: rulings | `ontology-approver` |
+| Lifecycle transitions | per transition, as in [Governance workflow](#governance-workflow); machine-readable in the `x-lifecycle` extension of `KnowledgeSpecification` and the `x-review-kinds` extension of `ReviewItem` |
+| Delete a module or mapping | `ontology-editor` (draft or rejected only), `ontology-approver` (any state) |
 
 ### Enforcement
 
