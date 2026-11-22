@@ -45,6 +45,7 @@ The use cases are named based on the [use-case naming conventions](use-case-nami
 - UC013: [Upgrade Canvas](./UC013-Upgrade-Canvas.md) - Seamless in-life upgrade of the ODA Canvas.
 - UC014: [Secrets Management JWT-based](./UC014-Secrets-Management-JWT-based.md) - Manage component secrets using JWT/OIDC provider capabilities and Canvas-Vault integration without requiring bootstrap credentials.
 - UC016: [ODA Component and API Registry](./UC016-ODA-Component-and-API-Registry.md) - Centralized registry providing visibility into deployed ODA Components, their exposed APIs, and operational status.
+- UC018: [Knowledge and Ontology Management](./UC018-Knowledge-and-Ontology-Management.md) - Manage knowledge-bases and a governed, federated ontology in a Knowledge Management component, publish its data resources in Resource Inventory, and bind consuming components to them.
 
 
 

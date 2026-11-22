@@ -1,0 +1,64 @@
+@startuml ontology-proposal-and-ruling
+
+actor "Ontology\nEditor" as Editor
+actor "Ontology\nReviewer" as Reviewer
+actor "Ontology\nApprover" as Approver
+participant "Knowledge\nManagement\nComponent" as KM
+database "Governance\nStore" as Gov
+database "Graph\nStore" as Graph
+participant "Event Hub\nSubscribers" as Subscribers
+
+group Propose
+    Editor -> KM : POST /knowledgeSpecification\n(module from upload or git, or a bridge mapping)
+    KM -> KM : validate token and role ontology-editor
+    KM -> Graph : load the module content into its named graph
+    KM -> Gov : record the item in state draft
+    KM --> Editor : 201 Created (lifecycleStatus: draft)
+    Editor -> KM : PATCH lifecycleStatus: proposed
+    KM -> Gov : record transition draft -> proposed
+    KM -> Subscribers : KnowledgeSpecificationStateChangeEvent
+end
+
+group Review
+    Reviewer -> KM : PATCH lifecycleStatus: inReview
+    KM -> KM : validate token and role ontology-reviewer
+    KM -> Gov : record transition proposed -> inReview
+    Reviewer -> KM : POST /knowledgeSpecification/{id}/review (comment)
+    note right of KM
+        Comments are accepted while the
+        item is proposed or inReview
+    end note
+    KM -> Gov : store the comment
+    Reviewer -> KM : GET /knowledgeSpecification/{id}/validation
+    KM -> KM : run structural checks and SHACL validation
+    KM --> Reviewer : validation report
+end
+
+group Rule
+    Approver -> KM : POST /knowledgeSpecification/{id}/review\n(ruling: agreed or rejected, rationale)
+    KM -> KM : validate token and role ontology-approver
+    alt agreed
+        KM -> KM : validation must pass
+        KM -> Gov : record transition inReview -> agreed\n(approver, date, rationale)
+        KM -> Graph : write back bridge:status agreed\nand the linkStatus set by the approver
+    else rejected
+        KM -> Gov : record transition inReview -> rejected
+        KM -> KM : no write-back,\nbridge:status stays proposed
+        note over Editor, KM
+            The editor may revise the item and move it
+            back to draft; the review history is kept
+        end note
+    end
+    KM -> Subscribers : KnowledgeSpecificationStateChangeEvent
+end
+
+group Publish and deprecate
+    Approver -> KM : PATCH lifecycleStatus: published
+    KM -> Gov : record transition agreed -> published
+    KM -> Subscribers : KnowledgeSpecificationStateChangeEvent
+    Approver -> KM : PATCH lifecycleStatus: deprecated
+    KM -> Graph : add owl:deprecated true
+    KM -> Subscribers : KnowledgeSpecificationStateChangeEvent
+end
+
+@enduml

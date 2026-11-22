@@ -1,0 +1,61 @@
+@startuml knowledge-ingestion
+
+actor "Knowledge\nEditor" as Editor
+participant "Event\nSource\n(TMF639/638/642/628/921)" as Source
+participant "Knowledge\nManagement\nComponent API" as KM
+database "Job and\nDocument\nStore" as Jobs
+participant "Ingestion\nWorker\n(one of N)" as Worker
+participant "Model\nAccess\n(AI Gateway)" as Model
+database "Graph\nStore" as Graph
+database "Vector\nStore" as Vector
+
+alt Document upload
+    Editor -> KM : POST /knowledge/{id}/document (multipart)
+    KM -> KM : validate token and role knowledge-editor
+    KM -> Jobs : store document metadata and content
+    Editor -> KM : POST /knowledge/{id}/ingest
+else Subscribed event
+    Source -> KM : event notification\n(delivered through the Canvas event management)
+    KM -> KM : select the knowledge-bases whose source[] includes this API
+end
+
+KM -> Jobs : create TMF701 process with one task per step\nand enqueue the job
+KM --> Editor : 201 Created (process)
+
+Worker -> Jobs : claim the next job\n(SELECT ... FOR UPDATE SKIP LOCKED)
+group KM-FX-01 Data Processing
+    Worker -> Jobs : read the document or event payload
+    Worker -> Worker : parse, clean, chunk\n(RDF input is not chunked)
+end
+group KM-FX-02 Information Extraction
+    Worker -> Model : extract entities and relations,\nconstrained by the conformsTo ontology
+    note right of Worker
+        RDF payloads, such as TMF921
+        intent expressions, are lifted
+        directly without an LLM call
+    end note
+end
+group KM-FX-03 Knowledge Generation
+    Worker -> Worker : link entities by IRI or label,\nadd PROV-O provenance
+end
+group KM-FX-04 Knowledge Fusion
+    Worker -> Worker : SHACL and rule checks, OWL-RL reasoning
+    opt conflicts found
+        Worker -> KM : record proposed resolutions\nas review items (never applied directly)
+    end
+end
+group KM-FX-05 Knowledge Storage
+    Worker -> KM : write triples through the internal endpoint\n(service token; the API is the only graph writer)
+    KM -> Graph : add triples to the knowledge-base graph
+    Worker -> Model : embed chunks
+    Worker -> Vector : upsert chunks with dense and sparse vectors\nand the IRIs they mention
+end
+group KM-FX-06 Knowledge Recommendation
+    Worker -> Jobs : update ranking signals
+end
+Worker -> Jobs : mark tasks and process completed
+
+Editor -> KM : GET /process/{id}
+KM --> Editor : 200 OK (state: completed)
+
+@enduml

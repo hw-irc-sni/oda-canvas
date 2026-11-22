@@ -1,0 +1,56 @@
+@startuml data-resource-binding
+
+actor Operations
+entity "Consumer\nDataResourceConfig" as CDRC
+participant "Data Resource\nManagement\nOperator" as DRO
+entity "Provider\nDataResourceConfig" as PDRC
+participant "Identity\nManagement\nSystem" as IdM
+participant "Knowledge\nManagement\nComponent" as KM
+entity "Binding\nSecret" as Secret
+entity DependentAPI
+participant "Consumer\nComponent" as Consumer
+
+Operations -> CDRC : install the consumer component\n(its chart includes the DataResourceConfig)
+CDRC -> DRO : on.create\n(provider: odaComponent, role: consumer)
+DRO -> PDRC : find the provider by providerRef\n(componentId or componentName)
+DRO -> CDRC : condition ProviderResolved
+DRO -> IdM : obtain a token with canvasSystemRole
+alt providerRef.knowledgeId
+    DRO -> KM : GET /knowledge/{knowledgeId}
+else providerRef.create
+    DRO -> KM : POST /knowledge (from create{...})
+end
+DRO -> CDRC : condition KnowledgeBaseReady
+DRO -> IdM : assign the provider role knowledge-viewer\n(plus knowledge-editor for readWrite)\nto the consumer component's client
+DRO -> CDRC : condition AccessGranted
+DRO -> Secret : create <name>-<item>-binding\n(apiUrl, queryUrl, mcpUrl, kbId,\nproviderComponent, qdrantCollection)
+DRO -> DependentAPI : create for the provider's MCP API\n(data-resource dependency)
+note right of DependentAPI
+    Resolved by the Dependency Management
+    operator like any other dependent API
+end note
+DRO -> CDRC : status.bindings[], condition Ready
+
+group During consumer runtime
+    Consumer -> Secret : read the binding
+    Consumer -> KM : query, search or MCP call\nwith the consumer's own client credentials
+    KM -> KM : validate token and role knowledge-viewer
+    KM --> Consumer : results
+    note right of Consumer
+        No store credentials are ever given
+        to the consumer (ADR-007 Pattern A)
+    end note
+end
+
+group Uninstall the consumer
+    Operations -> CDRC : delete
+    CDRC -> DRO : on.delete
+    DRO -> IdM : revoke the granted roles
+    note right of DRO
+        The Secret and DependentAPI are removed
+        through their ownerRefs. The knowledge-base
+        is kept on the provider.
+    end note
+end
+
+@enduml
