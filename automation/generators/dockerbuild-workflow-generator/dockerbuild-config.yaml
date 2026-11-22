@@ -362,3 +362,16 @@ tmfc060-knowledge-api:
   paths:
     - source/components/TMFC060-KnowledgeManagement/knowledgeApiMicroservice/**/*
   buildContext: source/components/TMFC060-KnowledgeManagement/knowledgeApiMicroservice
+
+tmfc060-pipeline-worker:
+  displayName: TMFC060-Pipeline-Worker
+  fileName: tmfc060-pipeline-worker
+
+  valuesYamlFile: source/components/TMFC060-KnowledgeManagement/chart/values.yaml
+  valuesPathImage: .pipelineWorker.image
+  valuesPathVersion: .pipelineWorker.version
+  valuesPathPrereleaseSuffix: .pipelineWorker.prereleaseSuffix
+
+  paths:
+    - source/components/TMFC060-KnowledgeManagement/pipelineWorkerMicroservice/**/*
+  buildContext: source/components/TMFC060-KnowledgeManagement/pipelineWorkerMicroservice

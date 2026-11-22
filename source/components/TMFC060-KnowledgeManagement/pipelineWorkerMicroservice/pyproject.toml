@@ -1,0 +1,35 @@
+[project]
+name = "tmfc060-pipeline-worker"
+version = "0.1.0"
+description = "TMFC060 Knowledge Management reference implementation: the ingestion pipeline worker (KM-FX-01..06)"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "fastapi==0.165.0",
+    "uvicorn[standard]==0.54.0",
+    "pydantic-settings==2.16.3",
+    "httpx==0.28.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+    "pytest-asyncio==1.5.0",
+    "testcontainers[postgres]==4.15.0",
+    # the real API, for tests only: the worker runs against its internal port (never installed in the image)
+    "tmfc060-knowledge-api",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+tmfc060-knowledge-api = { path = "../knowledgeApiMicroservice", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+markers = ["integration: needs Docker (testcontainers)"]

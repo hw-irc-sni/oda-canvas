@@ -147,14 +147,14 @@ jobs:
         id: values_yaml_contains_version_suffix_8
         uses: mikefarah/yq@master
         with:
-          cmd: yq '[.knowledgeApi.prereleaseSuffix] | filter(.!=null and .!="")  | length | . != "0"' source/components/TMFC060-KnowledgeManagement/chart/values.yaml
+          cmd: yq '[.knowledgeApi.prereleaseSuffix, .pipelineWorker.prereleaseSuffix] | filter(.!=null and .!="")  | length | . != "0"' source/components/TMFC060-KnowledgeManagement/chart/values.yaml
 
       - name: collect existing version suffixes in source/components/TMFC060-KnowledgeManagement/chart/values.yaml for error report
         id: version_suffixes_8
         if: steps.values_yaml_contains_version_suffix_8.outputs.result=='true'
         uses: mikefarah/yq@master
         with:
-          cmd: yq '[.knowledgeApi.prereleaseSuffix] | filter(.!=null and .!="") | join(", ")' source/components/TMFC060-KnowledgeManagement/chart/values.yaml
+          cmd: yq '[.knowledgeApi.prereleaseSuffix, .pipelineWorker.prereleaseSuffix] | filter(.!=null and .!="") | join(", ")' source/components/TMFC060-KnowledgeManagement/chart/values.yaml
           
       - name: report error in source/components/TMFC060-KnowledgeManagement/chart/values.yaml
         if: steps.values_yaml_contains_version_suffix_8.outputs.result=='true'

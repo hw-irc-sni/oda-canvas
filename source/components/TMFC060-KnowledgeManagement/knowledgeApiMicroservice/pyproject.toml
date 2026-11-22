@@ -29,8 +29,14 @@ dev = [
     "testcontainers[postgres]==4.15.0",
 ]
 
-[tool.uv]
-package = false
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+# Installable as the "app" package so the pipeline worker's tests can run the real API (a dev-only path dependency);
+# the image installs the dependencies only (--no-install-project) and copies app/ and api/.
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
