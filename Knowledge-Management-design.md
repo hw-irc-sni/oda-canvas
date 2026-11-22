@@ -240,7 +240,11 @@ Federation works at two levels: modules and queries.
 * **Component-contributed modules.** Another ODA Component can contribute its own ontology module (source `componentContribution`). It enters the same governance workflow as any other module.
 * **Query federation.** A federation peer is a `knowledgeSpecification` with `specKind: remote`. A peer is either a remote SPARQL endpoint or another TMFC060 instance, found by IRI. This keeps federation inside the two API resources, without a third resource type. Queries reach peers through SPARQL `SERVICE` clauses, and only allowlisted endpoints are accepted. Remote calls have a timeout, and results are cached.
 
-Whether pyoxigraph executes `SERVICE` itself, and whether endpoints can be allowlisted there, is an unverified mechanic (spike S3). If it can't, the service parses the query with rdflib algebra and rejects non-allowlisted `SERVICE` IRIs, or runs federation in application code.
+Spike S3 ([#20](https://github.com/hw-irc-sni/oda-canvas/issues/20), pyoxigraph 0.5.13) found that pyoxigraph executes `SERVICE` natively, but offers no way to allowlist endpoints and no query timeout: a query to an unreachable peer hangs, even with `SILENT`. The design is therefore:
+
+* **Pre-check.** Before a query runs, the service parses it with rdflib and collects every `SERVICE` target. A target that is not the endpoint of a published `remote` module, a variable target, or a query that cannot be parsed is rejected with `403 SERVICE_NOT_ALLOWED`.
+* **Killable worker.** Each `/query` runs in a short-lived worker process that opens the store with `Store.read_only` (about 22 ms, and it sees the latest writes) and uses the native `SERVICE`. It is killed at the timeout, which answers `504`. The API process remains the only writer.
+* **Egress policy.** As defence in depth, the chart can limit egress to the peer endpoints with a NetworkPolicy.
 
 ## Ingestion pipeline
 
@@ -410,7 +414,7 @@ These mechanics are unverified. Each is checked by a short spike at the start of
 |---|---|---|
 | S1 | Does the portal access token carry the component client roles? | [Security](#security) |
 | S2 | Can the portal pod reach the ExposedAPI URL from Resource Inventory? If not, the in-cluster Service URL is built from the ExposedAPI implementation | [Canvas integration](#canvas-integration) |
-| S3 | Does pyoxigraph execute SPARQL `SERVICE`, with an allowlist? | [Federation](#federation) |
+| S3 | Does pyoxigraph execute SPARQL `SERVICE`, with an allowlist? **Done (#20):** yes natively, no allowlist or timeout; rdflib pre-check plus killable read-only workers | [Federation](#federation) |
 | S4 | How does an operator obtain a canvasSystemRole token? | [Canvas integration](#canvas-integration) |
 | S5 | What does TMFOP006 support for `subscribedEvents` delivery? | [Ingestion pipeline](#ingestion-pipeline) |
 | S6 | Does a standalone CRD need a webhook conversion change? | [Canvas integration](#canvas-integration) |
