@@ -13,6 +13,7 @@ from .db.session import make_engine, make_sessionmaker
 from .events import EventRecorder
 from .graphstore import GraphStore
 from .ontology import sync
+from .ontology.governance import load_lifecycles
 from .ontology.registry import Registry
 from .routers import specifications
 from .store import get_store
@@ -51,6 +52,7 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
     app.state.operations = load_operations(settings.oas_path)
     app.state.token_validator = token_validator or (TokenValidator(settings) if settings.auth_enabled else None)
     app.state.events = EventRecorder()
+    app.state.lifecycles = load_lifecycles(settings.oas_path)
 
     @app.exception_handler(ApiError)
     async def api_error(request: Request, exc: ApiError) -> JSONResponse:

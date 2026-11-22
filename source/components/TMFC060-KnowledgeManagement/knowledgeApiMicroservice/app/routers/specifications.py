@@ -10,7 +10,12 @@ from ..auth import Principal, require_operation
 from ..errors import ApiError
 from ..graphstore import module_graph
 from ..listing import list_response, present
+from ..ontology.governance import Governance
 from .deps import registry_for, session
+
+
+def governance_for(request: Request, s: AsyncSession) -> Governance:
+    return Governance(registry_for(request, s), request.app.state.lifecycles)
 
 router = APIRouter()
 SCHEMAS_DIR = Path(__file__).resolve().parent.parent.parent / "api" / "schemas"
@@ -49,7 +54,15 @@ async def retrieve_specification(id: str, request: Request, s: AsyncSession = De
 @router.patch("/knowledgeSpecification/{id}")
 async def patch_specification(id: str, request: Request, s: AsyncSession = Depends(session),
                               principal: Principal = Depends(require_operation("patchKnowledgeSpecification"))):
-    body = await registry_for(request, s).patch(id, await json_body(request), principal)
+    payload = await json_body(request)
+    registry = registry_for(request, s)
+    current = (await registry.get_row(id)).lifecycle_status
+    if "lifecycleStatus" in payload and payload["lifecycleStatus"] != current:
+        if set(payload) - {"lifecycleStatus", "@type"}:
+            raise ApiError(400, "400", "Bad Request", "Change lifecycleStatus on its own, without other fields")
+        body = await governance_for(request, s).transition_module(id, payload["lifecycleStatus"], principal)
+    else:
+        body = await registry.patch(id, payload, principal)
     return present(request, body)
 
 
@@ -76,6 +89,19 @@ async def replace_content(id: str, request: Request, s: AsyncSession = Depends(s
         raise ApiError(415, "415", "Unsupported Media Type", "Module content is text/turtle")
     await registry_for(request, s).put_content(id, await request.body(), "text/turtle", principal)
     return Response(status_code=204)
+
+
+@router.get("/knowledgeSpecification/{id}/review")
+async def list_reviews(id: str, request: Request, s: AsyncSession = Depends(session),
+                       _: Principal = Depends(require_operation("listKnowledgeSpecificationReview"))):
+    return list_response(request, await governance_for(request, s).list_reviews(id))
+
+
+@router.post("/knowledgeSpecification/{id}/review", status_code=201)
+async def create_review(id: str, request: Request, s: AsyncSession = Depends(session),
+                        principal: Principal = Depends(require_operation("createKnowledgeSpecificationReview"))):
+    item = await governance_for(request, s).create_review(id, await json_body(request), principal)
+    return JSONResponse(item, status_code=201)
 
 
 @router.get("/knowledgeSpecification/{id}/validation")

@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     # How long the API keeps retrying Postgres at startup before it exits (migrations need it)
     db_startup_timeout: float = 120.0
 
+    # Governance: a ruling 'agreed' runs validation and needs it to conform
+    governance_require_validation: bool = True
+
     # Log level of the application loggers (uvicorn configures its own)
     log_level: str = "INFO"
 

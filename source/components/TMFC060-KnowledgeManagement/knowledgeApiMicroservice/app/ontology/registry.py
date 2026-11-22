@@ -196,8 +196,8 @@ class Registry:
     async def patch(self, module_id: str, payload: dict, principal: Principal) -> dict:
         row = await self.get_row(module_id)
         body = dict(row.body)
-        if "lifecycleStatus" in payload and payload["lifecycleStatus"] != body["lifecycleStatus"]:
-            raise ApiError(501, "501", "Not Implemented", "Lifecycle transitions arrive with the governance workflow")
+        if "linkStatus" in payload and payload["linkStatus"] != body.get("linkStatus"):
+            raise bad_request("linkStatus is set by the ontology-approver when ruling")
         if "ontology-editor" not in principal.roles:
             raise ApiError(403, "403", "Forbidden", "Only an ontology-editor may change a module's fields")
         if "iri" in payload and payload["iri"] != body["iri"]:
@@ -205,7 +205,7 @@ class Registry:
         if body["lifecycleStatus"] not in EDITABLE_STATES:
             raise conflict(f"a {body['lifecycleStatus']} module cannot be edited")
         validate_fields(payload, creating=False)
-        changes = {k: v for k, v in payload.items() if k not in READ_ONLY | {"lifecycleStatus", "@type"}}
+        changes = {k: v for k, v in payload.items() if k not in READ_ONLY | {"lifecycleStatus", "@type", "linkStatus"}}
         body.update(changes)
         if "source" in changes:
             await self.load_source_content(body)

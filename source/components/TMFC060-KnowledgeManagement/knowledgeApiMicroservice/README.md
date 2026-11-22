@@ -40,6 +40,7 @@ The API is mounted under `/{COMPONENT_NAME}/tmf-api/knowledgeManagement/v5`.
 | `GIT_CACHE_DIR`, `GIT_TIMEOUT` | `/tmp/tmfc060-git`, `120` | Clone cache and timeout |
 | `MOUNT_ROOTS` | `/etc/tmfc060/ontologies` | Comma-separated directories that `mount` sources must be under |
 | `LOG_LEVEL` | `INFO` | Level of the application loggers |
+| `GOVERNANCE_REQUIRE_VALIDATION` | `true` | A ruling `agreed` needs the module's validation to conform |
 | `DB_STARTUP_TIMEOUT` | `120` | Seconds the API retries Postgres at startup (backoff 1–10 s) before it exits |
 
 ## Ontology modules
@@ -59,9 +60,25 @@ serve `/knowledgeSpecification` (list, create, get, patch fields, delete) and it
   `@schemaLocation` served at `…/schema/FederatedKnowledgeSpecification.schema.json`). The layer is the module's
   `fto:layer`, else its top folder. A module without a file is metadata-only, without an IRI it gets
   `urn:tmfc060:federation:<source>:<key>`. A module gone from the repository becomes `deprecated`.
-- Lifecycle transitions (PATCH `lifecycleStatus`) answer 501 until the governance workflow (#28).
 - **Shapes:** an `ONTOLOGY_SOURCES` entry may list `"shapes": [{"id": "tio-shacl-ext", "path": "implementation/tio-shacl-ext/rdf"}]`;
   each path (file or folder of `.ttl`) becomes a `specKind: shapes` module.
+
+## Governance
+
+[`app/ontology/governance.py`](app/ontology/governance.py) runs the governed lifecycle
+`draft → proposed → inReview → agreed | rejected → published → deprecated` (`rejected → draft` to revise). The
+transitions and their roles are read from the OAS `x-lifecycle` of `KnowledgeSpecification` (and `Knowledge`, for
+knowledge-bases); the review rules from `x-review-kinds` of `ReviewItem`.
+
+- A transition is a `PATCH` of `lifecycleStatus` alone, or a review item: a `proposal` (editor, draft → proposed),
+  a `comment` (reviewer, only while proposed or inReview) or a `ruling` (approver, inReview → agreed or rejected,
+  setting `linkStatus`). Wrong role: 403. Transition not in the lifecycle: 409.
+- A ruling `agreed` runs validation first and is refused (409) unless it conforms
+  (`GOVERNANCE_REQUIRE_VALIDATION`, default true).
+- Modules imported by the federation sync are governed by their repository: 409.
+- Every transition is recorded in `state_transition` and published as a StateChange event, and written back to RDF:
+  `fto:linkStatus` and `owl:deprecated` on the module's `owl:Ontology` node; `adms:status` and, per ruling, a
+  `prov:Activity` in the governance graph `urn:tmfc060:governance`.
 
 ## Validation
 

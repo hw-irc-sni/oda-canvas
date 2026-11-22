@@ -57,8 +57,9 @@ async def test_rbac(api):
     await api.post(path(api), json=CORE, headers=auth("ontology-editor"))
     patch = await api.patch(path(api, "core"), json={"description": "x"}, headers=auth("ontology-reviewer"))
     assert patch.status_code == 403
+    # lifecycle transitions go through the governance workflow (#28)
     assert (await api.patch(path(api, "core"), json={"lifecycleStatus": "proposed"},
-                            headers=auth("ontology-editor"))).status_code == 501
+                            headers=auth("ontology-editor"))).status_code == 200
 
 
 async def test_content_upload_resolves_imports_and_emits_events(api):
