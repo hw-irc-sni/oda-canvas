@@ -9,7 +9,7 @@ description: BDD test chart - a TMFC060-KnowledgeManagement ODA Component, with 
 # images of the reference ProductCatalog chart 1.4.5 as stand-in workloads:
 #   - Component CR (oda.tmforum.org/v1) with componentMetadata.id TMFC060 and the
 #     oda.tmforum.org/componentId: TMFC060 label
-#   - exposedAPIs knowledgemanagement (openapi, TMFxxx), processflow (openapi, TMF701) and
+#   - exposedAPIs knowledgemanagement (openapi, TMFxxx), processflow (openapi, TMF701 v5) and
 #     knowledgemcp (mcp); metrics (prometheus); partyrole (TMF669)
 #   - static componentRoles knowledge-viewer, knowledge-editor, ontology-editor, ontology-reviewer,
 #     ontology-approver
@@ -20,8 +20,9 @@ description: BDD test chart - a TMFC060-KnowledgeManagement ODA Component, with 
 # Service's endpoints, so the stand-ins are enough for scenarios that test Canvas behaviour.
 # Replace them with the TMFC060 images once Phase 3 publishes the component chart.
 #
+# version: 0.1.1 - TMF701 Process Management v5 for the processflow API, as in the TMFC060 specification
 # version: 0.1.0 - first version, with stand-in workloads
 
 type: application
-version: 0.1.0
+version: 0.1.1
 appVersion: "0.1.0"

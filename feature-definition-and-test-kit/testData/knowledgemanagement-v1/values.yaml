@@ -13,8 +13,9 @@ component:
     specification: https://raw.githubusercontent.com/hw-irc-sni/oda-canvas/ai-knowledge/source/components/TMFC060-KnowledgeManagement/knowledgeApiMicroservice/api/TMFxxx-KnowledgeManagement-v5.0.0.oas.yaml
   mcpApi:
     specification: https://modelcontextprotocol.io/specification/2025-06-18
+  # TMF701 Process Management v5 (process and task), as in the TMFC060 specification
   processFlowApi:
-    specification: https://raw.githubusercontent.com/tmforum-apis/TMF701_ProcessFlow/master/TMF701-ProcessFlow-v4.0.0.swagger.json
+    specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF701_Process_Flow/5.0.0/swagger/TMF701-Process_Management-v5.0.0.oas.yaml
 
 security:
   canvasSystemRole: canvasRole

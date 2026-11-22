@@ -31,8 +31,8 @@ spec:
       implementation: {{.Release.Name}}-kmprocessflow
       apiType: openapi
       id: TMF701
-      path: /{{.Release.Name}}-{{.Values.component.name}}/tmf-api/processFlowManagement/v4
-      developerUI: /{{.Release.Name}}-{{.Values.component.name}}/tmf-api/processFlowManagement/v4/docs
+      path: /{{.Release.Name}}-{{.Values.component.name}}/tmf-api/process/v5
+      developerUI: /{{.Release.Name}}-{{.Values.component.name}}/tmf-api/process/v5/docs
       port: 8080
     - name: knowledgemcp
       # The v1 Component CRD requires a specification; for MCP it is the protocol specification.

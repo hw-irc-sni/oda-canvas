@@ -14,7 +14,7 @@ spec:
   selector:
     impl: {{.Release.Name}}-kmapi
 ---
-# The TMF701 process flow API is served by the same pods as the knowledge API.
+# The TMF701 v5 process API is served by the same pods as the knowledge API.
 apiVersion: v1
 kind: Service
 metadata:

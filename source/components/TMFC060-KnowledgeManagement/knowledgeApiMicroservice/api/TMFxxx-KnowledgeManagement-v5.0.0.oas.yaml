@@ -892,10 +892,10 @@ paths:
       operationId: createKnowledgeIngestion
       summary: Starts the ingestion of knowledge
       description: >-
-        Starts an ingestion: a TMF701 process flow with one task flow per Knowledge Management
+        Starts an ingestion: a TMF701 v5 process with one task per Knowledge Management
         function (KM-FX-01 data processing to KM-FX-06 knowledge recommendation). Without
         `documentId`, every document not yet ingested is ingested. Follow the progress through the
-        component's TMF701 Process Flow Management API.
+        component's TMF701 Process Management API (v5).
       tags:
         - knowledge
       x-required-roles:
@@ -913,16 +913,16 @@ paths:
                 - 7a10b3
       responses:
         '201':
-          description: The process flow of the ingestion was created
+          description: The process of the ingestion was created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProcessFlowRef'
+                $ref: '#/components/schemas/ProcessRef'
               example:
-                '@type': ProcessFlowRef
-                '@referredType': ProcessFlow
+                '@type': ProcessRef
+                '@referredType': Process
                 id: pf-8812
-                href: https://host/tmf-api/processFlowManagement/v4/processFlow/pf-8812
+                href: https://host/tmf-api/process/v5/process/pf-8812
         '400':
           $ref: '#/components/responses/400'
         '401':
@@ -2594,7 +2594,7 @@ components:
             - ingested
             - failed
         lastIngestion:
-          $ref: '#/components/schemas/ProcessFlowRef'
+          $ref: '#/components/schemas/ProcessRef'
     IngestRequest:
       type: object
       description: What to ingest.
@@ -2619,12 +2619,16 @@ components:
           type: object
           description: Source-specific parameters, for example a TMF filter for an inventory snapshot.
           additionalProperties: true
-    ProcessFlowRef:
+    ProcessRef:
       allOf:
         - $ref: '#/components/schemas/EntityRef'
       description: >-
-        Reference to a TMF701 process flow (`…/processFlowManagement/v4/processFlow/{id}`), served by
-        the component's process flow API.
+        Reference to a TMF701 v5 process (`…/tmf-api/process/v5/process/{id}`), served by the
+        component's process API (TMF701 Process Management v5).
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          ProcessRef: '#/components/schemas/ProcessRef'
     OntologyLayerType:
       type: string
       description: The FTO layer of an ontology module (fto:layer).
@@ -3876,9 +3880,9 @@ components:
         uploadDate: '2026-11-22T09:12:00Z'
         ingestionState: ingested
         lastIngestion:
-          '@type': ProcessFlowRef
+          '@type': ProcessRef
           id: pf-8812
-          href: https://host/tmf-api/processFlowManagement/v4/processFlow/pf-8812
+          href: https://host/tmf-api/process/v5/process/pf-8812
     Error403ServiceNotAllowed:
       summary: A SPARQL SERVICE clause names an endpoint that is not an allowlisted peer
       value:
