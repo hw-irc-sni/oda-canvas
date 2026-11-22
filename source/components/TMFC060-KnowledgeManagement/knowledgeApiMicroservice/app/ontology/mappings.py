@@ -46,6 +46,23 @@ def namespace(module_iri: str) -> str:
     return module_iri if module_iri.endswith(("/", "#")) else module_iri + "#"
 
 
+def prefix_map(rows) -> dict[str, str]:
+    """The standard prefixes plus the prefixes each registered module lists (its ``prefix`` field).
+
+    A listed prefix is bound to the namespace the module's content declares for it (TIO lists ``icm, imo, …``, one
+    per sub-namespace); a module listing a single prefix that its content doesn't declare gets its own IRI."""
+    out = dict(STANDARD_PREFIXES)
+    for row in rows:
+        listed = [p.strip() for p in (row.body.get("prefix") or "").split(",") if p.strip()]
+        declared = row.namespaces or {}
+        for prefix in listed:
+            if prefix in declared:
+                out.setdefault(prefix, declared[prefix])
+            elif len(listed) == 1 and not row.iri.startswith("urn:"):
+                out.setdefault(prefix, namespace(row.iri))
+    return out
+
+
 def bridge_status(lifecycle_status: str, previous: str | None = None) -> str:
     if lifecycle_status in ("agreed", "published"):
         return "agreed"
@@ -78,12 +95,7 @@ class Mappings:
         return mapping
 
     async def prefixes(self) -> dict[str, str]:
-        out = dict(STANDARD_PREFIXES)
-        for row in (await self.session.scalars(select(SpecRow))).all():
-            for prefix in (row.body.get("prefix") or "").split(","):
-                if prefix.strip() and not row.iri.startswith("urn:"):
-                    out.setdefault(prefix.strip(), namespace(row.iri))
-        return out
+        return prefix_map((await self.session.scalars(select(SpecRow))).all())
 
     @staticmethod
     def expand(term: str, prefixes: dict[str, str]) -> str:

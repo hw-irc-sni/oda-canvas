@@ -15,7 +15,7 @@ from app.main import create_app
 pytestmark = pytest.mark.integration
 TABLES = {"knowledge", "knowledge_specification", "mapping", "document", "document_blob", "process", "task",
           "review_item", "state_transition", "hub_subscription", "recommend_feedback", "validation_report"}
-HEAD = "0003_mapping_key"
+HEAD = "0004_namespaces"
 
 
 @pytest.fixture
@@ -59,7 +59,7 @@ async def test_migrated_schema_matches_the_models(engine):
 async def test_downgrade_of_the_last_revision_and_upgrade_again(engine):
     await upgrade(engine)
     await downgrade(engine, "-1")
-    assert await revision(engine) == "0002_validation_report"
+    assert await revision(engine) == "0003_mapping_key"
     await upgrade(engine)
     assert TABLES <= await tables(engine)
 

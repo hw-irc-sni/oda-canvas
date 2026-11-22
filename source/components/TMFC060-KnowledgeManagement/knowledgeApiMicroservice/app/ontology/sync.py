@@ -21,7 +21,7 @@ from pyoxigraph import NamedNode, RdfFormat, parse
 from sqlalchemy import select
 
 from ..db.models import KnowledgeSpecification as SpecRow
-from ..graphstore import module_graph
+from ..graphstore import declared_prefixes, module_graph
 from . import loaders
 from .checks import repository_pass
 from .registry import FEDERATED_TYPE, Registry
@@ -133,6 +133,7 @@ async def sync_source(registry: Registry, source: dict) -> dict:
         pending_imports[key] = entry.get("imports") or []
         row = await registry.session.get(SpecRow, key)
         graph = module_graph(key)
+        namespaces = declared_prefixes(data) if data is not None else None
         if data is not None:
             registry.graphs.replace(graph, data, "text/turtle")
         else:
@@ -146,12 +147,14 @@ async def sync_source(registry: Registry, source: dict) -> dict:
             full = {**body, "href": registry.href(key), "lifecycleStatus": "published",
                     "sourceStatus": entry.get("status"), "@baseType": "KnowledgeSpecification",
                     "@schemaLocation": registry.schema_location()}
-            registry.save(None, full)
+            registry.save(None, full).namespaces = namespaces
             stats["created"] += 1
             await registry.session.flush()
             await registry.publish("Create", full)
         else:
             full = {**row.body, **body, "lifecycleStatus": "published", "sourceStatus": entry.get("status")}
+            if row.namespaces != namespaces:
+                row.namespaces = namespaces
             if unchanged(row.body, full):
                 continue
             registry.save(row, full)

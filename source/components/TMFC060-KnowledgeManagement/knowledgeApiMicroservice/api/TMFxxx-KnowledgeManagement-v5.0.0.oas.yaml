@@ -1723,6 +1723,14 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: includeUnpublished
+          in: query
+          description: >-
+            Also look in modules that are not published (draft, proposed, inReview, agreed, rejected). By default only
+            published and deprecated modules are searched.
+          schema:
+            type: boolean
+            default: false
         - name: limit
           in: query
           description: With `q`, the maximum number of hits.

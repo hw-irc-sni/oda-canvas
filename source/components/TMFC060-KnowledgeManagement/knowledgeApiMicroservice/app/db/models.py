@@ -44,6 +44,8 @@ class KnowledgeSpecification(Base):
     lifecycle_status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     link_status: Mapped[str | None] = mapped_column(String(16))
     body: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    # the @prefix declarations of the module's content (prefix -> namespace), for binding its listed prefixes
+    namespaces: Mapped[dict | None] = mapped_column(JSONB)
     created: Mapped[datetime] = created_at()
     updated: Mapped[datetime] = updated_at()
 

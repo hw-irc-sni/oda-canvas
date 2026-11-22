@@ -21,7 +21,7 @@ from ..db.models import KnowledgeSpecification as SpecRow
 from ..db.models import ValidationReport
 from ..errors import ApiError
 from ..events import Event
-from ..graphstore import GraphStore, module_graph
+from ..graphstore import GraphStore, declared_prefixes, module_graph
 from . import loaders
 
 log = logging.getLogger(__name__)
@@ -146,15 +146,17 @@ class Registry:
         declared = list(body.get("imports") or []) + self.content_imports(body["id"])
         body["imports"] = [r for r in await self.resolve_refs(declared) if r["id"] != body["id"]]
 
-    async def load_source_content(self, body: dict) -> None:
+    async def load_source_content(self, body: dict) -> dict | None:
+        """Load git or mount content into the module graph; returns its @prefix declarations."""
         source = body["source"]
         if source["kind"] == "git":
             data = await loaders.read_git_file(self.settings, source)
         elif source["kind"] == "mount":
             data = loaders.read_mount_file(self.settings, source)
         else:
-            return  # upload and componentContribution arrive through PUT /content; remoteEndpoint has none
+            return None  # upload and componentContribution arrive through PUT /content; remoteEndpoint has none
         self.graphs.replace(module_graph(body["id"]), data, "text/turtle")
+        return declared_prefixes(data)
 
     def save(self, row: SpecRow | None, body: dict) -> SpecRow:
         body["lastUpdate"] = now()
@@ -183,12 +185,12 @@ class Registry:
         if body["@type"] == FEDERATED_TYPE:
             body.update({"@baseType": "KnowledgeSpecification", "@schemaLocation": self.schema_location()})
         try:
-            await self.load_source_content(body)
+            namespaces = await self.load_source_content(body)
         except ApiError:
             self.graphs.remove(module_graph(module_id))
             raise
         await self.refresh_imports(body)
-        self.save(None, body)
+        self.save(None, body).namespaces = namespaces
         await self.session.commit()
         await self.publish("Create", body)
         return body
@@ -208,7 +210,7 @@ class Registry:
         changes = {k: v for k, v in payload.items() if k not in READ_ONLY | {"lifecycleStatus", "@type", "linkStatus"}}
         body.update(changes)
         if "source" in changes:
-            await self.load_source_content(body)
+            row.namespaces = await self.load_source_content(body)
         await self.refresh_imports(body)
         self.save(row, body)
         await self.session.commit()
@@ -247,6 +249,7 @@ class Registry:
         if row.lifecycle_status not in EDITABLE_STATES:
             raise conflict(f"a {row.lifecycle_status} module cannot be edited")
         self.graphs.replace(module_graph(module_id), data, media_type)
+        row.namespaces = declared_prefixes(data, media_type)
         body = dict(row.body)
         await self.refresh_imports(body)
         self.save(row, body)

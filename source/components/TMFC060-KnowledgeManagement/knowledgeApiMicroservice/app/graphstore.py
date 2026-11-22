@@ -3,6 +3,8 @@
 Named graphs: one per ontology module (``urn:tmfc060:module:{id}``), one per knowledge-base
 (``urn:tmfc060:kb:{id}``), and the governance graph (``urn:tmfc060:governance``).
 """
+import re
+
 from pyoxigraph import NamedNode, RdfFormat, Store
 
 from .errors import ApiError
@@ -24,6 +26,17 @@ def rdf_format(media_type: str) -> RdfFormat:
     if base not in MEDIA_TYPES:
         raise ApiError(415, "415", "Unsupported Media Type", f"Use one of {', '.join(MEDIA_TYPES)}")
     return MEDIA_TYPES[base]
+
+
+TURTLE_FAMILY = ("text/turtle", "application/trig", "text/n3", "application/n-triples", "application/n-quads")
+PREFIX_LINE = re.compile(r"(?im)^\s*@?prefix\s+([A-Za-z][\w.-]*|)\s*:\s*<([^>]*)>")
+
+
+def declared_prefixes(data: bytes, media_type: str = "text/turtle") -> dict[str, str]:
+    """The @prefix / PREFIX declarations of Turtle-family content (other formats declare none here)."""
+    if media_type.split(";")[0].strip() not in TURTLE_FAMILY:
+        return {}
+    return {p: ns for p, ns in PREFIX_LINE.findall(data.decode("utf-8", errors="replace")) if p}
 
 
 class GraphStore:

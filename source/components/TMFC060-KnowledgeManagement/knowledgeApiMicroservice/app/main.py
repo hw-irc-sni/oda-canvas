@@ -15,7 +15,7 @@ from .graphstore import GraphStore
 from .ontology import sync
 from .ontology.governance import load_lifecycles
 from .ontology.registry import Registry
-from .routers import specifications
+from .routers import specifications, terms
 from .store import get_store
 from .errors import ApiError
 from .health import is_ready, run_checks
@@ -79,6 +79,7 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
     # The TMFxxx resources are added to this router by the following issues.
     api = APIRouter(prefix=settings.base_path)
     api.include_router(specifications.router)
+    api.include_router(terms.router)
     app.include_router(api)
     app.state.api_router = api
     return app
