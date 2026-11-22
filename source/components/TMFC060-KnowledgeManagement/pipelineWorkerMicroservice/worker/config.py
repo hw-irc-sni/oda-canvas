@@ -22,3 +22,5 @@ class Settings(BaseSettings):
     # KM-FX-01 chunking (tokens are estimated as characters / 4)
     chunk_max_tokens: int = 400
     chunk_overlap_tokens: int = 60
+    # KM-FX-02: the most ontology terms sent to the model with a chunk (the best-matching ones, plus superclasses)
+    extraction_max_terms: int = 150

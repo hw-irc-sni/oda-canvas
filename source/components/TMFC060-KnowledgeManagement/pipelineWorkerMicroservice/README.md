@@ -45,6 +45,23 @@ docker build -t tmforumodacanvas/tmfc060-pipeline-worker:dev .
 The result is handed to KM-FX-02 as its `input` (at most `TASK_RESULT_MAX_BYTES` on the API; a larger result fails
 the step).
 
+## KM-FX-02 Information Extraction
+
+[`worker/steps/km_fx_02.py`](worker/steps/km_fx_02.py) turns KM-FX-01's output into triples that use the KB's
+ontology (its conformsTo closure, read with the internal SPARQL call and cached for 5 minutes):
+
+- **Text**: each chunk goes to the model (internal `models/chat`, JSON output) with the ontology's classes and
+  properties, all of them or the `EXTRACTION_MAX_TERMS` (150) matching the chunk best plus their superclasses. The
+  answer's entities get deterministic IRIs, `urn:tmfc060:kb:{kb}:entity:{class}:{label slug}`, so one entity in two
+  chunks or documents is one node. Invalid JSON is asked again once.
+- **RDF documents** (Turtle, JSON-LD without remote contexts) and **TMF921 intent expressions** are lifted directly;
+  every **TMF record** also gets a generic mapping into FTO's Open API namespace
+  (`https://models.tmforum.org/ontology/open-api/{api}/`).
+- **The ontology filter**: a predicate must be declared by the ontology modules (with any type), or be `rdf:type`,
+  `rdfs:label`/`comment`, SKOS labels or RDF list structure; an `rdf:type` object must be a class there. Schema a
+  document declares itself (classes, properties, `rdfs:subClassOf`/`domain`/`range`) is kept with it, and its own
+  terms are valid in it. Everything else is dropped and listed in `proposedTerms` for KM-FX-04.
+
 ## Settings
 
 | Variable | Default | Meaning |
@@ -59,3 +76,4 @@ the step).
 | `WORKER_HEALTH_HOST` / `WORKER_HEALTH_PORT` | `0.0.0.0` / `8082` | The probe server |
 | `LOG_LEVEL` | `INFO` | Log level |
 | `CHUNK_MAX_TOKENS` / `CHUNK_OVERLAP_TOKENS` | `400` / `60` | KM-FX-01 chunk size and overlap (tokens ≈ characters / 4) |
+| `EXTRACTION_MAX_TERMS` | `150` | KM-FX-02: ontology terms sent to the model with a chunk |

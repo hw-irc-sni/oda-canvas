@@ -19,6 +19,8 @@ async def noop(task: dict, client) -> dict:
 
 def default_handlers(settings=None) -> dict[str, Handler]:
     from .km_fx_01 import handler as km_fx_01
+    from .km_fx_02 import handler as km_fx_02
     handlers: dict[str, Handler] = {step: noop for step in STEPS}
     handlers["KM-FX-01"] = km_fx_01(settings)
+    handlers["KM-FX-02"] = km_fx_02(settings)
     return handlers

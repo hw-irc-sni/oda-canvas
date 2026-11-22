@@ -25,7 +25,11 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select
 from pyoxigraph import Literal, NamedNode, Quad
 
+import httpx
+
 from . import processes
+from .models import ModelError
+from .query import run_query
 from .db.models import Document, DocumentBlob, Task
 from .db.models import Knowledge as KnowledgeRow
 from .errors import ApiError
@@ -159,6 +163,69 @@ def build_app(main: FastAPI, token: InternalToken) -> FastAPI:
             previous = await session.scalar(select(Task.result).where(
                 Task.process_id == task.process_id, Task.chain == task.chain, Task.seq == task.seq - 1))
         return JSONResponse(task_json(task, previous))
+
+    # ---- models and SPARQL (KM-FX-02 onwards) --------------------------------------------------------------
+    async def json_of(request: Request) -> dict:
+        try:
+            payload = await request.json()
+        except ValueError:
+            raise ApiError(400, "400", "Bad Request", "The body must be JSON") from None
+        if not isinstance(payload, dict):
+            raise ApiError(400, "400", "Bad Request", "The body must be a JSON object")
+        return payload
+
+    async def model_call(call):
+        resolver = getattr(state, "models", None)
+        try:
+            if resolver is None:
+                raise ModelError("No model resolver")
+            return await call(resolver)
+        except ModelError as exc:
+            if exc.status is not None and 400 <= exc.status < 500:
+                raise ApiError(400, "400", "Bad Request", str(exc)) from exc
+            if exc.status is None and (resolver is None or resolver.active is None):
+                raise ApiError(503, "503", "Service Unavailable", f"No model route: {exc}") from exc
+            raise ApiError(502, "502", "Bad Gateway", str(exc)) from exc
+        except httpx.HTTPError as exc:
+            raise ApiError(502, "502", "Bad Gateway", f"{type(exc).__name__}: {exc}") from exc
+
+    @app.post("/internal/models/chat", dependencies=[Depends(authorized)])
+    async def chat(request: Request):
+        payload = await json_of(request)
+        messages = payload.get("messages")
+        if not isinstance(messages, list) or not messages:
+            raise ApiError(400, "400", "Bad Request", "messages is required")
+        options = {k: v for k, v in payload.items() if k in ("response_format", "temperature", "max_tokens", "seed")}
+        content = await model_call(lambda r: r.chat(messages, **options))
+        return {"content": content, "route": state.models.active.name if state.models.active else None}
+
+    @app.post("/internal/models/embeddings", dependencies=[Depends(authorized)])
+    async def embeddings(request: Request):
+        payload = await json_of(request)
+        texts = payload.get("input")
+        if not isinstance(texts, list) or not all(isinstance(t, str) for t in texts):
+            raise ApiError(400, "400", "Bad Request", "input must be a list of strings")
+        vectors = await model_call(lambda r: r.embed(texts))
+        return {"embeddings": vectors, "model": state.models.active.embedding_model if state.models.active else None}
+
+    @app.post("/internal/knowledge/{kb_id}/query", dependencies=[Depends(authorized)])
+    async def query(kb_id: str, request: Request):
+        from .kb.router import dataset_for
+        text = (await request.body()).decode("utf-8", errors="replace")
+        if not text.strip():
+            raise ApiError(400, "400", "Bad Request", "The query is empty")
+        settings = state.settings
+        async with state.sessions() as session:
+            row = await session.get(KnowledgeRow, kb_id)
+            if row is None:
+                raise ApiError(404, "404", "Not Found", f"No knowledge '{kb_id}'")
+            dataset = await dataset_for(session, state.graphs, row)
+        result = await run_query(settings.store_path, text, dataset, timeout=settings.query_timeout_default,
+                                 row_cap=settings.query_row_cap)  # no SERVICE: the allowlist is empty
+        if result.kind == "graph":
+            return Response(result.body, media_type="text/turtle")
+        return JSONResponse(result.body, media_type="application/sparql-results+json",
+                            headers={"X-Result-Truncated": "true"} if result.truncated else {})
 
     # ---- documents (KM-FX-01) ------------------------------------------------------------------------------
     async def document_of(session, kb_id: str, doc_id: str) -> Document:

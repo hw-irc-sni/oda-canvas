@@ -8,6 +8,14 @@ class LeaseLost(Exception):
     """The API says this worker no longer holds the task."""
 
 
+class ModelUnavailable(Exception):
+    """No model route, or the model failed: worth retrying later."""
+
+
+class ModelRefused(Exception):
+    """The model rejected the request (4xx): retrying the same request won't help."""
+
+
 class ResultTooLarge(Exception):
     """The API refused a task result over TASK_RESULT_MAX_BYTES."""
 
@@ -70,6 +78,24 @@ class InternalClient:
         content = await self.http.get(f"/internal/knowledge/{kb_id}/document/{doc_id}/content", headers=self.headers())
         content.raise_for_status()
         return meta.json(), content.content
+
+    async def chat(self, messages: list[dict], **options) -> str:
+        """A chat completion through the API's model route (KM-FX-02). Raises ModelUnavailable or ModelRefused."""
+        response = await self.http.post("/internal/models/chat", json={"messages": messages, **options},
+                                        headers=self.headers())
+        if response.status_code == 400:
+            raise ModelRefused(response.json().get("message", "refused"))
+        if response.status_code in (502, 503):
+            raise ModelUnavailable(response.json().get("message", "unavailable"))
+        response.raise_for_status()
+        return response.json()["content"]
+
+    async def query(self, kb_id: str, sparql: str) -> dict:
+        """A read-only SPARQL SELECT over the knowledge-base's dataset (SPARQL JSON results)."""
+        response = await self.http.post(f"/internal/knowledge/{kb_id}/query", content=sparql.encode(),
+                                        headers=self.headers())
+        response.raise_for_status()
+        return response.json()
 
     async def ready(self) -> bool:
         """The internal API answers and accepts the token (a claim without a worker: 400 means authenticated)."""

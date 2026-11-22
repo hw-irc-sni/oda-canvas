@@ -114,6 +114,9 @@ not started. The workers reach the component only through this API.
   the previous step of its chain; `…/task/{id}/heartbeat`, `/complete` (`result`, at most `TASK_RESULT_MAX_BYTES`,
   32 MiB, else 413) and `/fail` (`error`, `retryable`); 409 when the worker no longer holds the task.
 - `GET /internal/knowledge/{id}/document/{doc}` and `…/content`: a document's metadata and bytes (KM-FX-01).
+- `POST /internal/models/chat` and `/internal/models/embeddings`: calls through the model route (503 without a route,
+  400 when the model refuses the request, 502 on other failures).
+- `POST /internal/knowledge/{id}/query`: a read-only SPARQL query over the KB's dataset (no SERVICE).
 - The public `/knowledge/{id}/graph` shows the KB graph and its source graphs together; its PUT and DELETE replace
   or clear all of them, and queries and `statistics` include them.
 

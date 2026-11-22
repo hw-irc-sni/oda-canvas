@@ -970,6 +970,7 @@ dependencies = [
     { name = "httpx" },
     { name = "pydantic-settings" },
     { name = "pypdf" },
+    { name = "rdflib" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -987,6 +988,7 @@ requires-dist = [
     { name = "httpx", specifier = "==0.28.1" },
     { name = "pydantic-settings", specifier = "==2.16.3" },
     { name = "pypdf", specifier = "==5.4.0" },
+    { name = "rdflib", specifier = "==7.6.0" },
     { name = "uvicorn", extras = ["standard"], specifier = "==0.54.0" },
 ]
 

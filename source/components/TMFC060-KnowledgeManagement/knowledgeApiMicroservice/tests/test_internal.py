@@ -163,3 +163,49 @@ async def test_document_content_claim_input_and_result_cap(postgres_url, tmp_pat
         second = (await i.post("/internal/task/claim", json={"worker": "w"}, headers=TOKEN)).json()
         assert second["step"] == "KM-FX-02" and second["input"] == {"chunks": 3}
         await i.aclose()
+
+
+async def test_models_and_query(api):
+    import json as _json
+    from app.models import ModelResolver
+    i = api.internal
+    # no model route
+    assert (await i.post("/internal/models/chat", json={"messages": [{"role": "user", "content": "hi"}]},
+                         headers=TOKEN)).status_code == 503
+
+    def fake(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": []})
+        body = _json.loads(request.content)
+        if request.url.path.endswith("/embeddings"):
+            return httpx.Response(200, json={"data": [{"index": n, "embedding": [1.0, 0.0]}
+                                                      for n, _ in enumerate(body["input"])]})
+        if body.get("response_format") == {"type": "bad"}:
+            return httpx.Response(400, json={"error": "bad"})
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"ok": true}'}}]})
+    state = api.app.state
+    state.models = ModelResolver(state.settings.model_copy(update={
+        "openai_base_url": "http://m.test/v1", "openai_chat_model": "c", "openai_embedding_model": "e"}),
+        transport=httpx.MockTransport(fake), use_in_cluster=False)
+    await state.models.resolve()
+    chat = await i.post("/internal/models/chat", json={"messages": [{"role": "user", "content": "hi"}],
+                                                        "response_format": {"type": "json_object"}}, headers=TOKEN)
+    assert chat.status_code == 200 and chat.json() == {"content": '{"ok": true}', "route": "openaiCompatible"}
+    assert (await i.post("/internal/models/chat", json={"messages": [{"role": "user", "content": "x"}],
+                                                        "response_format": {"type": "bad"}},
+                         headers=TOKEN)).status_code == 400
+    emb = await i.post("/internal/models/embeddings", json={"input": ["a", "b"]}, headers=TOKEN)
+    assert emb.json()["embeddings"] == [[1.0, 0.0], [1.0, 0.0]]
+    assert (await i.post("/internal/models/chat", json={}, headers=TOKEN)).status_code == 400
+    assert (await i.post("/internal/models/embeddings", json={"input": "x"}, headers=TOKEN)).status_code == 400
+    assert (await i.post("/internal/models/embeddings", json={"input": ["a"]})).status_code == 401
+    # read-only SPARQL over the KB's dataset
+    await i.post("/internal/knowledge/kb/graph", content=MAIN, headers={**TOKEN, **TURTLE})
+    q = await i.post("/internal/knowledge/kb/query", content=b"SELECT ?o WHERE { <urn:x:m> ?p ?o }", headers=TOKEN)
+    assert q.json()["results"]["bindings"][0]["o"]["value"] == "urn:x:0"
+    assert (await i.post("/internal/knowledge/kb/query", content=b"INSERT DATA { <urn:a> <urn:b> <urn:c> }",
+                         headers=TOKEN)).status_code == 400
+    svc = await i.post("/internal/knowledge/kb/query", content=b"SELECT * WHERE { SERVICE <https://x/sparql> { ?s ?p ?o } }",
+                       headers=TOKEN)
+    assert svc.status_code == 403
+    assert (await i.post("/internal/knowledge/none/query", content=b"ASK {}", headers=TOKEN)).status_code == 404
