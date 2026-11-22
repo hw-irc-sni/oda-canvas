@@ -25,4 +25,4 @@ COPY api/ ./api/
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 STORE_PATH=/data/store
 USER 10001
 EXPOSE 8080
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "--factory", "app.main:create_app", "--host", "0.0.0.0", "--port", "8080"]
