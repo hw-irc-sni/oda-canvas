@@ -347,19 +347,23 @@ sequenceDiagram
   Op->>CCR: watch (providerRef)
   Op->>Op: resolve the provider by componentId or componentName
   Op->>API: use knowledgeId, or POST /knowledge from create{…}
-  Op->>Sec: REST query URL, MCP URL, kbId, Qdrant collection name (ownerRef to the CR)
-  Op->>CCR: status.bindings[], conditions
+  Op->>KC: grant knowledge-viewer to the consumer's client
+  Op->>Sec: apiUrl, queryUrl, mcpUrl, kbId, qdrantCollection (ownerRef to the CR)
+  Op->>CCR: DependentAPI for the MCP API, status.bindings[], conditions
 ```
 
-1. **`DataResourceConfig` CRD** (`oda.tmforum.org/v1alpha1`, namespaced, standalone). It links to its component by label or ownerRef, so the Component CRD doesn't change. The spec has:
-   * `role`: provider or consumer.
-   * `dataResources[]`: `name`, `id`, `type` (`vectorStore`, `knowledgeGraph`, `dataProduct` or `cache`), `required`, `retrieval{topK, scoreThreshold, hybrid}`, `physicalStorage`, `catalogRef` and `providerRef{componentId | componentName, knowledgeId | create{…}}`. The type enum and the retrieval block come from the Component v2alpha1 proposal.
-   * `status`: `providedResources[]`, `bindings[]` and `conditions`.
+1. **`DataResourceConfig` CRD** (`oda.tmforum.org/v1alpha1`, namespaced, standalone), as refined by [ADR-010](https://github.com/hw-irc-sni/ai-canvas-architecture/blob/adr-tmfc060-knowledge/decision-log/ADR-010-data-resource-config-refinement.md). It **extends the existing draft CRD** of the AI-Native Canvas architecture, which was written for Databricks, in a backward-compatible way, so the two uses share one resource. It links to its component by the `oda.tmforum.org/componentName` label or an ownerRef, so the Component CRD doesn't change. The additions:
+   * `spec.provider` gains `odaComponent` next to `databricks`: the data resource is served by an ODA Component.
+   * `spec.role`: `consumer` (default) or `provider`.
+   * `dependentDataResources[]` (consumer) items gain `type` (`vectorStore`, `knowledgeGraph`, `dataProduct` or `cache`, from the Component v2alpha1 proposal), `required`, `retrieval{topK, scoreThreshold, hybrid}`, `access` (`read` or `readWrite`) and `providerRef{componentId | componentName, knowledgeId | create{…}}`. The existing `dataProductType`, `catalogRef` and `physicalStorage` stay.
+   * `providedDataResources[]` (provider) declares the stores a component serves: name, type, engine and the ExposedAPIs that serve them.
+   * `status` keeps `phase` and adds `conditions`, `providedResources[]` and `bindings[]`.
+   * The Databricks-only fields (`workspace`, `accessType`) become conditionally required through CEL validation rules. An operator writes status only on CRs whose `spec.provider` it owns.
 
    That a standalone CRD needs no webhook conversion change is to be confirmed (spike S6). The fallback is conversion stubs.
-2. **TMFOP012 Data Resource Management operator** (`dataresource-operator`, kopf).
+2. **TMFOP012 Data Resource Management operator** (`dataresource-operator`, kopf). It handles `provider: odaComponent`.
    * **Provider role:** mirrors the component's knowledge-bases and modules into the CR status, by polling the API and listening on its hub.
-   * **Consumer role:** resolves the provider and ensures the knowledge-base exists, using canvasSystemRole credentials. It then writes a binding Secret with the REST query URL, the MCP URL, the `kbId` and, for reference, the Qdrant collection name.
+   * **Consumer role:** resolves the provider and ensures the knowledge-base exists, using canvasSystemRole credentials. It grants the consumer component's identity client the TMFC060 role (`knowledge-viewer`, plus `knowledge-editor` for `access: readWrite`). It then writes a **binding Secret** (`apiUrl`, `queryUrl`, `mcpUrl`, `kbId`, `providerComponent` and, for reference, `qdrantCollection`) and a **DependentAPI** for the MCP API, both owned by the CR. Deleting the CR removes both and revokes the role; the knowledge-base is kept.
 
    Consumers access data only through the API or MCP (ADR-007 Pattern A). They never receive Qdrant or RocksDB credentials. How an operator obtains a canvasSystemRole token is an unverified mechanic (spike S4); the fallback is Keycloak client credentials for an operator client.
 3. **Resource Inventory.** TMF639 gets a `DataResource` category projected from `DataResourceConfig`. Its characteristics are type, storeKind, layer and lifecycleStatus, with `providedBy`/`dependsOn` relationships to the ODAComponent. ODAComponent gains a `componentId` characteristic. The same projection is mirrored in ComponentRegistry and in the MCP_Resource_Inventory category filter and prompts. The portal discovers TMFC060 instances this way, with a configured-URL override.
@@ -401,4 +405,5 @@ These mechanics are unverified. Each is checked by a short spike at the start of
 * [Event-based Integration Design](Event-based-integration-design.md)
 * [UC018 Knowledge and Ontology Management](usecase-library/UC018-Knowledge-and-Ontology-Management.md)
 * [AI Canvas architecture decision log](https://github.com/hw-irc-sni/ai-canvas-architecture/tree/main/decision-log): ADR-005 and ADR-007 (data resources), ADR-003 (Resource Inventory)
+* Proposed ADRs for this work ([PR](https://github.com/hw-irc-sni/ai-canvas-architecture/pull/1)): [ADR-009](https://github.com/hw-irc-sni/ai-canvas-architecture/blob/adr-tmfc060-knowledge/decision-log/ADR-009-knowledge-and-ontology-provider.md) TMFC060 as knowledge and ontology provider, [ADR-010](https://github.com/hw-irc-sni/ai-canvas-architecture/blob/adr-tmfc060-knowledge/decision-log/ADR-010-data-resource-config-refinement.md) DataResourceConfig refinement
 * [Delivery tracking issue](https://github.com/hw-irc-sni/oda-canvas/issues/90)
