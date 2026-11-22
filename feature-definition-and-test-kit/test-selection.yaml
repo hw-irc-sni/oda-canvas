@@ -156,7 +156,8 @@ rules:
       - "charts/api-operator-istio/**"
     canvasSections:
       - api-operator-istio
-    tags: "@UC003 or @UC012"
+    # UC018-F003: MCP ExposedAPIs are registered with the AI gateway
+    tags: "@UC003 or @UC012 or @UC018-F003"
 
   # The UC003 features run on the Istio canvas, so they don't exercise Kong
   # or APISIX. The gateway features run on their own canvas (see gateways).

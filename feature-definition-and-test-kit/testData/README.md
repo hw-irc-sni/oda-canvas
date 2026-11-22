@@ -12,7 +12,7 @@ The table is generated from each chart's `Chart.yaml` and the feature files: run
 
 | Test chart | Chart name | Description | Used by |
 | --- | --- | --- | --- |
-| [`knowledgemanagement-v1`](knowledgemanagement-v1/Chart.yaml) | `knowledgemanagement` | BDD test chart - a TMFC060-KnowledgeManagement ODA Component, with the reference ProductCatalog images as stand-in workloads | UC018-F001, UC018-F002 |
+| [`knowledgemanagement-v1`](knowledgemanagement-v1/Chart.yaml) | `knowledgemanagement` | BDD test chart - a TMFC060-KnowledgeManagement ODA Component, with the reference ProductCatalog images as stand-in workloads | UC018-F001, UC018-F002, UC018-F003 |
 | [`productcatalog-depapitest-v1`](productcatalog-depapitest-v1/Chart.yaml) | `productcatalog` | BDD test chart - the reference TMFC001-ProductCatalogManagement ODA Component as the downstream catalog for UC007-F002 | UC007-F002 |
 | [`productcatalog-dependent-API-v1beta3`](productcatalog-dependent-API-v1beta3/Chart.yaml) | `productcatalog` | BDD test chart - the reference TMFC001-ProductCatalogManagement ODA Component as an oda.tmforum.org/v1beta3 Component, with its dependent API enabled | UC013-F001 |
 | [`productcatalog-dependent-API-v1beta4`](productcatalog-dependent-API-v1beta4/Chart.yaml) | `productcatalog` | BDD test chart - the reference TMFC001-ProductCatalogManagement ODA Component as an oda.tmforum.org/v1beta4 Component, with its dependent API enabled | UC013-F001 |

@@ -1,0 +1,15 @@
+{
+  "name": "ai-gateway-utils-agentgateway",
+  "version": "1.0.0",
+  "description": "Utilities for checking MCP targets in an agentgateway AI gateway to support BDD tests",
+  "main": "ai-gateway-utils-agentgateway.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@kubernetes/client-node": "^0.12.3",
+    "axios": "^0.26.0",
+    "yaml": "^2.1.3"
+  }
+}

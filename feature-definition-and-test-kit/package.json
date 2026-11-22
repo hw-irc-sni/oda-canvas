@@ -25,6 +25,7 @@
     "identity-manager-utils-keycloak": "file:utilities/identity-manager-utils-keycloak",
     "component-utils": "file:utilities/component-utils",
     "observability-utils-kubernetes": "file:utilities/observability-utils-kubernetes",
+    "ai-gateway-utils-agentgateway": "file:utilities/ai-gateway-utils-agentgateway",
     "yaml": "^2.1.3"
   }
 }
