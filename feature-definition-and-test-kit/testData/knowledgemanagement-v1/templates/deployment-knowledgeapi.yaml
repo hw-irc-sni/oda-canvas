@@ -1,0 +1,55 @@
+# Stand-in for knowledgeApiMicroservice: the reference ProductCatalog API image (see Chart.yaml).
+# It also implements the processflow API (Service {{.Release.Name}}-kmprocessflow).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{.Release.Name}}-kmapi
+  labels:
+    oda.tmforum.org/componentName: {{.Release.Name}}-{{.Values.component.name}}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      impl: {{.Release.Name}}-kmapi
+  template:
+    metadata:
+      labels:
+        app: {{.Release.Name}}-{{.Values.component.name}}
+        impl: {{.Release.Name}}-kmapi
+        version: {{.Values.api.versionLabel}}
+    spec:
+      containers:
+      - name: {{.Release.Name}}-kmapi
+        image: {{.Values.api.image}}
+        env:
+        - name: RELEASE_NAME
+          value: {{.Release.Name}}
+        - name: COMPONENT_NAME
+          value: {{.Release.Name}}-{{.Values.component.name}}
+        - name: OTL_EXPORTER_CONSOLE_ENABLED
+          value: "false"
+        - name: OTL_EXPORTER_TRACE_PROTO_ENABLED
+          value: "false"
+        - name: MONGODB_HOST
+          value: {{.Release.Name}}-mongodb
+        - name: MONGODB_PORT
+          value: "{{.Values.mongodb.port}}"
+        - name: MONGODB_DATABASE
+          value: {{.Values.mongodb.database}}
+        - name: NODE_ENV
+          value: production
+        - name: CANVAS_INFO_HOST_PORT
+          value: "{{.Values.canvasinfo.host}}"
+        - name: CANVAS_INFO_BASEPATH
+          value: "{{.Values.canvasinfo.basepath}}"
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: {{.Release.Name}}-kmapi
+          containerPort: 8080
+        startupProbe:
+          httpGet:
+            path: /{{.Release.Name}}-{{.Values.component.name}}/tmf-api/productCatalogManagement/v4/catalog
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 30

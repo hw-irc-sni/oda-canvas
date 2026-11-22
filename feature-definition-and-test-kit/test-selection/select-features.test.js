@@ -301,7 +301,7 @@ test('the default run never includes gateway features', () => {
 test('a path that matches several rules runs all of them', () => {
   const result = select(['source/operators/TMFOP005-Dependency-Management/README.md', 'charts/canvas-info-service/values.yaml', 'charts/component-registry/values.yaml'])
   assert.equal(result.mode, 'selected')
-  assert.equal(result.tagExpression, '(@UC002-F001) or (@UC007) or (@UC016)')
+  assert.equal(result.tagExpression, '(@UC002-F001) or (@UC007) or (@UC016 or @UC018-F001)')
 })
 
 test('a rule with no tags runs only the smoke test', () => {

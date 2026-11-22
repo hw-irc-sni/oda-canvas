@@ -1,0 +1,27 @@
+apiVersion: v2
+name: knowledgemanagement
+description: BDD test chart - a TMFC060-KnowledgeManagement ODA Component, with the reference ProductCatalog images as stand-in workloads
+
+# BDD test chart knowledgemanagement-v1, used by the UC018 features in feature-definition-and-test-kit/features.
+#
+# TMFC060 Knowledge Management has no chart or images in reference-example-components yet. This chart
+# declares the TMFC060 Component as the Canvas sees it, and runs the published tmforumodacanvas
+# images of the reference ProductCatalog chart 1.4.5 as stand-in workloads:
+#   - Component CR (oda.tmforum.org/v1) with componentMetadata.id TMFC060 and the
+#     oda.tmforum.org/componentId: TMFC060 label
+#   - exposedAPIs knowledgemanagement (openapi, TMFxxx), processflow (openapi, TMF701) and
+#     knowledgemcp (mcp); metrics (prometheus); partyrole (TMF669)
+#   - static componentRoles knowledge-viewer, knowledge-editor, ontology-editor, ontology-reviewer,
+#     ontology-approver
+#   - a provider DataResourceConfig (ADR-010 shape), rendered only when the Canvas has the
+#     oda.tmforum.org/v1alpha1 DataResourceConfig CRD or dataResourceConfig.enabled is true
+# The workloads come from productcatalog-v1 (productcatalogapi, productcatalogmcp, partyroleapi,
+# productcatalogmetrics, MongoDB). The Canvas marks an ExposedAPI ready from its implementation
+# Service's endpoints, so the stand-ins are enough for scenarios that test Canvas behaviour.
+# Replace them with the TMFC060 images once Phase 3 publishes the component chart.
+#
+# version: 0.1.0 - first version, with stand-in workloads
+
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

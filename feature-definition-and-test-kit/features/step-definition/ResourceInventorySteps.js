@@ -220,3 +220,78 @@ Then('I can query the Resource Inventory API with a filter for each of the follo
     throw error;
   }
 });
+/**
+ * Returns the value of a resource characteristic, or undefined.
+ * @param {Object} resource - a TMF639 resource
+ * @param {string} name - the characteristic name
+ */
+function characteristicValue(resource, name) {
+  const characteristic = (resource.resourceCharacteristic || []).find(c => c.name === name);
+  return characteristic ? characteristic.value : undefined;
+}
+
+/**
+ * Returns the ids of the resources a resource relates to with the given relationship type.
+ * @param {Object} resource - a TMF639 resource
+ * @param {string} relationshipType - for example 'providedBy' or 'provides'
+ */
+function relatedResourceIds(resource, relationshipType) {
+  return (resource.resourceRelationship || [])
+    .filter(r => r.relationshipType === relationshipType)
+    .map(r => r.resource && r.resource.id);
+}
+
+/**
+ * Step: Then the Resource Inventory API lists a '<category>' resource with '<characteristic>' '<value>'
+ * that is '<relationshipType>' the '<resourceId>' resource
+ *
+ * Used by UC018 for data resources (ADR-011), for example a 'DataResource' with 'type'
+ * 'vectorStore' that is 'providedBy' an ODAComponent.
+ */
+Then('the Resource Inventory API lists a {string} resource with {string} {string} that is {string} the {string} resource', async function (category, characteristicName, expectedValue, relationshipType, relatedId) {
+  console.log(`\n=== Looking for a '${category}' resource with ${characteristicName}=${expectedValue}, ${relationshipType} '${relatedId}' ===`);
+  const resources = await resourceInventoryUtilsTMF639.getAllResources();
+  const matching = resources.filter(r =>
+    r.category === category &&
+    characteristicValue(r, characteristicName) === expectedValue &&
+    relatedResourceIds(r, relationshipType).includes(relatedId));
+  if (DEBUG_LOGS) {
+    console.log('Resources in this category:', JSON.stringify(resources.filter(r => r.category === category), null, 2));
+  }
+  assert.ok(matching.length > 0,
+    `No '${category}' resource with ${characteristicName}=${expectedValue} that is '${relationshipType}' '${relatedId}' in the Resource Inventory`);
+  console.log(`✅ Found ${matching.map(r => r.id).join(', ')}`);
+});
+
+/**
+ * Step: Then the '<resourceId>' resource in the Resource Inventory API has the characteristic
+ * '<name>' with value '<value>'
+ */
+Then('the {string} resource in the Resource Inventory API has the characteristic {string} with value {string}', async function (resourceId, characteristicName, expectedValue) {
+  console.log(`\n=== Checking characteristic '${characteristicName}' of '${resourceId}' ===`);
+  const resource = await resourceInventoryUtilsTMF639.findResource(resourceId);
+  assert.ok(resource, `Resource '${resourceId}' not found in the Resource Inventory`);
+  const actual = characteristicValue(resource, characteristicName);
+  assert.strictEqual(actual, expectedValue,
+    `Characteristic '${characteristicName}' of '${resourceId}' is '${actual}', expected '${expectedValue}'`);
+  console.log(`✅ ${characteristicName} = ${actual}`);
+});
+
+/**
+ * Step: Then the '<resourceId>' resource in the Resource Inventory API has a '<relationshipType>'
+ * relationship to <count> '<category>' resources
+ */
+Then('the {string} resource in the Resource Inventory API has a {string} relationship to {int} {string} resources', async function (resourceId, relationshipType, expectedCount, category) {
+  console.log(`\n=== Checking '${relationshipType}' relationships of '${resourceId}' ===`);
+  const resource = await resourceInventoryUtilsTMF639.findResource(resourceId);
+  assert.ok(resource, `Resource '${resourceId}' not found in the Resource Inventory`);
+  const relatedIds = relatedResourceIds(resource, relationshipType);
+  const related = [];
+  for (const id of relatedIds) {
+    const target = await resourceInventoryUtilsTMF639.findResource(id);
+    if (target && target.category === category) related.push(id);
+  }
+  assert.strictEqual(related.length, expectedCount,
+    `'${resourceId}' has ${related.length} '${relationshipType}' relationships to '${category}' resources (${related.join(', ')}), expected ${expectedCount}`);
+  console.log(`✅ ${related.length} '${relationshipType}' relationships to '${category}' resources`);
+});

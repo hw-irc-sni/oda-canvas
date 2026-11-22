@@ -220,7 +220,8 @@ rules:
       - "charts/resource-inventory/**"
     canvasSections:
       - resource-inventory
-    tags: "@UC016"
+    # UC018-F001: the data resources a component provides (DataResource, ADR-011)
+    tags: "@UC016 or @UC018-F001"
 
   - name: Component Registry
     paths:
@@ -228,7 +229,8 @@ rules:
       - "charts/component-registry/**"
     canvasSections:
       - component-registry
-    tags: "@UC016"
+    # UC018-F001: the data resources a component provides (DataResource, ADR-011)
+    tags: "@UC016 or @UC018-F001"
 
   # The webhook converts components between CRD versions.
   - name: ODA webhook
