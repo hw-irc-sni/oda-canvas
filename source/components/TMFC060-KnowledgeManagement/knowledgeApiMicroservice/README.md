@@ -44,6 +44,10 @@ The API is mounted under `/{COMPONENT_NAME}/tmf-api/knowledgeManagement/v5`.
 | `FEDERATION_SECRETS_DIR` | | Folder of per-module OAuth2 client Secrets (`<moduleId>/tokenUrl`, `clientId`, `clientSecret`) |
 | `FEDERATION_CALL_TIMEOUT` | `10` | Seconds a federated SERVICE call may take |
 | `FEDERATION_CACHE_TTL` | `60` | Seconds federated answers are cached (0 = off) |
+| `EVENT_CALLBACK_ALLOWED_HOSTS` | | Callback hosts (globs) allowed to resolve to private addresses, for example `*.svc.cluster.local` |
+| `EVENT_RETRY_DELAYS` | `10,60,300,900,1800` | Seconds before each retry of an event delivery |
+| `EVENT_DELIVERY_TIMEOUT` / `EVENT_POLL_INTERVAL` / `EVENT_RETENTION_DAYS` | `10` / `1` / `7` | Delivery call timeout, outbox poll interval, days finished deliveries are kept |
+| `EVENT_HREF_BASE` | | Base URL that makes the hrefs in events absolute |
 | `TASK_LEASE_SECONDS` / `TASK_MAX_ATTEMPTS` / `TASK_RETRY_DELAY` | `300` / `3` / `30` | Ingestion task lease, attempts, and retry delay per attempt |
 | `DOCUMENT_MAX_BYTES` | `52428800` | Largest document a knowledge-base accepts (50 MiB) |
 | `MODEL_GATEWAY_SERVICE`, `MGS_CHAT_MODEL`, `MGS_EMBEDDING_MODEL` | | Route 1: the ModelGatewayService CR and its model names |
@@ -93,6 +97,22 @@ serve `/knowledgeSpecification` (list, create, get, patch fields, delete) and it
 - `/knowledge/{id}/query` runs a read-only SPARQL query (`application/sparql-query` or the form field `query`) over
   the KB graph plus its conformsTo closure, in a killable worker: `timeout` capped by `QUERY_TIMEOUT_MAX` (504),
   the row cap (`X-Result-Truncated`), updates refused (400), and SERVICE only to allowlisted peers (below).
+
+## Events
+
+[`app/events.py`](app/events.py): `POST /hub` (`callback`, optional `query` such as
+`eventType=KnowledgeCreateEvent,KnowledgeDeleteEvent`) subscribes to the Create, AttributeValueChange, StateChange
+and Delete events of `knowledge` and `knowledgeSpecification`. `GET`/`DELETE /hub/{id}` work for the subscription's
+creator only (404 for anyone else); deleting it stops delivery.
+
+- Each event is written to the `event_delivery` outbox for every matching subscription, and delivered as a TMF630
+  event (`eventId`, `eventTime`, `eventType`, `event: {knowledge | knowledgeSpecification}`) to
+  `{callback}/listener/{eventName}`, for example `…/listener/knowledgeCreateEvent`. Delivery survives restarts.
+- A failed delivery is retried after each of `EVENT_RETRY_DELAYS` (10 s, 1 min, 5 min, 15 min, 30 min) and then
+  marked `failed`; finished rows are kept `EVENT_RETENTION_DAYS` (7).
+- Callbacks must be http(s), and a host resolving to a loopback, link-local (cloud metadata), private or other
+  non-public address is refused, at registration (400) and before each delivery, unless it matches
+  `EVENT_CALLBACK_ALLOWED_HOSTS` (for example `*.svc.cluster.local`).
 
 ## Ingestion processes
 

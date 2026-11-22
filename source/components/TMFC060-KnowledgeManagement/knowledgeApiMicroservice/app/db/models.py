@@ -170,6 +170,25 @@ class HubSubscription(Base):
     created: Mapped[datetime] = created_at()
 
 
+class EventDelivery(Base):
+    """The outbox: one event to deliver to one hub subscription, retried with backoff."""
+    __tablename__ = "event_delivery"
+    __table_args__ = (Index("ix_event_delivery_due", "state", "next_attempt_at"),)
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    subscription_id: Mapped[str] = mapped_column(Text, ForeignKey("hub_subscription.id", ondelete="CASCADE"),
+                                                 nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(Text, nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")  # pending, delivered, failed
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
+                                                      server_default=func.now())
+    last_error: Mapped[str | None] = mapped_column(Text)
+    created: Mapped[datetime] = created_at()
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class RecommendFeedback(Base):
     """Feedback on a recommended item (KM-FX-06 ranking signals)."""
     __tablename__ = "recommend_feedback"

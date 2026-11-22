@@ -34,7 +34,8 @@ class Settings(BaseSettings):
     process_oas_path: str = str(Path(__file__).resolve().parent.parent / "api" /
                                 "TMF701-ProcessManagement-v5.0.0-subset.oas.yaml")
 
-    @field_validator("keycloak_issuers", "git_allowed_schemes", "mount_roots", mode="before")
+    @field_validator("keycloak_issuers", "git_allowed_schemes", "mount_roots", "event_callback_allowed_hosts",
+                     "event_retry_delays", mode="before")
     @classmethod
     def _split_issuers(cls, value):
         if isinstance(value, str):
@@ -82,6 +83,16 @@ class Settings(BaseSettings):
     model_route_interval: int = 300
     model_probe_timeout: float = 5.0
     model_call_timeout: float = 120.0
+
+    # Event delivery to /hub subscribers: callback hosts allowed even when they resolve to private addresses (glob
+    # patterns, for example *.svc.cluster.local), the delays before each retry, the call timeout, the outbox poll
+    # interval, how long finished deliveries are kept, and an optional base URL to make event hrefs absolute
+    event_callback_allowed_hosts: Annotated[list[str], NoDecode] = []
+    event_retry_delays: Annotated[list[float], NoDecode] = [10, 60, 300, 900, 1800]
+    event_delivery_timeout: float = 10.0
+    event_poll_interval: float = 1.0
+    event_retention_days: int = 7
+    event_href_base: str = ""
 
     # Ingestion tasks: the lease a worker holds (renewed by heartbeats), attempts, and the retry delay per attempt
     task_lease_seconds: int = 300

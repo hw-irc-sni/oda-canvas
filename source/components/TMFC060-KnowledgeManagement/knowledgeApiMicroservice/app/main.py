@@ -10,7 +10,7 @@ from .auth import TokenValidator, check_auth_settings, load_operations
 from .config import Settings, get_settings
 from .db.migrate import upgrade, wait_for_database
 from .db.session import make_engine, make_sessionmaker
-from .events import EventRecorder
+from .events import Dispatcher, HubEvents
 from .graphstore import GraphStore
 from .ontology import sync
 from .ontology.governance import load_lifecycles
@@ -20,7 +20,7 @@ from qdrant_client import AsyncQdrantClient
 from .kb import router as kb_router
 from .models import ModelResolver
 from .ontology.federation import Relay
-from .routers import processes, specifications, terms
+from .routers import hub, processes, specifications, terms
 from .store import get_store
 from .errors import ApiError
 from .health import is_ready, run_checks
@@ -41,6 +41,9 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
         app.state.sessions = make_sessionmaker(engine)
         app.state.graphs = GraphStore(get_store(settings.store_path))
         app.state.qdrant = AsyncQdrantClient(url=settings.qdrant_url, timeout=10)
+        app.state.events.sessions = app.state.sessions
+        app.state.dispatcher = Dispatcher(settings, app.state.sessions)
+        dispatch_task = asyncio.create_task(app.state.dispatcher.run_forever())
         app.state.relay = Relay(settings, app.state.sessions)
         await app.state.relay.start()
         app.state.models = ModelResolver(settings)
@@ -56,6 +59,8 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
             if sync_task:
                 sync_task.cancel()
             models_task.cancel()
+            dispatch_task.cancel()
+            await app.state.dispatcher.aclose()
             await app.state.models.aclose()
             await app.state.relay.stop()
             await app.state.qdrant.close()
@@ -66,7 +71,7 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
     app.state.operations = {**load_operations(settings.oas_path, settings.base_path),
                             **load_operations(settings.process_oas_path, settings.process_base_path)}
     app.state.token_validator = token_validator or (TokenValidator(settings) if settings.auth_enabled else None)
-    app.state.events = EventRecorder()
+    app.state.events = HubEvents(settings)
     app.state.lifecycles = load_lifecycles(settings.oas_path)
 
     @app.exception_handler(ApiError)
@@ -95,6 +100,7 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
     api = APIRouter(prefix=settings.base_path)
     api.include_router(specifications.router)
     api.include_router(terms.router)
+    api.include_router(hub.router)
     api.include_router(kb_router.router)
     app.include_router(api)
     app.include_router(processes.router, prefix=settings.process_base_path)
