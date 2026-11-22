@@ -51,9 +51,9 @@ class KnowledgeSpecification(Base):
 class Mapping(Base):
     """A bridge statement (reified bridge:mapping) of a bridge module."""
     __tablename__ = "mapping"
-    id: Mapped[str] = mapped_column(Text, primary_key=True)
     specification_id: Mapped[str] = mapped_column(
-        Text, ForeignKey("knowledge_specification.id", ondelete="CASCADE"), nullable=False, index=True)
+        Text, ForeignKey("knowledge_specification.id", ondelete="CASCADE"), primary_key=True)
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
     subject: Mapped[str] = mapped_column(Text, nullable=False)
     predicate: Mapped[str] = mapped_column(Text, nullable=False)
     object: Mapped[str] = mapped_column(Text, nullable=False)

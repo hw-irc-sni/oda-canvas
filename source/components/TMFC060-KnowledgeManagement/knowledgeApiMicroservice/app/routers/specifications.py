@@ -91,6 +91,64 @@ async def replace_content(id: str, request: Request, s: AsyncSession = Depends(s
     return Response(status_code=204)
 
 
+def mappings_for(request: Request, s: AsyncSession):
+    from ..ontology.mappings import Mappings
+    return Mappings(registry_for(request, s))
+
+
+def present_mapping(request: Request, mappings, m) -> dict:
+    return present(request, mappings.present(request.app.state.settings.base_path, m))
+
+
+@router.get("/knowledgeSpecification/{id}/mapping")
+async def list_mappings(id: str, request: Request, s: AsyncSession = Depends(session),
+                        _: Principal = Depends(require_operation("listKnowledgeSpecificationMapping"))):
+    from sqlalchemy import select
+    from ..db.models import Mapping
+    mappings = mappings_for(request, s)
+    await mappings.bridge_module(id)
+    rows = (await s.scalars(select(Mapping).where(Mapping.specification_id == id).order_by(Mapping.id))).all()
+    return list_response(request, [mappings.present(request.app.state.settings.base_path, m) for m in rows])
+
+
+@router.post("/knowledgeSpecification/{id}/mapping", status_code=201)
+async def create_mapping(id: str, request: Request, s: AsyncSession = Depends(session),
+                         _: Principal = Depends(require_operation("createKnowledgeSpecificationMapping"))):
+    mappings = mappings_for(request, s)
+    m = await mappings.create(id, await json_body(request))
+    return JSONResponse(present_mapping(request, mappings, m), status_code=201)
+
+
+@router.get("/knowledgeSpecification/{id}/mapping/{mappingId}")
+async def retrieve_mapping(id: str, mappingId: str, request: Request, s: AsyncSession = Depends(session),
+                           _: Principal = Depends(require_operation("retrieveKnowledgeSpecificationMapping"))):
+    mappings = mappings_for(request, s)
+    await mappings.bridge_module(id)
+    return present_mapping(request, mappings, await mappings.get(id, mappingId))
+
+
+@router.patch("/knowledgeSpecification/{id}/mapping/{mappingId}")
+async def patch_mapping(id: str, mappingId: str, request: Request, s: AsyncSession = Depends(session),
+                        principal: Principal = Depends(require_operation("patchKnowledgeSpecificationMapping"))):
+    payload = await json_body(request)
+    mappings = mappings_for(request, s)
+    current = (await mappings.get(id, mappingId)).lifecycle_status
+    if "lifecycleStatus" in payload and payload["lifecycleStatus"] != current:
+        if set(payload) - {"lifecycleStatus"}:
+            raise ApiError(400, "400", "Bad Request", "Change lifecycleStatus on its own, without other fields")
+        m = await governance_for(request, s).transition_mapping(id, mappingId, payload["lifecycleStatus"], principal)
+    else:
+        m = await mappings.patch(id, mappingId, payload, principal)
+    return present_mapping(request, mappings, m)
+
+
+@router.delete("/knowledgeSpecification/{id}/mapping/{mappingId}", status_code=204)
+async def delete_mapping(id: str, mappingId: str, request: Request, s: AsyncSession = Depends(session),
+                         principal: Principal = Depends(require_operation("deleteKnowledgeSpecificationMapping"))):
+    await mappings_for(request, s).delete(id, mappingId, principal)
+    return Response(status_code=204)
+
+
 @router.get("/knowledgeSpecification/{id}/review")
 async def list_reviews(id: str, request: Request, s: AsyncSession = Depends(session),
                        _: Principal = Depends(require_operation("listKnowledgeSpecificationReview"))):

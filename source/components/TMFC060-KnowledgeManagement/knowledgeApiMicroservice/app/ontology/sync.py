@@ -171,6 +171,16 @@ async def sync_source(registry: Registry, source: dict) -> dict:
             body.pop("describes")
         if not unchanged(row.body, body):
             registry.save(row, body)
+    # the reified bridge:mapping records of synced bridge modules become read-only mappings
+    from .mappings import Mappings
+    mappings = Mappings(registry)
+    for key in pending_imports:
+        row = await registry.session.get(SpecRow, key)
+        if row is not None and row.spec_kind == "bridge":
+            stats.setdefault("mappings", 0)
+            stats["mappings"] += await mappings.import_from_content(row)
+    await registry.session.flush()
+
     # shapes folders or files listed in the source become specKind shapes modules
     for shape in source.get("shapes") or []:
         sid = shape["id"]

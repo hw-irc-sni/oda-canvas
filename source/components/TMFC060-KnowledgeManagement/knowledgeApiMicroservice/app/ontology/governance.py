@@ -125,6 +125,32 @@ class Governance:
                                                  body))
         return body
 
+    async def transition_mapping(self, module_id: str, mapping_id: str, target: str, principal: Principal, *,
+                                 review_item: ReviewItem | None = None, validated: bool = False):
+        """A mapping follows the module lifecycle; its bridge:status is written back to the bridge record."""
+        from .mappings import Mappings
+        mappings = Mappings(self.registry)
+        module = await mappings.bridge_module(module_id)
+        mappings.read_only(module)
+        mapping = await mappings.get(module_id, mapping_id)
+        current = mapping.lifecycle_status
+        self.check(self.lifecycles["KnowledgeSpecification"], current, target, principal)
+        if target == "agreed" and not validated:
+            await self.require_valid(module_id)
+            mapping = await mappings.get(module_id, mapping_id)
+        previous_status = mappings.current_status(module, mapping_id)
+        prefixes = await mappings.prefixes()
+        mappings.remove_rdf(module, mapping, prefixes)
+        mapping.lifecycle_status = target
+        self.session.add(StateTransition(target_kind="mapping", target_id=f"{module_id}/{mapping_id}",
+                                         from_state=current, to_state=target, actor=principal.username,
+                                         review_item_id=review_item.id if review_item else None))
+        await self.session.commit()
+        mappings.write_rdf(module, mapping, prefixes, previous_status)
+        await self.registry.events.publish(Event("KnowledgeSpecificationAttributeValueChangeEvent",
+                                                 "knowledgeSpecification", module.body))
+        return mapping
+
     async def require_valid(self, module_id: str) -> None:
         """The validation gate of a ruling agreed (it stores the report, so run it before writing anything)."""
         if not self.registry.settings.governance_require_validation:
@@ -171,14 +197,23 @@ class Governance:
         target = payload.get("target") or {}
         if kind not in ("proposal", "comment", "ruling"):
             raise ApiError(400, "400", "Bad Request", "kind must be proposal, comment or ruling")
-        if target.get("kind") == "mapping":
-            raise ApiError(501, "501", "Not Implemented", "Reviews of mappings arrive with the mapping sub-resource")
-        if target.get("kind") != "module" or target.get("id") not in (None, module_id):
-            raise ApiError(400, "400", "Bad Request", f"target must be the module {module_id}")
-        current = row.lifecycle_status
         lifecycle = self.lifecycles["KnowledgeSpecification"]
-        item = ReviewItem(id=f"rv-{secrets.token_hex(6)}", specification_id=module_id, target_kind="module",
-                          target_id=module_id, kind=kind, text=payload.get("text"), author=principal.username,
+        if target.get("kind") == "mapping":
+            from .mappings import Mappings
+            mapping = await Mappings(self.registry).get(module_id, target.get("id") or "")
+            current, target_kind, target_id = mapping.lifecycle_status, "mapping", mapping.id
+
+            async def move(state, item, **kw):
+                return await self.transition_mapping(module_id, target_id, state, principal, review_item=item, **kw)
+        elif target.get("kind") == "module" and target.get("id") in (None, module_id):
+            current, target_kind, target_id = row.lifecycle_status, "module", module_id
+
+            async def move(state, item, **kw):
+                return await self.transition_module(module_id, state, principal, review_item=item, **kw)
+        else:
+            raise ApiError(400, "400", "Bad Request", f"target must be the module {module_id} or one of its mappings")
+        item = ReviewItem(id=f"rv-{secrets.token_hex(6)}", specification_id=module_id, target_kind=target_kind,
+                          target_id=target_id, kind=kind, text=payload.get("text"), author=principal.username,
                           created=now())
         if kind == "comment":
             if "ontology-reviewer" not in principal.roles:
@@ -192,7 +227,7 @@ class Governance:
             self.check(lifecycle, current, "proposed", principal)
             self.session.add(item)
             await self.session.flush()
-            await self.transition_module(module_id, "proposed", principal, review_item=item)
+            await move("proposed", item)
             return self.present(item)
         ruling = payload.get("ruling")
         if ruling not in ("agreed", "rejected"):
@@ -206,8 +241,10 @@ class Governance:
         item.ruling, item.link_status, item.approver = ruling, link_status, principal.username
         self.session.add(item)
         await self.session.flush()
-        await self.transition_module(module_id, ruling, principal, review_item=item, link_status=link_status,
-                                     validated=True)
+        if target_kind == "module":
+            await move(ruling, item, link_status=link_status, validated=True)
+        else:
+            await move(ruling, item, validated=True)
         return self.present(item)
 
     async def list_reviews(self, module_id: str) -> list[dict]:

@@ -80,6 +80,19 @@ knowledge-bases); the review rules from `x-review-kinds` of `ReviewItem`.
   `fto:linkStatus` and `owl:deprecated` on the module's `owl:Ontology` node; `adms:status` and, per ruling, a
   `prov:Activity` in the governance graph `urn:tmfc060:governance`.
 
+## Mappings
+
+[`app/ontology/mappings.py`](app/ontology/mappings.py) serves `/knowledgeSpecification/{id}/mapping` on
+`specKind: bridge` modules (409 otherwise). A mapping (`subject`, `predicate`, `object` as IRIs or CURIEs of
+registered prefixes, `confidence` high|medium|low, `rationale`) is written to the bridge module graph as FTO's
+`irc-fto-bridge.ttl` does: the asserted statement plus a reified record `<moduleIRI><id> a <moduleIRI>mapping`, in
+the module's own namespace. `status` is `agreed` for agreed and published mappings and `proposed` otherwise.
+
+- Mappings follow the module lifecycle, via `PATCH lifecycleStatus` or review items with
+  `target: {kind: mapping, id}`.
+- Editing is allowed in any state except deprecated; editing an agreed or published mapping puts it back to draft.
+- The records of synced bridge modules are imported read-only (FTO `agreed` → published, `proposed` → proposed).
+
 ## Validation
 
 `POST /knowledgeSpecification/{id}/validation` runs, and `GET` returns, the latest report
