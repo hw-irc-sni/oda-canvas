@@ -69,6 +69,7 @@ class Principal:
     subject: str
     username: str
     roles: frozenset[str] = field(default_factory=frozenset)
+    client: str = ""  # the client the token was issued to (azp), for example a contributing component
 
     def has_any(self, roles) -> bool:
         return bool(self.roles & set(roles))
@@ -139,7 +140,7 @@ class TokenValidator:
         if self.settings.canvas_system_role in client_roles:
             roles.add(SYSTEM_ROLE)
         return Principal(subject=claims["sub"], username=claims.get("preferred_username", claims["sub"]),
-                         roles=frozenset(roles))
+                         roles=frozenset(roles), client=claims.get("azp", ""))
 
 
 def unauthorized(message: str) -> ApiError:

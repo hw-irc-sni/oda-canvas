@@ -1261,11 +1261,15 @@ paths:
       operationId: replaceKnowledgeSpecificationContent
       summary: Replaces the content of a KnowledgeSpecification
       description: >-
-        Replaces the Turtle content of a module whose source is `upload`, while it is `draft` or `rejected`. Modules loaded from git, a mount or a component contribution get their content from that source (`409`).
+        Replaces the Turtle content of a module, while it is `draft` or `rejected`. An `ontology-editor` may
+        replace the content of a module whose source is `upload`. The contributing component, calling with
+        its Canvas system role, may replace the content of a module whose source is `componentContribution`
+        and names it. Modules loaded from git or a mount get their content from that source (`409`).
       tags:
         - knowledgeSpecification
       x-required-roles:
         - ontology-editor
+        - canvasSystemRole
       requestBody:
         required: true
         content:
@@ -1642,6 +1646,44 @@ paths:
           $ref: '#/components/responses/404'
         '500':
           $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/schema/{name}':
+    get:
+      operationId: retrieveSchema
+      summary: Retrieves an extension schema
+      description: >-
+        Returns a JSON Schema that the `@schemaLocation` of an extended resource points to, for example
+        `FederatedKnowledgeSpecification.schema.json`.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: The schema file name
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The JSON Schema
+          content:
+            application/schema+json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
         default:
           $ref: '#/components/responses/Error'
   /knowledgeTerm:
@@ -2855,6 +2897,7 @@ components:
         propertyName: '@type'
         mapping:
           KnowledgeSpecification: '#/components/schemas/KnowledgeSpecification'
+          FederatedKnowledgeSpecification: '#/components/schemas/FederatedKnowledgeSpecification'
       x-lifecycle:
         description: >-
           Allowed lifecycleStatus transitions and the role that may make each one. Confirmed in
@@ -2869,6 +2912,21 @@ components:
           - {from: agreed, to: published, role: ontology-approver}
           - {from: published, to: deprecated, role: ontology-approver}
         reviewComments: [proposed, inReview]
+    FederatedKnowledgeSpecification:
+      allOf:
+        - $ref: '#/components/schemas/KnowledgeSpecification'
+        - type: object
+          description: >-
+            An ontology module imported from a federation repository (modules.json and catalog.json, as in
+            FTO) by the configured ontology source sync. The source repository governs it, so it is published;
+            its status in the source is kept as `sourceStatus`. `@baseType` is `KnowledgeSpecification` and
+            `@schemaLocation` points to the JSON Schema of this extension.
+          properties:
+            sourceStatus:
+              type: string
+              readOnly: true
+              description: The status of the module in the source federation repository, for example provisional.
+              example: provisional
     KnowledgeSpecification_FVO:
       allOf:
         - $ref: '#/components/schemas/Extensible'

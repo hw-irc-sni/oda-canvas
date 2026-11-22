@@ -1,4 +1,6 @@
 """FastAPI application of the TMFC060 knowledge API. Run with: uvicorn --factory app.main:create_app"""
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI, Request
@@ -8,12 +10,20 @@ from .auth import TokenValidator, check_auth_settings, load_operations
 from .config import Settings, get_settings
 from .db.migrate import upgrade, wait_for_database
 from .db.session import make_engine, make_sessionmaker
+from .events import EventRecorder
+from .graphstore import GraphStore
+from .ontology import sync
+from .ontology.registry import Registry
+from .routers import specifications
+from .store import get_store
 from .errors import ApiError
 from .health import is_ready, run_checks
 
 
 def create_app(settings: Settings | None = None, token_validator: TokenValidator | None = None) -> FastAPI:
     settings = settings or get_settings()
+    logging.basicConfig(format="%(levelname)s:     %(name)s: %(message)s")
+    logging.getLogger("app").setLevel(settings.log_level.upper())
     check_auth_settings(settings)
 
     @asynccontextmanager
@@ -23,15 +33,24 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
         await upgrade(engine)
         app.state.engine = engine
         app.state.sessions = make_sessionmaker(engine)
+        app.state.graphs = GraphStore(get_store(settings.store_path))
+        sources = sync.parse_sources(settings.ontology_sources)
+        sync_task = None
+        if sources:
+            sync_task = asyncio.create_task(sync.run_periodically(
+                lambda: _registry_context(app), sources, settings.ontology_sync_interval))
         try:
             yield
         finally:
+            if sync_task:
+                sync_task.cancel()
             await engine.dispose()
 
     app = FastAPI(title="Knowledge Management", version="5.0.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.operations = load_operations(settings.oas_path)
     app.state.token_validator = token_validator or (TokenValidator(settings) if settings.auth_enabled else None)
+    app.state.events = EventRecorder()
 
     @app.exception_handler(ApiError)
     async def api_error(request: Request, exc: ApiError) -> JSONResponse:
@@ -57,7 +76,15 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
 
     # The TMFxxx resources are added to this router by the following issues.
     api = APIRouter(prefix=settings.base_path)
+    api.include_router(specifications.router)
     app.include_router(api)
     app.state.api_router = api
     return app
 
+
+
+@asynccontextmanager
+async def _registry_context(app: FastAPI):
+    """A Registry on its own session, for background work such as the ontology source sync."""
+    async with app.state.sessions() as session:
+        yield Registry(session, app.state.graphs, app.state.settings, app.state.events)

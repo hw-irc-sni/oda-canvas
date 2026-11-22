@@ -33,7 +33,33 @@ The API is mounted under `/{COMPONENT_NAME}/tmf-api/knowledgeManagement/v5`.
 | `HEALTH_CHECK_TIMEOUT` | `2.0` | Seconds per dependency check |
 | `QUERY_TIMEOUT_DEFAULT`, `QUERY_TIMEOUT_MAX` | `30`, `120` | Read-only SPARQL timeout in seconds: the default, and the cap on the client's `timeout` |
 | `QUERY_ROW_CAP` | `10000` | Maximum SELECT rows (or CONSTRUCT triples); beyond it the result is flagged truncated |
+| `ONTOLOGY_SOURCES` | `[]` | Federation repositories to sync, JSON: `[{"name": "fto", "git": {"url": "https://…", "ref": "main", "secretRef": "tfo-git"}}]` or `{"name": "x", "mount": {"path": "/etc/tmfc060/ontologies/x"}}` |
+| `ONTOLOGY_SYNC_INTERVAL` | `900` | Seconds between syncs (also at startup) |
+| `GIT_ALLOWED_SCHEMES` | `https` | Comma-separated URL schemes allowed for git sources |
+| `GIT_SECRETS_DIR` | `/etc/tmfc060/git` | Git credentials: `<dir>/<secretRef>/username` and `password` (token), used through `GIT_ASKPASS` |
+| `GIT_CACHE_DIR`, `GIT_TIMEOUT` | `/tmp/tmfc060-git`, `120` | Clone cache and timeout |
+| `MOUNT_ROOTS` | `/etc/tmfc060/ontologies` | Comma-separated directories that `mount` sources must be under |
+| `LOG_LEVEL` | `INFO` | Level of the application loggers |
 | `DB_STARTUP_TIMEOUT` | `120` | Seconds the API retries Postgres at startup (backoff 1–10 s) before it exits |
+
+## Ontology modules
+
+[`app/ontology/registry.py`](app/ontology/registry.py) and [`app/routers/specifications.py`](app/routers/specifications.py)
+serve `/knowledgeSpecification` (list, create, get, patch fields, delete) and its `/content`.
+
+- **Ids:** a client slug `^[a-z0-9][a-z0-9-]{0,62}$`, or derived from `prefix`/`name`.
+- **Content:** `upload` modules get it through `PUT /content` (`ontology-editor`); `componentContribution` modules
+  from the contributing component (its token's `azp`, with the Canvas system role); `git` and `mount` modules from
+  their source; `remoteEndpoint` modules have none.
+- **Imports:** `imports[]` and the content's `owl:imports` resolve to registered modules by IRI; unresolved ones are
+  logged and skipped.
+- **Federation sync** ([`app/ontology/sync.py`](app/ontology/sync.py)): each `ONTOLOGY_SOURCES` repository in FTO
+  layout (`modules.json`, `catalog.json`) is synced at startup and every `ONTOLOGY_SYNC_INTERVAL`. Its modules
+  become `FederatedKnowledgeSpecification` (`published`, with the repository status as `sourceStatus`, and
+  `@schemaLocation` served at `…/schema/FederatedKnowledgeSpecification.schema.json`). The layer is the module's
+  `fto:layer`, else its top folder. A module without a file is metadata-only, without an IRI it gets
+  `urn:tmfc060:federation:<source>:<key>`. A module gone from the repository becomes `deprecated`.
+- Lifecycle transitions (PATCH `lifecycleStatus`) answer 501 until the governance workflow (#28).
 
 ## RDF store and queries
 

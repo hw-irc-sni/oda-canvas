@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "FederatedKnowledgeSpecification.schema.json",
+  "title": "FederatedKnowledgeSpecification",
+  "description": "Extension of KnowledgeSpecification for ontology modules imported from a federation repository (modules.json and catalog.json, as in FTO). @baseType is KnowledgeSpecification.",
+  "type": "object",
+  "properties": {
+    "@type": { "const": "FederatedKnowledgeSpecification" },
+    "@baseType": { "const": "KnowledgeSpecification" },
+    "sourceStatus": {
+      "type": "string",
+      "description": "The status of the module in the source federation repository, for example provisional."
+    }
+  },
+  "required": ["@type"]
+}

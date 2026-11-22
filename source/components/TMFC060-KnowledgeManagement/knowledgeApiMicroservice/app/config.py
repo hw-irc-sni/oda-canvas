@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # The TMFxxx OAS; its x-required-roles drive the endpoint guards.
     oas_path: str = str(Path(__file__).resolve().parent.parent / "api" / "TMFxxx-KnowledgeManagement-v5.0.0.oas.yaml")
 
-    @field_validator("keycloak_issuers", mode="before")
+    @field_validator("keycloak_issuers", "git_allowed_schemes", "mount_roots", mode="before")
     @classmethod
     def _split_issuers(cls, value):
         if isinstance(value, str):
@@ -43,8 +43,23 @@ class Settings(BaseSettings):
     query_timeout_max: int = 120
     query_row_cap: int = 10000
 
+    # Ontology sources (federation repositories) synced at startup and every ontology_sync_interval seconds.
+    # JSON list: [{"name": "fto", "git": {"url": "...", "ref": "main", "secretRef": "tfo-git"}}, {"name": "x", "mount": {"path": "..."}}]
+    ontology_sources: str = "[]"
+    ontology_sync_interval: int = 900
+    # Git: allowed URL schemes, credential Secrets mounted as <dir>/<secretRef>/{username,password}, clone cache
+    git_allowed_schemes: Annotated[list[str], NoDecode] = ["https"]
+    git_secrets_dir: str = "/etc/tmfc060/git"
+    git_cache_dir: str = "/tmp/tmfc060-git"
+    git_timeout: int = 120
+    # Module content from a mounted volume must be under one of these directories
+    mount_roots: Annotated[list[str], NoDecode] = ["/etc/tmfc060/ontologies"]
+
     # How long the API keeps retrying Postgres at startup before it exits (migrations need it)
     db_startup_timeout: float = 120.0
+
+    # Log level of the application loggers (uvicorn configures its own)
+    log_level: str = "INFO"
 
     # Timeout in seconds for each dependency check of /health and /ready
     health_check_timeout: float = 2.0

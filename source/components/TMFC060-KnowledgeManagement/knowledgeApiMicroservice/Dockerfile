@@ -16,7 +16,8 @@ LABEL org.opencontainers.image.title="tmfc060-knowledge-api" \
       org.opencontainers.image.source="https://github.com/tmforum-oda/oda-canvas" \
       org.opencontainers.image.revision="${GIT_COMMIT_SHA}" \
       org.opencontainers.image.created="${CICD_BUILD_TIME}"
-RUN groupadd --system --gid 10001 app && useradd --system --uid 10001 --gid app --home /app app \
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 10001 app && useradd --system --uid 10001 --gid app --home /app app \
     && mkdir -p /data/store && chown -R app:app /data
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
