@@ -20,7 +20,7 @@ from qdrant_client import AsyncQdrantClient
 from .kb import router as kb_router
 from .models import ModelResolver
 from .ontology.federation import Relay
-from .routers import specifications, terms
+from .routers import processes, specifications, terms
 from .store import get_store
 from .errors import ApiError
 from .health import is_ready, run_checks
@@ -63,7 +63,8 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
 
     app = FastAPI(title="Knowledge Management", version="5.0.0", lifespan=lifespan)
     app.state.settings = settings
-    app.state.operations = load_operations(settings.oas_path)
+    app.state.operations = {**load_operations(settings.oas_path, settings.base_path),
+                            **load_operations(settings.process_oas_path, settings.process_base_path)}
     app.state.token_validator = token_validator or (TokenValidator(settings) if settings.auth_enabled else None)
     app.state.events = EventRecorder()
     app.state.lifecycles = load_lifecycles(settings.oas_path)
@@ -96,6 +97,7 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
     api.include_router(terms.router)
     api.include_router(kb_router.router)
     app.include_router(api)
+    app.include_router(processes.router, prefix=settings.process_base_path)
     app.state.api_router = api
     return app
 

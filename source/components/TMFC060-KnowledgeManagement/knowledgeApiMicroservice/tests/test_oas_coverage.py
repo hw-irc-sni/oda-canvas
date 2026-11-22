@@ -8,6 +8,8 @@ from app.config import Settings
 def test_every_operation_has_known_roles():
     operations = load_operations(Settings().oas_path)
     assert len(operations) == 40  # 48 operations in the OAS minus the 8 listener callbacks
+    assert set(load_operations(Settings().process_oas_path)) == {"listProcess", "retrieveProcess", "listTask",
+                                                                  "retrieveTask"}
     for op in operations.values():
         assert op.roles and set(op.roles) <= ALL_ROLES, op.operation_id
 
@@ -37,7 +39,7 @@ def assert_routes_match_oas(app):
         assert operation_id in operations, f"{route.path}: {operation_id} is not in the OAS"
         op = operations[operation_id]
         assert op.method in route.methods, f"{operation_id}: method {route.methods} != {op.method}"
-        assert route.path == settings.base_path + op.path, f"{operation_id}: path {route.path} != {op.path}"
+        assert route.path == op.base + op.path, f"{operation_id}: path {route.path} != {op.base + op.path}"
 
 
 def test_routes_match_the_oas():
@@ -51,5 +53,6 @@ def test_routes_match_the_oas():
     assert {"listKnowledgeSpecification", "createKnowledgeSpecification", "retrieveSchema", "retrieveKnowledgeTerm",
             "listKnowledge", "createKnowledge", "retrieveKnowledge", "patchKnowledge", "deleteKnowledge",
             "retrieveKnowledgeGraph", "replaceKnowledgeGraph", "mergeKnowledgeGraph", "clearKnowledgeGraph",
-            "queryKnowledge"} <= found
+            "queryKnowledge", "createKnowledgeIngestion", "listProcess", "retrieveProcess", "listTask",
+            "retrieveTask"} <= found
     assert_routes_match_oas(app)

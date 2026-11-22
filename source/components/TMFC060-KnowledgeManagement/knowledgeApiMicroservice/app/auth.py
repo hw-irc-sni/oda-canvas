@@ -81,10 +81,11 @@ class Operation:
     method: str
     path: str
     roles: tuple[str, ...]
+    base: str = ""  # the base path the API is served under
 
 
-def load_operations(oas_path: str) -> dict[str, Operation]:
-    """Read operationId -> (method, path, x-required-roles) from the OAS. Listener callbacks are skipped."""
+def load_operations(oas_path: str, base: str = "") -> dict[str, Operation]:
+    """Read operationId -> (method, path, x-required-roles) from an OAS. Listener callbacks are skipped."""
     oas = yaml.safe_load(Path(oas_path).read_text())
     operations = {}
     for path, item in oas.get("paths", {}).items():
@@ -98,7 +99,7 @@ def load_operations(oas_path: str) -> dict[str, Operation]:
             unknown = set(roles) - ALL_ROLES
             if not roles or unknown:
                 raise ValueError(f"{op.get('operationId')}: x-required-roles missing or unknown {sorted(unknown)}")
-            operations[op["operationId"]] = Operation(op["operationId"], method.upper(), path, roles)
+            operations[op["operationId"]] = Operation(op["operationId"], method.upper(), path, roles, base)
     return operations
 
 

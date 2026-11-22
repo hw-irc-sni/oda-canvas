@@ -108,12 +108,16 @@ class Process(Base):
 class Task(Base):
     """A TMF701 v5 task: one KM-FX step of a process, claimed by a worker with SELECT ... FOR UPDATE SKIP LOCKED."""
     __tablename__ = "task"
-    __table_args__ = (Index("ix_task_claim", "state", "created"),)
+    __table_args__ = (Index("ix_task_claim", "state", "available_at"), Index("ix_task_chain", "process_id", "chain"))
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     process_id: Mapped[str] = mapped_column(Text, ForeignKey("process.id", ondelete="CASCADE"), nullable=False,
                                             index=True)
+    # the document (or source batch) whose steps this task belongs to: steps of one chain run in seq order
+    chain: Mapped[str] = mapped_column(Text, nullable=False)
     step: Mapped[str] = mapped_column(String(16), nullable=False)
     seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    # not claimable before this time (the retry delay)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     state: Mapped[str] = mapped_column(String(16), nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     locked_by: Mapped[str | None] = mapped_column(Text)

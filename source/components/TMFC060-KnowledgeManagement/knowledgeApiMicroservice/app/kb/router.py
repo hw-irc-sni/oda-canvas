@@ -17,6 +17,7 @@ from ..db.models import KnowledgeSpecification as SpecRow
 from ..errors import ApiError
 from ..graphstore import kb_graph
 from ..listing import list_response, present
+from .. import processes
 from ..models import ModelError
 from ..ontology import federation
 from ..query import effective_timeout, precheck, run_query
@@ -153,6 +154,17 @@ async def delete_document(id: str, documentId: str, request: Request, s: AsyncSe
                           principal: Principal = Depends(require_operation("deleteKnowledgeDocument"))):
     await documents_for(request, s).delete(id, documentId, principal)
     return Response(status_code=204)
+
+
+# ---- ingest ----------------------------------------------------------------------------------------------------
+@router.post("/knowledge/{id}/ingest", status_code=201)
+async def ingest_knowledge(id: str, request: Request, s: AsyncSession = Depends(session),
+                           principal: Principal = Depends(require_operation("createKnowledgeIngestion"))):
+    kbs = kbs_for(request, s)
+    row = await kbs.get_row(id)
+    kbs.check_writer(row, principal)
+    ref = await processes.start_ingestion(s, request.app.state.settings, row, await json_body(request))
+    return JSONResponse(present(request, ref), status_code=201)
 
 
 # ---- search ----------------------------------------------------------------------------------------------------

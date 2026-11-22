@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     auth_enabled: bool = True
     # The TMFxxx OAS; its x-required-roles drive the endpoint guards.
     oas_path: str = str(Path(__file__).resolve().parent.parent / "api" / "TMFxxx-KnowledgeManagement-v5.0.0.oas.yaml")
+    # The TMF701 v5 subset served as the component's processflow API (ingestion processes and their tasks)
+    process_oas_path: str = str(Path(__file__).resolve().parent.parent / "api" /
+                                "TMF701-ProcessManagement-v5.0.0-subset.oas.yaml")
 
     @field_validator("keycloak_issuers", "git_allowed_schemes", "mount_roots", mode="before")
     @classmethod
@@ -80,6 +83,11 @@ class Settings(BaseSettings):
     model_probe_timeout: float = 5.0
     model_call_timeout: float = 120.0
 
+    # Ingestion tasks: the lease a worker holds (renewed by heartbeats), attempts, and the retry delay per attempt
+    task_lease_seconds: int = 300
+    task_max_attempts: int = 3
+    task_retry_delay: int = 30
+
     # Largest document a knowledge-base accepts, in bytes (50 MiB)
     document_max_bytes: int = 50 * 1024 * 1024
 
@@ -98,6 +106,11 @@ class Settings(BaseSettings):
     @property
     def base_path(self) -> str:
         return f"/{self.component_name}{self.api_path}"
+
+    @property
+    def process_base_path(self) -> str:
+        """The TMF701 processflow API of the component."""
+        return f"/{self.component_name}/tmf-api/process/v5"
 
 
 @lru_cache

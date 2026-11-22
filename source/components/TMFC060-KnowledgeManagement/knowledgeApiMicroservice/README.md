@@ -44,6 +44,7 @@ The API is mounted under `/{COMPONENT_NAME}/tmf-api/knowledgeManagement/v5`.
 | `FEDERATION_SECRETS_DIR` | | Folder of per-module OAuth2 client Secrets (`<moduleId>/tokenUrl`, `clientId`, `clientSecret`) |
 | `FEDERATION_CALL_TIMEOUT` | `10` | Seconds a federated SERVICE call may take |
 | `FEDERATION_CACHE_TTL` | `60` | Seconds federated answers are cached (0 = off) |
+| `TASK_LEASE_SECONDS` / `TASK_MAX_ATTEMPTS` / `TASK_RETRY_DELAY` | `300` / `3` / `30` | Ingestion task lease, attempts, and retry delay per attempt |
 | `DOCUMENT_MAX_BYTES` | `52428800` | Largest document a knowledge-base accepts (50 MiB) |
 | `MODEL_GATEWAY_SERVICE`, `MGS_CHAT_MODEL`, `MGS_EMBEDDING_MODEL` | | Route 1: the ModelGatewayService CR and its model names |
 | `AGENTGATEWAY_URL`, `AGENTGATEWAY_CHAT_MODEL`, `AGENTGATEWAY_EMBEDDING_MODEL` | | Route 2: the agentgateway `/v1` URL and model names |
@@ -92,6 +93,24 @@ serve `/knowledgeSpecification` (list, create, get, patch fields, delete) and it
 - `/knowledge/{id}/query` runs a read-only SPARQL query (`application/sparql-query` or the form field `query`) over
   the KB graph plus its conformsTo closure, in a killable worker: `timeout` capped by `QUERY_TIMEOUT_MAX` (504),
   the row cap (`X-Result-Truncated`), updates refused (400), and SERVICE only to allowlisted peers (below).
+
+## Ingestion processes
+
+`POST /knowledge/{id}/ingest` ([`app/processes.py`](app/processes.py)) starts a TMF701 v5 **process** and answers 201
+with its `ProcessRef`. Each document (for `upload`: the named ones, or every one not yet ingested) or source batch
+(`tmf…`, `remote`: a source of the KB, with `params`) gets a chain of six **tasks**, KM-FX-01 … KM-FX-06. 409 when
+the KB is deprecated, the source is not one of its `source[]`, nothing is left to ingest, or a named document is
+already being ingested.
+
+- Workers `claim` tasks with `SELECT … FOR UPDATE SKIP LOCKED`: a task is due when the previous step of its chain
+  has completed. A claim holds a lease of `TASK_LEASE_SECONDS` (300), renewed by `heartbeat`; an expired lease makes
+  the task claimable again.
+- `fail` reschedules a task `TASK_RETRY_DELAY` × attempt seconds later (30 s) until `TASK_MAX_ATTEMPTS` (3); then
+  the task, the rest of its chain and its document fail. The process ends `completed`, or `failed` with the first
+  error once no chain is still running.
+- The component's **processflow** API (TMF701 v5 subset,
+  [`api/TMF701-ProcessManagement-v5.0.0-subset.oas.yaml`](api/TMF701-ProcessManagement-v5.0.0-subset.oas.yaml)) reads
+  them at `/{component}/tmf-api/process/v5/process` and `/task` (filter tasks with `processId=` or `documentId=`).
 
 ## Search
 
