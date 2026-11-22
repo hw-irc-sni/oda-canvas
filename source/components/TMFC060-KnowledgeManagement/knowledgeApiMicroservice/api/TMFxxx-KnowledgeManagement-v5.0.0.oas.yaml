@@ -1195,6 +1195,508 @@ paths:
           description: Notified
         default:
           $ref: '#/components/responses/Error'
+  '/knowledgeSpecification/{id}/content':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: retrieveKnowledgeSpecificationContent
+      summary: Retrieves the content of a KnowledgeSpecification
+      description: >-
+        Returns the ontology module content in Turtle.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      responses:
+        '200':
+          description: The module content
+          content:
+            text/turtle:
+              schema:
+                type: string
+              example: |
+                @prefix as: <https://example.org/ontology/telecom/assurance#> .
+                @prefix owl: <http://www.w3.org/2002/07/owl#> .
+                @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+                @prefix fto: <https://models.tmforum.org/ontology/fto/> .
+                <https://example.org/ontology/telecom/assurance> a owl:Ontology ;
+                    fto:layer fto:Telecom ;
+                    owl:imports <https://example.org/ontology/foundational/core> .
+                as:Incident a owl:Class ;
+                    rdfs:label "Incident" ;
+                    rdfs:subClassOf <https://example.org/ontology/foundational/core#Event> .
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '406':
+          $ref: '#/components/responses/406'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: replaceKnowledgeSpecificationContent
+      summary: Replaces the content of a KnowledgeSpecification
+      description: >-
+        Replaces the Turtle content of a module whose source is `upload`, while it is `draft` or `rejected`. Modules loaded from git, a mount or a component contribution get their content from that source (`409`).
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+      requestBody:
+        required: true
+        content:
+          text/turtle:
+            schema:
+              type: string
+            example: |
+              @prefix as: <https://example.org/ontology/telecom/assurance#> .
+              @prefix owl: <http://www.w3.org/2002/07/owl#> .
+              @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+              as:Problem a owl:Class ; rdfs:label "Problem" .
+      responses:
+        '204':
+          description: Replaced
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '415':
+          $ref: '#/components/responses/415'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledgeSpecification/{id}/mapping':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: listKnowledgeSpecificationMapping
+      summary: Lists the mappings of a bridge module
+      description: >-
+        Lists the bridge statements (reified bridge:mapping) of a module whose specKind is `bridge`.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Mapping'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createKnowledgeSpecificationMapping
+      summary: Proposes a mapping in a bridge module
+      description: >-
+        Adds a bridge statement to a module whose specKind is `bridge` (`409` otherwise). The mapping starts as `draft`; its derived `status` is `proposed` until it is agreed.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Mapping_FVO'
+            examples:
+              proposed:
+                $ref: '#/components/examples/Mapping_FVO_proposed'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mapping'
+              examples:
+                proposed:
+                  $ref: '#/components/examples/Mapping_proposed'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledgeSpecification/{id}/mapping/{mappingId}':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/MappingId'
+    get:
+      operationId: retrieveKnowledgeSpecificationMapping
+      summary: Retrieves a mapping
+      description: >-
+        Retrieves a bridge statement.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mapping'
+              examples:
+                proposed:
+                  $ref: '#/components/examples/Mapping_proposed'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: patchKnowledgeSpecificationMapping
+      summary: Updates partially a mapping
+      description: >-
+        Updates a bridge statement with a JSON merge patch. A change of `lifecycleStatus` is a governance transition, allowed as in the `x-lifecycle` of `KnowledgeSpecification`. Other fields can be changed by an `ontology-editor` while the mapping is `draft` or `rejected`.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/Mapping_MVO'
+            example:
+              confidence: high
+              rationale: Confirmed by the vendor team
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mapping'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteKnowledgeSpecificationMapping
+      summary: Deletes a mapping
+      description: >-
+        Deletes a bridge statement. An `ontology-editor` may delete a `draft` or `rejected` mapping; an `ontology-approver` may delete any.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+        - ontology-approver
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledgeSpecification/{id}/review':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: listKnowledgeSpecificationReview
+      summary: Lists the review history of a module
+      description: >-
+        Lists the proposals, comments and rulings on the module and its mappings, oldest first.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReviewItem'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createKnowledgeSpecificationReview
+      summary: Adds a proposal, a comment or a ruling
+      description: >-
+        Adds a review item to the module or to one of its mappings. Each kind needs its own role and target state, as listed in the `x-review-kinds` extension of `ReviewItem`: a `proposal` moves the target from `draft` to `proposed`; a `comment` is accepted while the target is `proposed` or `inReview`; a `ruling` moves it from `inReview` to `agreed` or `rejected`, and a ruling `agreed` needs the latest validation to pass. A review item in the wrong state gets `409`. `author`, `approver` and `date` are taken from the token and the clock.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewItem_FVO'
+            examples:
+              ruling:
+                $ref: '#/components/examples/ReviewItem_FVO_ruling'
+              comment:
+                $ref: '#/components/examples/ReviewItem_FVO_comment'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewItem'
+              examples:
+                ruling:
+                  $ref: '#/components/examples/ReviewItem_ruling'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledgeSpecification/{id}/validation':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: retrieveKnowledgeSpecificationValidation
+      summary: Retrieves the latest validation report
+      description: >-
+        Returns the report of the latest validation run of the module.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationReport'
+              examples:
+                failing:
+                  $ref: '#/components/examples/ValidationReport_failing'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: runKnowledgeSpecificationValidation
+      summary: Validates a module
+      description: >-
+        Runs the structural checks (the five rules of the FTO check.py: parse, layer annotation, layer monotonicity, parents resolve, catalog integrity) and SHACL validation against the shapes the module imports, and returns the report.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+      responses:
+        '200':
+          description: The validation report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationReport'
+              examples:
+                failing:
+                  $ref: '#/components/examples/ValidationReport_failing'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  /knowledgeTerm:
+    get:
+      operationId: retrieveKnowledgeTerm
+      summary: Looks up ontology terms
+      description: >-
+        Looks up terms across the ontology modules: with `iri`, describes one term (labels,
+        definitions, defining module, FTO layer, parents and SKOS matches); with `q`, searches
+        labels and definitions. With `layerChain=true`, also returns the term's subclass chain
+        down to the Foundational layer. Exactly one of `iri` and `q` must be given (`400`
+        otherwise). These are the lookups of the FTO MCP tools fto_describe, fto_search and
+        fto_layer_of.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - name: iri
+          in: query
+          description: The term to describe, as an IRI or a CURIE.
+          schema:
+            type: string
+        - name: q
+          in: query
+          description: Text to search for in labels and definitions.
+          schema:
+            type: string
+        - name: layerChain
+          in: query
+          description: With `iri`, also return the subclass chain with the layer of each term.
+          schema:
+            type: boolean
+            default: false
+        - name: limit
+          in: query
+          description: With `q`, the maximum number of hits.
+          schema:
+            type: integer
+            minimum: 1
+            default: 25
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TermLookupResult'
+              examples:
+                describe:
+                  $ref: '#/components/examples/Term_describe'
+                search:
+                  $ref: '#/components/examples/Term_search'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
   /listener/knowledgeCreateEvent:
     post:
       operationId: knowledgeCreateEvent
@@ -2491,6 +2993,343 @@ components:
       properties:
         knowledgeSpecification:
           $ref: '#/components/schemas/KnowledgeSpecification'
+    MappingConfidenceType:
+      type: string
+      description: How confident the author is in a mapping (bridge:confidence).
+      enum:
+        - high
+        - medium
+        - low
+    Mapping:
+      type: object
+      description: >-
+        A bridge statement between terms of two ontologies: the reified bridge:mapping of FTO
+        bridge modules. Mappings follow the governed lifecycle of ontology modules. `status`
+        (bridge:status) is derived from it and written to RDF: `agreed` for agreed and published
+        mappings, `proposed` otherwise.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        href:
+          type: string
+          readOnly: true
+        subject:
+          type: string
+          description: The term being mapped, as an IRI or a CURIE.
+          example: irc:KPI
+        predicate:
+          type: string
+          description: >-
+            The relationship: rdfs:subClassOf, owl:equivalentClass, skos:exactMatch,
+            skos:closeMatch, skos:broadMatch, or another property.
+          example: rdfs:subClassOf
+        object:
+          type: string
+          description: The term it is mapped to, as an IRI or a CURIE.
+          example: an:KPI
+        confidence:
+          $ref: '#/components/schemas/MappingConfidenceType'
+        rationale:
+          type: string
+          description: A one-line justification (bridge:rationale).
+        lifecycleStatus:
+          $ref: '#/components/schemas/OntologyLifecycleStatusType'
+        status:
+          type: string
+          readOnly: true
+          enum:
+            - agreed
+            - proposed
+          description: The bridge:status, derived from lifecycleStatus.
+    Mapping_FVO:
+      type: object
+      description: A bridge statement, as proposed. It starts as draft.
+      required:
+        - subject
+        - predicate
+        - object
+      properties:
+        subject:
+          type: string
+        predicate:
+          type: string
+        object:
+          type: string
+        confidence:
+          $ref: '#/components/schemas/MappingConfidenceType'
+        rationale:
+          type: string
+    Mapping_MVO:
+      type: object
+      description: The fields of a mapping that can be changed. A change of lifecycleStatus is a governance transition.
+      properties:
+        subject:
+          type: string
+        predicate:
+          type: string
+        object:
+          type: string
+        confidence:
+          $ref: '#/components/schemas/MappingConfidenceType'
+        rationale:
+          type: string
+        lifecycleStatus:
+          $ref: '#/components/schemas/OntologyLifecycleStatusType'
+    ReviewTarget:
+      type: object
+      description: What a review item is about.
+      required:
+        - kind
+        - id
+      properties:
+        kind:
+          type: string
+          enum:
+            - module
+            - mapping
+        id:
+          type: string
+          description: The module id, or the mapping id within the module.
+    ReviewItem:
+      type: object
+      description: A proposal, a review comment or a ruling on a module or on one of its mappings.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        kind:
+          type: string
+          enum:
+            - proposal
+            - comment
+            - ruling
+        target:
+          $ref: '#/components/schemas/ReviewTarget'
+        text:
+          type: string
+          description: The proposal note, the comment, or the rationale of the ruling.
+        ruling:
+          type: string
+          enum:
+            - agreed
+            - rejected
+          description: For a ruling, the decision.
+        linkStatus:
+          $ref: '#/components/schemas/LinkStatusType'
+        author:
+          type: string
+          readOnly: true
+          description: Who wrote the item, from the token.
+        approver:
+          type: string
+          readOnly: true
+          description: For a ruling, the approver, from the token.
+        date:
+          type: string
+          format: date-time
+          readOnly: true
+      x-review-kinds:
+        proposal: {role: ontology-editor, targetState: draft, transition: draft -> proposed}
+        comment: {role: ontology-reviewer, targetState: [proposed, inReview]}
+        ruling: {role: ontology-approver, targetState: inReview, transition: inReview -> agreed | rejected, condition: validation passes for agreed, sets: linkStatus}
+    ReviewItem_FVO:
+      type: object
+      description: A review item, as added.
+      required:
+        - kind
+        - target
+      properties:
+        kind:
+          type: string
+          enum:
+            - proposal
+            - comment
+            - ruling
+        target:
+          $ref: '#/components/schemas/ReviewTarget'
+        text:
+          type: string
+        ruling:
+          type: string
+          enum:
+            - agreed
+            - rejected
+        linkStatus:
+          $ref: '#/components/schemas/LinkStatusType'
+    ValidationMessage:
+      type: object
+      required:
+        - severity
+        - text
+      properties:
+        severity:
+          type: string
+          enum:
+            - error
+            - warning
+        text:
+          type: string
+    ValidationRuleResult:
+      type: object
+      required:
+        - rule
+        - passed
+      properties:
+        rule:
+          type: string
+          description: >-
+            The structural rule (FTO check.py): parse (every file parses), layerAnnotation (the
+            module and its classes carry a consistent fto:layer), layerMonotonicity (no class
+            extends a deeper layer), parentsResolve (every superclass resolves), catalogIntegrity
+            (every import resolves through the catalog to a file that declares it).
+          enum:
+            - parse
+            - layerAnnotation
+            - layerMonotonicity
+            - parentsResolve
+            - catalogIntegrity
+        passed:
+          type: boolean
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationMessage'
+    ShaclResult:
+      type: object
+      description: One result of a SHACL validation report.
+      properties:
+        focusNode:
+          type: string
+        resultPath:
+          type: string
+        severity:
+          type: string
+          enum:
+            - Violation
+            - Warning
+            - Info
+        message:
+          type: string
+        sourceShape:
+          type: string
+    ValidationReport:
+      type: object
+      description: The result of validating an ontology module.
+      properties:
+        moduleId:
+          type: string
+        runAt:
+          type: string
+          format: date-time
+        conforms:
+          type: boolean
+          description: True when every structural rule passed and the SHACL validation conforms.
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationRuleResult'
+        shacl:
+          type: object
+          properties:
+            conforms:
+              type: boolean
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/ShaclResult'
+    TermDescription:
+      type: object
+      description: A description of one ontology term (fto_describe).
+      properties:
+        iri:
+          type: string
+        curie:
+          type: string
+        definedIn:
+          type: array
+          description: The modules that state something about the term.
+          items:
+            type: string
+        labels:
+          type: array
+          items:
+            type: string
+        definitions:
+          type: array
+          items:
+            type: string
+        types:
+          type: array
+          items:
+            type: string
+        parents:
+          type: array
+          items:
+            type: string
+        matches:
+          type: array
+          items:
+            type: object
+            properties:
+              predicate:
+                type: string
+              object:
+                type: string
+        layer:
+          $ref: '#/components/schemas/OntologyLayerType'
+        linkStatus:
+          $ref: '#/components/schemas/LinkStatusType'
+    TermHit:
+      type: object
+      description: A search hit (fto_search).
+      properties:
+        iri:
+          type: string
+        curie:
+          type: string
+        module:
+          type: string
+        layer:
+          $ref: '#/components/schemas/OntologyLayerType'
+        via:
+          type: string
+          description: The property the text matched, for example label or definition.
+        text:
+          type: string
+    LayerChainEntry:
+      type: object
+      properties:
+        term:
+          type: string
+        layer:
+          $ref: '#/components/schemas/OntologyLayerType'
+        module:
+          type: string
+        linkStatus:
+          $ref: '#/components/schemas/LinkStatusType'
+    TermLookupResult:
+      type: object
+      description: >-
+        The result of a term lookup: `description` (and `layerChain` if asked) for an `iri`
+        lookup, `hits` for a `q` search.
+      properties:
+        description:
+          $ref: '#/components/schemas/TermDescription'
+        hits:
+          type: array
+          items:
+            $ref: '#/components/schemas/TermHit'
+        layerChain:
+          type: object
+          description: The subclass chain of the term down to the Foundational layer (fto_layer_of).
+          properties:
+            chain:
+              type: array
+              items:
+                $ref: '#/components/schemas/LayerChainEntry'
+            endsAtFoundational:
+              type: boolean
   parameters:
     Id:
       name: id
@@ -2542,6 +3381,13 @@ components:
         type: string
       in: path
       description: Identifier of the document
+    MappingId:
+      name: mappingId
+      required: true
+      schema:
+        type: string
+      in: path
+      description: Identifier of the mapping
   headers:
     X-Total-Count:
       description: Total number of items matching criteria
@@ -3154,3 +4000,128 @@ components:
           specKind: ontology
           lifecycleStatus: draft
           linkStatus: provisional
+    Mapping_FVO_proposed:
+      summary: Propose that an IRC KPI is a kind of AN KPI
+      value:
+        subject: irc:KPI
+        predicate: rdfs:subClassOf
+        object: an:KPI
+        confidence: high
+        rationale: Same thing, same scope - a continuous performance measurement over a time window
+    Mapping_proposed:
+      summary: A proposed mapping
+      value:
+        id: m-kpi
+        href: https://host/tmf-api/knowledgeManagement/v5/knowledgeSpecification/irc-fto-bridge/mapping/m-kpi
+        subject: irc:KPI
+        predicate: rdfs:subClassOf
+        object: an:KPI
+        confidence: high
+        rationale: Same thing, same scope - a continuous performance measurement over a time window
+        lifecycleStatus: proposed
+        status: proposed
+    ReviewItem_FVO_comment:
+      summary: A reviewer comments on a mapping
+      value:
+        kind: comment
+        target:
+          kind: mapping
+          id: m-kpi
+        text: Should this be skos:closeMatch? The IRC KPI is narrower than the AN KPI.
+    ReviewItem_FVO_ruling:
+      summary: The approver rules a mapping agreed
+      value:
+        kind: ruling
+        target:
+          kind: mapping
+          id: m-kpi
+        ruling: agreed
+        linkStatus: confirmed
+        text: Agreed at the programme ruling; the scopes match.
+    ReviewItem_ruling:
+      summary: A recorded ruling
+      value:
+        id: rv-0042
+        kind: ruling
+        target:
+          kind: mapping
+          id: m-kpi
+        ruling: agreed
+        linkStatus: confirmed
+        text: Agreed at the programme ruling; the scopes match.
+        author: approver@example.org
+        approver: approver@example.org
+        date: '2026-11-22T11:30:00Z'
+    ValidationReport_failing:
+      summary: A failing validation report
+      value:
+        moduleId: fto-telecom-assurance
+        runAt: '2026-11-22T11:00:00Z'
+        conforms: false
+        rules:
+          - rule: parse
+            passed: true
+          - rule: layerAnnotation
+            passed: true
+          - rule: layerMonotonicity
+            passed: false
+            messages:
+              - severity: error
+                text: Incident (Telecom) extends deeper-layer ImplementationEvent (Implementation)
+          - rule: parentsResolve
+            passed: true
+          - rule: catalogIntegrity
+            passed: true
+            messages:
+              - severity: warning
+                text: imports https://example.org/ontology/telecom/legacy, which is deprecated
+        shacl:
+          conforms: false
+          results:
+            - focusNode: https://example.org/ontology/telecom/assurance#Incident
+              resultPath: http://www.w3.org/2000/01/rdf-schema#label
+              severity: Violation
+              message: Every class needs an rdfs:label
+              sourceShape: https://example.org/ontology/foundational/shapes#ClassLabelShape
+    Term_describe:
+      summary: Describe a term, with its layer chain
+      value:
+        description:
+          iri: https://example.org/ontology/telecom/assurance#Incident
+          curie: as:Incident
+          definedIn:
+            - fto-telecom-assurance
+          labels:
+            - Incident
+          definitions:
+            - An unplanned interruption or quality reduction of a service.
+          types:
+            - owl:Class
+          parents:
+            - core:Event
+          matches:
+            - predicate: skos:closeMatch
+              object: tmf724:Incident
+          layer: Telecom
+          linkStatus: provisional
+        layerChain:
+          chain:
+            - term: as:Incident
+              layer: Telecom
+              module: fto-telecom-assurance
+              linkStatus: provisional
+            - term: core:Event
+              layer: Foundational
+              module: fto-foundational-core
+              linkStatus: confirmed
+          endsAtFoundational: true
+    Term_search:
+      summary: Search terms by text
+      value:
+        hits:
+          - iri: https://example.org/ontology/telecom/assurance#Incident
+            curie: as:Incident
+            module: fto-telecom-assurance
+            layer: Telecom
+            via: label
+            text: Incident
