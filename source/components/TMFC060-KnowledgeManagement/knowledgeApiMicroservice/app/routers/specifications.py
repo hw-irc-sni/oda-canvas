@@ -78,6 +78,18 @@ async def replace_content(id: str, request: Request, s: AsyncSession = Depends(s
     return Response(status_code=204)
 
 
+@router.get("/knowledgeSpecification/{id}/validation")
+async def retrieve_validation(id: str, request: Request, s: AsyncSession = Depends(session),
+                              _: Principal = Depends(require_operation("retrieveKnowledgeSpecificationValidation"))):
+    return await registry_for(request, s).last_report(id)
+
+
+@router.post("/knowledgeSpecification/{id}/validation")
+async def run_validation(id: str, request: Request, s: AsyncSession = Depends(session),
+                         _: Principal = Depends(require_operation("runKnowledgeSpecificationValidation"))):
+    return await registry_for(request, s).validate(id)
+
+
 @router.get("/schema/{name}")
 async def retrieve_schema(name: str, _: Principal = Depends(require_operation("retrieveSchema"))):
     path = SCHEMAS_DIR / name

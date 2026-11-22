@@ -18,6 +18,7 @@ dependencies = [
     "SQLAlchemy[asyncio]==2.1.9",
     "alembic==1.20.1",
     "rdflib==7.6.0",
+    "pyshacl==0.40.2",
 ]
 
 [dependency-groups]

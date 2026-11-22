@@ -18,6 +18,7 @@ from ..auth import Principal
 from ..config import Settings
 from ..db.models import Knowledge as KnowledgeRow
 from ..db.models import KnowledgeSpecification as SpecRow
+from ..db.models import ValidationReport
 from ..errors import ApiError
 from ..events import Event
 from ..graphstore import GraphStore, module_graph
@@ -251,3 +252,57 @@ class Registry:
         self.save(row, body)
         await self.session.commit()
         await self.publish("AttributeValueChange", body)
+
+    # ---- validation (#27) ------------------------------------------------------------------------------------
+    def rdflib_graph(self, module_id: str):
+        from rdflib import Graph
+        data = self.graphs.export(module_graph(module_id), "text/turtle")
+        return Graph().parse(data=data, format="turtle")
+
+    async def import_closure(self, module_id: str, bodies: dict[str, dict]) -> list[str]:
+        seen, stack = [], [r["id"] for r in bodies[module_id].get("imports") or []]
+        while stack:
+            current = stack.pop()
+            if current in seen or current == module_id or current not in bodies:
+                continue
+            seen.append(current)
+            stack.extend(r["id"] for r in bodies[current].get("imports") or [])
+        return seen
+
+    async def validate(self, module_id: str) -> dict:
+        from rdflib import Graph
+
+        from .checks import check_module, report, shacl_validate
+        row = await self.get_row(module_id)
+        bodies = {b["id"]: b for b in await self.all_bodies()}
+        graphs = {mid: self.rdflib_graph(mid) for mid in bodies}
+        union = Graph()
+        for graph in graphs.values():
+            union += graph
+        # namespaces whose classes can be checked: modules that have content
+        iris = [b["iri"] for mid, b in bodies.items() if not b["iri"].startswith("urn:") and len(graphs[mid])]
+        unresolved = [r["iri"] for r in self.content_imports(module_id) if r["iri"] not in {b["iri"] for b in bodies.values()}]
+        rules = check_module(row.body, graphs[module_id], union, iris, unresolved)
+        closure = await self.import_closure(module_id, bodies)
+        shapes, ontology = Graph(), Graph()
+        for mid in closure:
+            if bodies[mid].get("specKind") == "shapes":
+                shapes += graphs[mid]
+            else:
+                ontology += graphs[mid]
+        data = graphs[module_id] if row.body.get("specKind") != "shapes" else Graph()
+        result = report(module_id, rules, shacl_validate(data, shapes, ontology))
+        stored = await self.session.get(ValidationReport, module_id)
+        if stored is None:
+            self.session.add(ValidationReport(specification_id=module_id, report=result))
+        else:
+            stored.report = result
+        await self.session.commit()
+        return result
+
+    async def last_report(self, module_id: str) -> dict:
+        await self.get_row(module_id)
+        stored = await self.session.get(ValidationReport, module_id)
+        if stored is None:
+            raise ApiError(404, "404", "Not Found", f"'{module_id}' has not been validated yet")
+        return stored.report

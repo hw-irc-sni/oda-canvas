@@ -14,7 +14,8 @@ from app.main import create_app
 
 pytestmark = pytest.mark.integration
 TABLES = {"knowledge", "knowledge_specification", "mapping", "document", "document_blob", "process", "task",
-          "review_item", "state_transition", "hub_subscription", "recommend_feedback"}
+          "review_item", "state_transition", "hub_subscription", "recommend_feedback", "validation_report"}
+HEAD = "0002_validation_report"
 
 
 @pytest.fixture
@@ -39,13 +40,13 @@ async def revision(engine):
 async def test_upgrade_on_an_empty_database_creates_the_schema(engine):
     await upgrade(engine)
     assert TABLES <= await tables(engine)
-    assert await revision(engine) == "0001_initial"
+    assert await revision(engine) == HEAD
 
 
 async def test_upgrade_is_idempotent(engine):
     await upgrade(engine)
     await upgrade(engine)
-    assert await revision(engine) == "0001_initial"
+    assert await revision(engine) == HEAD
 
 
 async def test_migrated_schema_matches_the_models(engine):
@@ -58,7 +59,7 @@ async def test_migrated_schema_matches_the_models(engine):
 async def test_downgrade_of_the_last_revision_and_upgrade_again(engine):
     await upgrade(engine)
     await downgrade(engine, "-1")
-    assert not (TABLES & await tables(engine))
+    assert "validation_report" not in await tables(engine) and await revision(engine) == "0001_initial"
     await upgrade(engine)
     assert TABLES <= await tables(engine)
 
@@ -69,7 +70,7 @@ async def test_concurrent_upgrades_serialise_on_the_advisory_lock(engine, postgr
         await asyncio.gather(upgrade(engine), upgrade(other))
     finally:
         await other.dispose()
-    assert await revision(engine) == "0001_initial"
+    assert await revision(engine) == HEAD
 
 
 async def test_document_blob_chunks_round_trip_and_cascade(engine):
@@ -99,7 +100,7 @@ async def test_app_startup_runs_the_migrations(settings, engine):
     app = create_app(settings)
     async with app.router.lifespan_context(app):
         assert app.state.sessions is not None
-    assert await revision(engine) == "0001_initial"
+    assert await revision(engine) == HEAD
 
 
 async def test_startup_gives_up_after_the_timeout():

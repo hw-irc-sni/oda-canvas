@@ -60,6 +60,24 @@ serve `/knowledgeSpecification` (list, create, get, patch fields, delete) and it
   `fto:layer`, else its top folder. A module without a file is metadata-only, without an IRI it gets
   `urn:tmfc060:federation:<source>:<key>`. A module gone from the repository becomes `deprecated`.
 - Lifecycle transitions (PATCH `lifecycleStatus`) answer 501 until the governance workflow (#28).
+- **Shapes:** an `ONTOLOGY_SOURCES` entry may list `"shapes": [{"id": "tio-shacl-ext", "path": "implementation/tio-shacl-ext/rdf"}]`;
+  each path (file or folder of `.ttl`) becomes a `specKind: shapes` module.
+
+## Validation
+
+`POST /knowledgeSpecification/{id}/validation` runs, and `GET` returns, the latest report
+([`app/ontology/checks.py`](app/ontology/checks.py)):
+
+- The five structural rules of FTO's `scripts/check.py`, per module: `parse`, `layerAnnotation` (the module's
+  `fto:layer`; missing is a warning), `layerMonotonicity` (deeper-layer inheritance; a warning in bridge-like
+  modules: `specKind: bridge` or content using `fto:linkStatus`), `parentsResolve` (parents in the namespaces of
+  registered modules with content must be declared, as `owl:Class` or `rdfs:Class`), and `catalogIntegrity` (the
+  content declares the module IRI; unresolved imports are warnings; placeholder IRIs are not checked). Class and
+  layer lookups use the union of all registered modules, as check.py merges its modules.
+- SHACL (pyshacl, inference none, as FTO's `scripts/validate.py`): the module's content against the `shapes`
+  modules it imports, with the rest of its import closure as the ontology graph.
+- The sync also runs check.py's repository-level part (every `.ttl` outside `_sources/` parses, `catalog.json` is
+  intact) and logs it.
 
 ## RDF store and queries
 

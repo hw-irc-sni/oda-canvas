@@ -23,6 +23,7 @@ from sqlalchemy import select
 from ..db.models import KnowledgeSpecification as SpecRow
 from ..graphstore import module_graph
 from . import loaders
+from .checks import repository_pass
 from .registry import FEDERATED_TYPE, Registry
 
 log = logging.getLogger(__name__)
@@ -170,6 +171,32 @@ async def sync_source(registry: Registry, source: dict) -> dict:
             body.pop("describes")
         if not unchanged(row.body, body):
             registry.save(row, body)
+    # shapes folders or files listed in the source become specKind shapes modules
+    for shape in source.get("shapes") or []:
+        sid = shape["id"]
+        base = loaders.safe_join(root, shape["path"])
+        files = [base] if base.is_file() else sorted(base.rglob("*.ttl"))
+        graph = module_graph(sid)
+        registry.graphs.clear(graph)
+        for path in files:
+            registry.graphs.merge(graph, path.read_bytes(), "text/turtle")
+        modules[sid] = {"shapes": True}
+        shape_source = {**origin, "path": shape["path"]} if origin["kind"] == "git" else {"kind": "mount", "path": str(base)}
+        body = {"@type": FEDERATED_TYPE, "id": sid, "name": shape.get("name") or sid,
+                "iri": shape.get("iri") or f"urn:tmfc060:federation:{source['name']}:{sid}", "specKind": "shapes",
+                "layer": folder_layer(shape["path"]), "source": shape_source}
+        row = await registry.session.get(SpecRow, sid)
+        if row is None:
+            full = {**body, "href": registry.href(sid), "lifecycleStatus": "published", "sourceStatus": "shapes",
+                    "@baseType": "KnowledgeSpecification", "@schemaLocation": registry.schema_location()}
+            registry.save(None, full)
+            stats["created"] += 1
+            await registry.session.flush()
+            await registry.publish("Create", full)
+        elif not unchanged(row.body, {**row.body, **body}):
+            registry.save(row, {**row.body, **body})
+            stats["updated"] += 1
+
     # modules of this repository that are gone from modules.json
     for row in (await registry.session.scalars(select(SpecRow))).all():
         if row.body.get("@type") == FEDERATED_TYPE and same_source(row.body, origin) and row.id not in modules \
@@ -178,7 +205,12 @@ async def sync_source(registry: Registry, source: dict) -> dict:
             stats["deprecated"] += 1
             await registry.publish("StateChange", row.body)
     await registry.session.commit()
-    log.info("ontology source %s synced: %s", source["name"], stats)
+    repo = await asyncio.to_thread(repository_pass, root)
+    stats["filesParsed"] = repo["filesParsed"]
+    stats["repoErrors"] = repo["errors"]
+    log.info("ontology source %s synced: %s", source["name"], {k: v for k, v in stats.items() if k != "repoErrors"})
+    log.info("ontology source %s: %d files parse, %s", source["name"], repo["filesParsed"],
+             f"{len(repo['errors'])} repository error(s): {repo['errors'][:5]}" if repo["errors"] else "catalog intact")
     return stats
 
 

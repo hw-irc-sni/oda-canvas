@@ -176,3 +176,12 @@ class RecommendFeedback(Base):
     outcome: Mapped[str | None] = mapped_column(String(16))
     actor: Mapped[str] = mapped_column(Text, nullable=False)
     created: Mapped[datetime] = created_at()
+
+
+class ValidationReport(Base):
+    """The latest validation report of an ontology module."""
+    __tablename__ = "validation_report"
+    specification_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("knowledge_specification.id", ondelete="CASCADE"), primary_key=True)
+    report: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    run_at: Mapped[datetime] = created_at()
