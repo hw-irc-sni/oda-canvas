@@ -1,6 +1,10 @@
 """/knowledge, /knowledge/{id}, its /graph (Graph Store Protocol) and /query (read-only SPARQL)."""
+import re
 import time
 from urllib.parse import parse_qs, quote
+
+import httpx
+from pyoxigraph import NamedNode
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -13,6 +17,7 @@ from ..db.models import KnowledgeSpecification as SpecRow
 from ..errors import ApiError
 from ..graphstore import kb_graph
 from ..listing import list_response, present
+from ..models import ModelError
 from ..ontology import federation
 from ..query import effective_timeout, precheck, run_query
 from ..routers.deps import session
@@ -150,6 +155,67 @@ async def delete_document(id: str, documentId: str, request: Request, s: AsyncSe
     return Response(status_code=204)
 
 
+# ---- search ----------------------------------------------------------------------------------------------------
+IRI = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:[^\s<>\"{}|^`\\]+$")
+SUBCLASSES = "SELECT DISTINCT ?c WHERE {{ VALUES ?root {{ {roots} }} ?c <http://www.w3.org/2000/01/rdf-schema#subClassOf>* ?root }}"
+
+
+async def dataset_for(s: AsyncSession, row) -> list[str]:
+    """The graphs a KB's queries see: its graph plus its conformsTo closure (published/deprecated modules)."""
+    modules = {m.id: ModuleInfo(m.lifecycle_status, tuple(r["id"] for r in m.body.get("imports") or []))
+               for m in (await s.scalars(select(SpecRow))).all()}
+    return query_dataset(row.id, [r["id"] for r in row.body.get("conformsTo") or []], modules)
+
+
+def with_subclasses(store, dataset: list[str], iris: list[str]) -> list[str]:
+    roots = " ".join(f"<{i}>" for i in iris)
+    result = store.query(SUBCLASSES.format(roots=roots), default_graph=[NamedNode(g) for g in dataset])
+    return sorted(set(iris) | {solution["c"].value for solution in result if isinstance(solution["c"], NamedNode)})
+
+
+@router.post("/knowledge/{id}/search")
+async def search_knowledge(id: str, request: Request, s: AsyncSession = Depends(session),
+                           _: Principal = Depends(require_operation("searchKnowledge"))):
+    kbs = kbs_for(request, s)
+    row = await kbs.get_row(id)
+    payload = await json_body(request)
+    text = payload.get("query")
+    if not isinstance(text, str) or not text.strip():
+        raise ApiError(400, "400", "Bad Request", "query is required")
+    defaults = {"topK": 8, "scoreThreshold": 0, "hybrid": True, **(row.body.get("retrieval") or {})}
+    top_k = payload.get("topK", defaults["topK"])
+    threshold = payload.get("scoreThreshold", defaults["scoreThreshold"])
+    hybrid = payload.get("hybrid", defaults["hybrid"])
+    iris = payload.get("iriFilter")
+    if not isinstance(top_k, int) or isinstance(top_k, bool) or top_k < 1:
+        raise ApiError(400, "400", "Bad Request", "topK must be an integer >= 1")
+    if not isinstance(threshold, (int, float)) or isinstance(threshold, bool) or not 0 <= threshold <= 1:
+        raise ApiError(400, "400", "Bad Request", "scoreThreshold must be between 0 and 1")
+    if not isinstance(hybrid, bool):
+        raise ApiError(400, "400", "Bad Request", "hybrid must be true or false")
+    if iris is not None and (not isinstance(iris, list) or not all(isinstance(i, str) and IRI.match(i) for i in iris)):
+        raise ApiError(400, "400", "Bad Request", "iriFilter must be a list of IRIs")
+    if row.store_kind == "graph":
+        raise ApiError(409, "409", "Conflict", f"'{id}' is a graph knowledge-base and has no vector store")
+    if iris:
+        iris = with_subclasses(kbs.graphs.store, await dataset_for(s, row), iris)
+    else:
+        iris = None
+    resolver = getattr(request.app.state, "models", None)
+    dense, mode = None, "hybrid" if hybrid else "dense"
+    try:
+        if resolver is None:
+            raise ModelError("No model resolver")
+        dense = (await resolver.embed([text]))[0]
+    except (ModelError, httpx.HTTPError, LookupError, ValueError) as exc:
+        if not hybrid:
+            raise ApiError(503, "503", "Service Unavailable",
+                           f"Dense search needs the embedding model: {exc}") from exc
+        mode = "sparse"
+    hits = await kbs.vectors.search(id, text, dense, top_k=top_k, threshold=float(threshold), mode=mode, iris=iris)
+    return JSONResponse({"hits": hits}, headers={"X-Search-Mode": mode})
+
+
 # ---- query -----------------------------------------------------------------------------------------------------
 async def query_text(request: Request) -> str:
     media_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
@@ -179,9 +245,7 @@ async def query_knowledge(id: str, request: Request, s: AsyncSession = Depends(s
         raise ApiError(400, "400", "Bad Request", "timeout must be an integer") from None
     if requested is not None and requested < 1:
         raise ApiError(400, "400", "Bad Request", "timeout must be at least 1")
-    modules = {m.id: ModuleInfo(m.lifecycle_status, tuple(r["id"] for r in m.body.get("imports") or []))
-               for m in (await s.scalars(select(SpecRow))).all()}
-    dataset = query_dataset(id, [r["id"] for r in row.body.get("conformsTo") or []], modules)
+    dataset = await dataset_for(s, row)
     graph_format = graph_media_type(request)
     timeout = effective_timeout(requested, settings.query_timeout_default, settings.query_timeout_max)
     # federation (#31): pre-check against the published remote modules, then send SERVICE through the relay

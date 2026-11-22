@@ -93,6 +93,23 @@ serve `/knowledgeSpecification` (list, create, get, patch fields, delete) and it
   the KB graph plus its conformsTo closure, in a killable worker: `timeout` capped by `QUERY_TIMEOUT_MAX` (504),
   the row cap (`X-Result-Truncated`), updates refused (400), and SERVICE only to allowlisted peers (below).
 
+## Search
+
+`POST /knowledge/{id}/search` ([`app/kb/vectors.py`](app/kb/vectors.py)) searches the chunks of a vector or hybrid
+knowledge-base (409 for a graph one). `topK`, `scoreThreshold` and `hybrid` default to the KB's `retrieval` block
+(8, 0, true).
+
+- **Hybrid**: a dense prefetch (the query embedded by the active model route) and a sparse one
+  ([`app/kb/sparse.py`](app/kb/sparse.py): hashed word tokens with BM25 term-frequency weights; Qdrant adds IDF),
+  fused with Qdrant's RRF and normalised to [0, 1] (first in both lists: 1.0). **`hybrid: false`**: dense only,
+  scored by cosine similarity. `scoreThreshold` applies to these scores.
+- With no model route, a hybrid search falls back to the sparse side alone (rank-normalised); a dense-only one
+  answers 503. The response header `X-Search-Mode` says which ran: `hybrid`, `dense` or `sparse`.
+- `iriFilter` keeps chunks whose `entityIri` or `classIri` payload holds one of the IRIs or a subclass of one
+  (`rdfs:subClassOf*` over the KB's query dataset).
+- Chunks are written (by the pipeline, #40) with `Vectors.upsert_chunks`, which computes the sparse vector with the
+  same encoder.
+
 ## Documents
 
 [`app/kb/documents.py`](app/kb/documents.py) serves `/knowledge/{id}/document`: a `multipart/form-data` upload
