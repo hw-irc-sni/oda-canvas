@@ -104,7 +104,7 @@ class KnowledgeBases:
     async def statistics(self, row: KnowledgeRow) -> dict:
         documents = await self.session.scalar(select(func.count()).select_from(Document)
                                               .where(Document.knowledge_id == row.id))
-        stats = {"triples": self.graphs.count(kb_graph(row.id)), "documents": documents}
+        stats = {"triples": self.graphs.count_union(self.graphs.kb_graphs(row.id)), "documents": documents}
         if row.store_kind in ("vector", "hybrid"):
             chunks = await self.vectors.count(row.id)
             if chunks is not None:
@@ -249,7 +249,8 @@ class KnowledgeBases:
             await self.vectors.drop(kb_id)
         await self.session.delete(row)  # documents, blobs, processes cascade
         await self.session.commit()
-        self.graphs.remove(kb_graph(kb_id))
+        for graph in self.graphs.kb_graphs(kb_id):
+            self.graphs.remove(graph)
         await self.publish("Delete", body)
 
     async def write_graph(self, kb_id: str, principal: Principal, action: str, data: bytes = b"",
@@ -258,12 +259,16 @@ class KnowledgeBases:
         self.check_writer(row, principal)
         self.check_writable(row)
         graph = kb_graph(kb_id)
-        if action == "replace":
-            self.graphs.replace(graph, data, media_type)
-        elif action == "merge":
+        if action == "merge":
             self.graphs.merge(graph, data, media_type)
-        else:
-            self.graphs.clear(graph)
+        else:  # replace and clear act on the whole knowledge-base, its per-source graphs included
+            sources = self.graphs.kb_graphs(kb_id)[1:]
+            if action == "replace":
+                self.graphs.replace(graph, data, media_type)  # parsed first: invalid RDF changes nothing
+            else:
+                self.graphs.clear(graph)
+            for source in sources:
+                self.graphs.remove(source)
         body = dict(row.body)
         self.save(row, body)
         await self.session.commit()

@@ -48,6 +48,8 @@ The API is mounted under `/{COMPONENT_NAME}/tmf-api/knowledgeManagement/v5`.
 | `EVENT_RETRY_DELAYS` | `10,60,300,900,1800` | Seconds before each retry of an event delivery |
 | `EVENT_DELIVERY_TIMEOUT` / `EVENT_POLL_INTERVAL` / `EVENT_RETENTION_DAYS` | `10` / `1` / `7` | Delivery call timeout, outbox poll interval, days finished deliveries are kept |
 | `EVENT_HREF_BASE` | | Base URL that makes the hrefs in events absolute |
+| `INTERNAL_PORT` / `INTERNAL_HOST` | `8081` / `0.0.0.0` | Listener of the internal API for the pipeline workers |
+| `INTERNAL_TOKEN_FILE` | | File (a Secret key) with the workers' service token; no token, no internal listener |
 | `TASK_LEASE_SECONDS` / `TASK_MAX_ATTEMPTS` / `TASK_RETRY_DELAY` | `300` / `3` / `30` | Ingestion task lease, attempts, and retry delay per attempt |
 | `DOCUMENT_MAX_BYTES` | `52428800` | Largest document a knowledge-base accepts (50 MiB) |
 | `MODEL_GATEWAY_SERVICE`, `MGS_CHAT_MODEL`, `MGS_EMBEDDING_MODEL` | | Route 1: the ModelGatewayService CR and its model names |
@@ -97,6 +99,21 @@ serve `/knowledgeSpecification` (list, create, get, patch fields, delete) and it
 - `/knowledge/{id}/query` runs a read-only SPARQL query (`application/sparql-query` or the form field `query`) over
   the KB graph plus its conformsTo closure, in a killable worker: `timeout` capped by `QUERY_TIMEOUT_MAX` (504),
   the row cap (`X-Result-Truncated`), updates refused (400), and SERVICE only to allowlisted peers (below).
+
+## Internal API (pipeline workers)
+
+[`app/internal.py`](app/internal.py) serves the workers on its own port, `INTERNAL_PORT` (8081), which no ExposedAPI
+references and no OAS describes. Every call needs `Authorization: Bearer <token>` with the token in
+`INTERNAL_TOKEN_FILE` (re-read when the file changes; compared in constant time). Without a token the listener is
+not started. The workers reach the component only through this API.
+
+- `POST /internal/knowledge/{id}/graph` merges triples into the KB graph; `PUT …/graph?source=<src>` replaces what
+  that source (a document or a batch) contributed, kept in `urn:tmfc060:kb:{id}:source:{src}`. Each write is a
+  `prov:Activity` in the governance graph (with `?task=` as `prov:wasInformedBy`).
+- `POST /internal/task/claim` (`{"worker": …}`; 204 when nothing is due), `…/task/{id}/heartbeat`, `/complete`
+  (`result`) and `/fail` (`error`, `retryable`); 409 when the worker no longer holds the task.
+- The public `/knowledge/{id}/graph` shows the KB graph and its source graphs together; its PUT and DELETE replace
+  or clear all of them, and queries and `statistics` include them.
 
 ## Events
 

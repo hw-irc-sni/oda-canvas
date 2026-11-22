@@ -90,7 +90,7 @@ async def retrieve_graph(id: str, request: Request, s: AsyncSession = Depends(se
     kbs = kbs_for(request, s)
     await kbs.get_row(id)
     media_type = graph_media_type(request)
-    return Response(kbs.graphs.export(kb_graph(id), media_type), media_type=media_type)
+    return Response(kbs.graphs.export_union(kbs.graphs.kb_graphs(id), media_type), media_type=media_type)
 
 
 @router.put("/knowledge/{id}/graph", status_code=204)
@@ -172,11 +172,13 @@ IRI = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:[^\s<>\"{}|^`\\]+$")
 SUBCLASSES = "SELECT DISTINCT ?c WHERE {{ VALUES ?root {{ {roots} }} ?c <http://www.w3.org/2000/01/rdf-schema#subClassOf>* ?root }}"
 
 
-async def dataset_for(s: AsyncSession, row) -> list[str]:
-    """The graphs a KB's queries see: its graph plus its conformsTo closure (published/deprecated modules)."""
+async def dataset_for(s: AsyncSession, graphs, row) -> list[str]:
+    """The graphs a KB's queries see: its graph and per-source graphs, plus its conformsTo closure
+    (published/deprecated modules)."""
     modules = {m.id: ModuleInfo(m.lifecycle_status, tuple(r["id"] for r in m.body.get("imports") or []))
                for m in (await s.scalars(select(SpecRow))).all()}
-    return query_dataset(row.id, [r["id"] for r in row.body.get("conformsTo") or []], modules)
+    return query_dataset(row.id, [r["id"] for r in row.body.get("conformsTo") or []], modules,
+                         graphs.kb_graphs(row.id))
 
 
 def with_subclasses(store, dataset: list[str], iris: list[str]) -> list[str]:
@@ -210,7 +212,7 @@ async def search_knowledge(id: str, request: Request, s: AsyncSession = Depends(
     if row.store_kind == "graph":
         raise ApiError(409, "409", "Conflict", f"'{id}' is a graph knowledge-base and has no vector store")
     if iris:
-        iris = with_subclasses(kbs.graphs.store, await dataset_for(s, row), iris)
+        iris = with_subclasses(kbs.graphs.store, await dataset_for(s, kbs.graphs, row), iris)
     else:
         iris = None
     resolver = getattr(request.app.state, "models", None)
@@ -257,7 +259,7 @@ async def query_knowledge(id: str, request: Request, s: AsyncSession = Depends(s
         raise ApiError(400, "400", "Bad Request", "timeout must be an integer") from None
     if requested is not None and requested < 1:
         raise ApiError(400, "400", "Bad Request", "timeout must be at least 1")
-    dataset = await dataset_for(s, row)
+    dataset = await dataset_for(s, kbs.graphs, row)
     graph_format = graph_media_type(request)
     timeout = effective_timeout(requested, settings.query_timeout_default, settings.query_timeout_max)
     # federation (#31): pre-check against the published remote modules, then send SERVICE through the relay

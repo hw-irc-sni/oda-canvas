@@ -25,6 +25,8 @@ async def running_api(postgres_url: str, store_path: str, **overrides):
         await conn.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public"))
     await engine.dispose()
     overrides.setdefault("federation_relay_port", 0)  # a free loopback port per test app
+    overrides.setdefault("internal_port", 0)
+    overrides.setdefault("internal_host", "127.0.0.1")
     settings = Settings(component_name=CLIENT, store_path=store_path, database_url=postgres_url,
                         keycloak_jwks_url="http://jwks.invalid/certs", keycloak_issuers=[ISSUER], **overrides)
     app = create_app(settings, TokenValidator(settings, StaticJWKClient(KEY)))

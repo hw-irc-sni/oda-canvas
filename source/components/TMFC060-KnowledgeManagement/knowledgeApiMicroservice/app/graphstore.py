@@ -5,7 +5,7 @@ Named graphs: one per ontology module (``urn:tmfc060:module:{id}``), one per kno
 """
 import re
 
-from pyoxigraph import NamedNode, RdfFormat, Store
+from pyoxigraph import NamedNode, RdfFormat, Store, Triple, serialize
 
 from .errors import ApiError
 
@@ -19,6 +19,11 @@ def module_graph(module_id: str) -> str:
 
 def kb_graph(kb_id: str) -> str:
     return f"urn:tmfc060:kb:{kb_id}"
+
+
+def source_graph(kb_id: str, source: str) -> str:
+    """What one ingestion source (a document or a batch) contributed to a knowledge-base."""
+    return f"{kb_graph(kb_id)}:source:{source}"
 
 
 def rdf_format(media_type: str) -> RdfFormat:
@@ -75,6 +80,23 @@ class GraphStore:
 
     def export(self, graph: str, media_type: str = "text/turtle") -> bytes:
         return self.store.dump(format=rdf_format(media_type), from_graph=NamedNode(graph))
+
+    def kb_graphs(self, kb_id: str) -> list[str]:
+        """The KB graph and its per-source graphs (the knowledge-base's whole instance data)."""
+        prefix = source_graph(kb_id, "")
+        sources = sorted(g.value for g in self.store.named_graphs()
+                         if isinstance(g, NamedNode) and g.value.startswith(prefix) and "#" not in g.value)
+        return [kb_graph(kb_id), *sources]
+
+    def export_union(self, graphs: list[str], media_type: str = "text/turtle") -> bytes:
+        triples = {Triple(q.subject, q.predicate, q.object)
+                   for g in graphs for q in self.store.quads_for_pattern(None, None, None, NamedNode(g))}
+        return serialize(triples, format=rdf_format(media_type)) or b""
+
+    def count_union(self, graphs: list[str]) -> int:
+        result = self.store.query("SELECT (COUNT(*) AS ?n) WHERE { SELECT DISTINCT ?s ?p ?o WHERE { ?s ?p ?o } }",
+                                  default_graph=[NamedNode(g) for g in graphs])
+        return int(next(iter(result))["n"].value)
 
     def count(self, graph: str) -> int:
         result = self.store.query("SELECT (COUNT(*) AS ?n) WHERE { ?s ?p ?o }", default_graph=NamedNode(graph))

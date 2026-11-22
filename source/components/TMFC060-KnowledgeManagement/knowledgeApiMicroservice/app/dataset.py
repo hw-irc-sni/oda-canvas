@@ -28,6 +28,8 @@ def visible_modules(conforms_to: list[str], modules: dict[str, ModuleInfo]) -> l
     return seen
 
 
-def query_dataset(kb_id: str, conforms_to: list[str], modules: dict[str, ModuleInfo]) -> list[str]:
-    """The graph IRIs that form the default graph of a query on the knowledge-base."""
-    return [kb_graph(kb_id)] + [module_graph(m) for m in visible_modules(conforms_to, modules)]
+def query_dataset(kb_id: str, conforms_to: list[str], modules: dict[str, ModuleInfo],
+                  kb_graphs: list[str] | None = None) -> list[str]:
+    """The graph IRIs that form the default graph of a query on the knowledge-base: its instance data (the KB graph
+    and, when given, its per-source graphs) and the visible modules."""
+    return list(kb_graphs or [kb_graph(kb_id)]) + [module_graph(m) for m in visible_modules(conforms_to, modules)]

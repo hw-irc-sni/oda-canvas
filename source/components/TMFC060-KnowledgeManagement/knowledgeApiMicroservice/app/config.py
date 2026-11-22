@@ -94,6 +94,11 @@ class Settings(BaseSettings):
     event_retention_days: int = 7
     event_href_base: str = ""
 
+    # The internal API of the pipeline workers: its own listener, guarded by the token in INTERNAL_TOKEN_FILE
+    internal_host: str = "0.0.0.0"
+    internal_port: int = 8081
+    internal_token_file: str | None = None
+
     # Ingestion tasks: the lease a worker holds (renewed by heartbeats), attempts, and the retry delay per attempt
     task_lease_seconds: int = 300
     task_max_attempts: int = 3
