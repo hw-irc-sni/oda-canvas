@@ -92,7 +92,8 @@ The API is specified in [`TMFxxx-KnowledgeManagement-v5.0.0.oas.yaml`](source/co
 
 | Field | Meaning |
 |---|---|
-| `name`, `description`, `version`, `lifecycleStatus` | Standard identity and lifecycle |
+| `name`, `description`, `version` | Standard identity |
+| `lifecycleStatus` | The same governed lifecycle as ontology modules (`draft` … `deprecated`), see [Governance workflow](#governance-workflow). A knowledge-base starts as `draft`, can be read in every state, and its content can be changed in every state except `deprecated` |
 | `knowledgeCategory[]` | know-what, know-why, know-how or know-who |
 | `storeKind` | graph, vector or hybrid |
 | `conformsTo[]` | KnowledgeSpecificationRefs: the ontology modules that type the KB |
@@ -229,6 +230,8 @@ stateDiagram-v2
 * **Validation.** The validation sub-resource ports the five FTO structural checks: every file parses; the folder matches the layer annotation; layers are monotonic; parents resolve; the catalog is intact. It adds pyshacl validation against the module's shapes.
 * **Machine proposals.** Conflict resolutions suggested by the ingestion pipeline (KM-FX-04), and `propose_mapping` calls from MCP clients, always enter the workflow as `proposed` items. They are never applied directly.
 
+* **Knowledge-bases** follow the same lifecycle (confirmed on 2026-11-22): `knowledge-editor` proposes and revises, `ontology-reviewer` moves to review, `ontology-approver` rules, publishes and deprecates.
+
 ## Federation
 
 Federation works at two levels: modules and queries.
@@ -325,7 +328,7 @@ Every operation of the API lists the roles allowed to call it in an `x-required-
 | Author: create a module, change its fields or content, create or change mappings | `ontology-editor` |
 | Review: comment, run validation | `ontology-reviewer` (editors and approvers may also run validation) |
 | Rule: rulings | `ontology-approver` |
-| Lifecycle transitions | per transition, as in [Governance workflow](#governance-workflow); machine-readable in the `x-lifecycle` extension of `KnowledgeSpecification` and the `x-review-kinds` extension of `ReviewItem` |
+| Lifecycle transitions | per transition, as in [Governance workflow](#governance-workflow); machine-readable in the `x-lifecycle` extensions of `KnowledgeSpecification` and `Knowledge`, and the `x-review-kinds` extension of `ReviewItem`. For knowledge-bases, `knowledge-editor` takes the proposer's place (draft → proposed, rejected → draft) |
 | Delete a module or mapping | `ontology-editor` (draft or rejected only), `ontology-approver` (any state) |
 
 ### Enforcement

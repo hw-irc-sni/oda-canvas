@@ -183,7 +183,7 @@ paths:
       summary: Creates a Knowledge
       description: >-
         This operation creates a knowledge-base, with its graph and its vector collection. The
-        knowledge-base's `lifecycleStatus` starts as `active`.
+        knowledge-base starts as `draft` (see `x-lifecycle` on `Knowledge`).
       tags:
         - knowledge
       x-required-roles:
@@ -240,12 +240,17 @@ paths:
       summary: Updates partially a Knowledge
       description: >-
         This operation updates a knowledge-base with a JSON merge patch. Changing `lifecycleStatus`
-        publishes a `KnowledgeStateChangeEvent`; changing other fields publishes a
+        is a governance transition: each transition is allowed to one role, as listed in the
+        `x-lifecycle` extension of `Knowledge` (403 for another role, 409 for a transition that is
+        not listed), and publishes a `KnowledgeStateChangeEvent`. Other fields can be changed by a
+        `knowledge-editor` unless the knowledge-base is `deprecated` (409); a change publishes a
         `KnowledgeAttributeValueChangeEvent`.
       tags:
         - knowledge
       x-required-roles:
         - knowledge-editor
+        - ontology-reviewer
+        - ontology-approver
         - canvasSystemRole
       parameters:
         - $ref: '#/components/parameters/Id'
@@ -374,6 +379,8 @@ paths:
           $ref: '#/components/responses/404'
         '415':
           $ref: '#/components/responses/415'
+        '409':
+          $ref: '#/components/responses/409'
         '500':
           $ref: '#/components/responses/500'
         default:
@@ -402,6 +409,8 @@ paths:
           $ref: '#/components/responses/404'
         '415':
           $ref: '#/components/responses/415'
+        '409':
+          $ref: '#/components/responses/409'
         '500':
           $ref: '#/components/responses/500'
         default:
@@ -424,6 +433,8 @@ paths:
           $ref: '#/components/responses/403'
         '404':
           $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
         '500':
           $ref: '#/components/responses/500'
         default:
@@ -791,6 +802,8 @@ paths:
           $ref: '#/components/responses/413'
         '415':
           $ref: '#/components/responses/415'
+        '409':
+          $ref: '#/components/responses/409'
         '500':
           $ref: '#/components/responses/500'
         default:
@@ -849,6 +862,8 @@ paths:
           $ref: '#/components/responses/403'
         '404':
           $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
         '500':
           $ref: '#/components/responses/500'
         default:
@@ -2169,11 +2184,7 @@ components:
               type: string
               description: Version of the knowledge-base.
             lifecycleStatus:
-              type: string
-              description: >-
-                Lifecycle status of the knowledge-base: `active`, `suspended` (no ingestion) or
-                `retired` (read-only).
-              example: active
+              $ref: '#/components/schemas/GovernedLifecycleStatusType'
             lastUpdate:
               type: string
               format: date-time
@@ -2208,6 +2219,23 @@ components:
         propertyName: '@type'
         mapping:
           Knowledge: '#/components/schemas/Knowledge'
+      x-lifecycle:
+        description: >-
+          Allowed lifecycleStatus transitions of a knowledge-base and the role that may make each
+          one: the governed lifecycle of ontology modules, with knowledge-editor as the proposer.
+          A knowledge-base is created as draft. It can be read in every state; its content (graph,
+          documents, ingestion) can be changed in every state except deprecated (409).
+        initial: draft
+        transitions:
+          - {from: draft, to: proposed, role: knowledge-editor}
+          - {from: proposed, to: inReview, role: ontology-reviewer}
+          - {from: inReview, to: agreed, role: ontology-approver}
+          - {from: inReview, to: rejected, role: ontology-approver}
+          - {from: rejected, to: draft, role: knowledge-editor}
+          - {from: agreed, to: published, role: ontology-approver}
+          - {from: published, to: deprecated, role: ontology-approver}
+        writableIn: [draft, proposed, inReview, agreed, rejected, published]
+        readableIn: [draft, proposed, inReview, agreed, rejected, published, deprecated]
     Knowledge_FVO:
       allOf:
         - $ref: '#/components/schemas/Extensible'
@@ -2256,7 +2284,8 @@ components:
         - type: object
           description: >-
             The fields of a knowledge-base that can be changed. `storeKind` cannot change once the
-            knowledge-base exists.
+            knowledge-base exists. A change of `lifecycleStatus` is a governance transition (see
+            `x-lifecycle` on `Knowledge`).
           properties:
             name:
               type: string
@@ -2265,7 +2294,7 @@ components:
             version:
               type: string
             lifecycleStatus:
-              type: string
+              $ref: '#/components/schemas/GovernedLifecycleStatusType'
             knowledgeCategory:
               type: array
               items:
@@ -2647,9 +2676,9 @@ components:
         - shapes
         - bridge
         - remote
-    OntologyLifecycleStatusType:
+    GovernedLifecycleStatusType:
       type: string
-      description: The governance lifecycle of ontology modules and mappings.
+      description: The governance lifecycle of knowledge-bases, ontology modules and mappings.
       enum:
         - draft
         - proposed
@@ -2815,7 +2844,7 @@ components:
             source:
               $ref: '#/components/schemas/KnowledgeSpecificationSource'
             lifecycleStatus:
-              $ref: '#/components/schemas/OntologyLifecycleStatusType'
+              $ref: '#/components/schemas/GovernedLifecycleStatusType'
             linkStatus:
               $ref: '#/components/schemas/LinkStatusType'
             lastUpdate:
@@ -2936,7 +2965,7 @@ components:
             source:
               $ref: '#/components/schemas/KnowledgeSpecificationSource'
             lifecycleStatus:
-              $ref: '#/components/schemas/OntologyLifecycleStatusType'
+              $ref: '#/components/schemas/GovernedLifecycleStatusType'
             linkStatus:
               $ref: '#/components/schemas/LinkStatusType'
       discriminator:
@@ -3038,7 +3067,7 @@ components:
           type: string
           description: A one-line justification (bridge:rationale).
         lifecycleStatus:
-          $ref: '#/components/schemas/OntologyLifecycleStatusType'
+          $ref: '#/components/schemas/GovernedLifecycleStatusType'
         status:
           type: string
           readOnly: true
@@ -3079,7 +3108,7 @@ components:
         rationale:
           type: string
         lifecycleStatus:
-          $ref: '#/components/schemas/OntologyLifecycleStatusType'
+          $ref: '#/components/schemas/GovernedLifecycleStatusType'
     ReviewTarget:
       type: object
       description: What a review item is about.
@@ -3794,7 +3823,7 @@ components:
         name: incident-knowledge
         description: Network incidents, alarms and trouble tickets, with their resolutions
         version: '1.0'
-        lifecycleStatus: active
+        lifecycleStatus: published
         lastUpdate: '2026-11-22T10:00:00Z'
         knowledgeCategory:
           - know-what
@@ -3839,7 +3868,7 @@ components:
           id: 3f1e2c8a
           href: https://host/tmf-api/knowledgeManagement/v5/knowledge/3f1e2c8a
           name: incident-knowledge
-          lifecycleStatus: active
+          lifecycleStatus: published
           storeKind: hybrid
           statistics:
             triples: 48210
@@ -3865,7 +3894,7 @@ components:
             id: 3f1e2c8a
             href: https://host/tmf-api/knowledgeManagement/v5/knowledge/3f1e2c8a
             name: incident-knowledge
-            lifecycleStatus: active
+            lifecycleStatus: draft
             storeKind: hybrid
     Document_runbook:
       summary: An uploaded runbook
