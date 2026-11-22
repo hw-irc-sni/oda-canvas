@@ -18,6 +18,7 @@ from .ontology.registry import Registry
 from qdrant_client import AsyncQdrantClient
 
 from .kb import router as kb_router
+from .ontology.federation import Relay
 from .routers import specifications, terms
 from .store import get_store
 from .errors import ApiError
@@ -39,6 +40,8 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
         app.state.sessions = make_sessionmaker(engine)
         app.state.graphs = GraphStore(get_store(settings.store_path))
         app.state.qdrant = AsyncQdrantClient(url=settings.qdrant_url, timeout=10)
+        app.state.relay = Relay(settings, app.state.sessions)
+        await app.state.relay.start()
         sources = sync.parse_sources(settings.ontology_sources)
         sync_task = None
         if sources:
@@ -49,6 +52,7 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
         finally:
             if sync_task:
                 sync_task.cancel()
+            await app.state.relay.stop()
             await app.state.qdrant.close()
             await engine.dispose()
 

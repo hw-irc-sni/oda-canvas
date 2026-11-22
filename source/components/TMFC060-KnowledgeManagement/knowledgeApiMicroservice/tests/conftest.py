@@ -34,4 +34,4 @@ def settings(tmp_path, postgres_url, qdrant_url):
     return Settings(component_name="km-knowledgemanagement", store_path=str(tmp_path / "store"),
                     database_url=postgres_url, qdrant_url=qdrant_url,
                     keycloak_jwks_url="http://jwks.invalid/certs",
-                    keycloak_issuers=["https://keycloak.example.org/auth/realms/odari"])
+                    keycloak_issuers=["https://keycloak.example.org/auth/realms/odari"], federation_relay_port=0)

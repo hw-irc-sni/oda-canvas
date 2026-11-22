@@ -1,4 +1,5 @@
 """/knowledge, /knowledge/{id}, its /graph (Graph Store Protocol) and /query (read-only SPARQL)."""
+import time
 from urllib.parse import parse_qs
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -12,7 +13,8 @@ from ..db.models import KnowledgeSpecification as SpecRow
 from ..errors import ApiError
 from ..graphstore import kb_graph
 from ..listing import list_response, present
-from ..query import effective_timeout, run_query
+from ..ontology import federation
+from ..query import effective_timeout, precheck, run_query
 from ..routers.deps import session
 from ..routers.specifications import json_body
 from .service import KnowledgeBases
@@ -138,11 +140,13 @@ async def query_knowledge(id: str, request: Request, s: AsyncSession = Depends(s
                for m in (await s.scalars(select(SpecRow))).all()}
     dataset = query_dataset(id, [r["id"] for r in row.body.get("conformsTo") or []], modules)
     graph_format = graph_media_type(request)
-    result = await run_query(settings.store_path, text, dataset,
-                             timeout=effective_timeout(requested, settings.query_timeout_default,
-                                                       settings.query_timeout_max),
-                             row_cap=settings.query_row_cap, allowed_services=frozenset(),
-                             graph_format=graph_format)
+    timeout = effective_timeout(requested, settings.query_timeout_default, settings.query_timeout_max)
+    # federation (#31): pre-check against the published remote modules, then send SERVICE through the relay
+    endpoints = await federation.allowlist(s)
+    precheck(text, frozenset(endpoints))
+    text, relays = federation.rewrite(text, endpoints, request.app.state.relay.port, time.time() + timeout)
+    result = await run_query(settings.store_path, text, dataset, timeout=timeout, row_cap=settings.query_row_cap,
+                             allowed_services=relays, graph_format=graph_format)
     headers = {"X-Result-Truncated": "true"} if result.truncated else {}
     if result.kind == "graph":
         return Response(result.body, media_type=graph_format, headers=headers)

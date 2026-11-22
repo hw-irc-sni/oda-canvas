@@ -533,6 +533,8 @@ paths:
           $ref: '#/components/responses/404'
         '500':
           $ref: '#/components/responses/500'
+        '502':
+          $ref: '#/components/responses/502'
         '504':
           $ref: '#/components/responses/504'
         default:
@@ -3794,8 +3796,21 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Error'
+    '502':
+      description: >-
+        Bad Gateway. A federated SERVICE call failed at the peer (error `code` `FEDERATION_ERROR`). Use
+        `SERVICE SILENT` to continue without the peer's answers.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
     '504':
-      description: Gateway Timeout. The query, or a federated SERVICE call, exceeded its timeout.
+      description: >-
+        Gateway Timeout. The query exceeded its timeout, or a federated SERVICE call exceeded the federation call
+        timeout (error `code` `FEDERATION_TIMEOUT`).
       content:
         application/json:
           schema:

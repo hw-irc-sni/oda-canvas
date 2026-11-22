@@ -58,6 +58,13 @@ class Settings(BaseSettings):
     # How long the API keeps retrying Postgres at startup before it exits (migrations need it)
     db_startup_timeout: float = 120.0
 
+    # Federation: the loopback relay port (0 picks a free one), the OAuth2 client Secrets of remote modules
+    # (<dir>/<moduleId>/{tokenUrl,clientId,clientSecret}), the per-call timeout and the answer cache TTL (0 = off)
+    federation_relay_port: int = 8099
+    federation_secrets_dir: str | None = None
+    federation_call_timeout: float = 10.0
+    federation_cache_ttl: int = 60
+
     # Size of the dense vectors of a knowledge-base's Qdrant collection (the embedding model's dimension)
     embedding_dimension: int = 1024
 

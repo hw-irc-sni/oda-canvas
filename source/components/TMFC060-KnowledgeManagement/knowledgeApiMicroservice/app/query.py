@@ -8,6 +8,7 @@
    whether the cap applied.
 """
 import asyncio
+import re
 import multiprocessing
 from dataclasses import dataclass
 
@@ -25,6 +26,9 @@ class QueryResult:
     kind: str  # "select", "ask" or "graph"
     body: object  # SPARQL JSON results dict (select/ask) or serialized RDF bytes (graph)
     truncated: bool = False
+
+
+RELAY_ERROR = re.compile(r"Error (\d{3}) .*? returned by http://127\.0\.0\.1:\d+/federation/([^?\s]+)")
 
 
 class QueryTimeout(ApiError):
@@ -113,6 +117,14 @@ def _worker(conn, store_path, query, default_graph, row_cap, graph_format):
             conn.send(("ok", "graph", serialize(triples, format=fmt), truncated))
     except SyntaxError as exc:
         conn.send(("error", 400, f"Invalid query: {exc}"))
+    except OSError as exc:  # a SERVICE call failed: map the relay's status (504 timeout, other failures 502)
+        found = RELAY_ERROR.search(str(exc))
+        if found:
+            status = 504 if found.group(1) == "504" else 502
+            conn.send(("error", status, f"The federation peer '{found.group(2)}' "
+                                        f"{'did not answer in time' if status == 504 else 'failed'}"))
+        else:
+            conn.send(("error", 500, f"{type(exc).__name__}: {exc}"))
     except Exception as exc:  # noqa: BLE001 - reported to the parent as a 500
         conn.send(("error", 500, f"{type(exc).__name__}: {exc}"))
     finally:
@@ -142,7 +154,9 @@ async def run_query(store_path: str, query: str, default_graph: list[str], *, ti
         parent.close()
     if message[0] == "error":
         _, status, text = message
-        raise ApiError(status, str(status), "Bad Request" if status == 400 else "Internal Server Error", text)
+        code, reason = {400: ("400", "Bad Request"), 502: ("FEDERATION_ERROR", "Bad Gateway"),
+                        504: ("FEDERATION_TIMEOUT", "Gateway Timeout")}.get(status, ("500", "Internal Server Error"))
+        raise ApiError(status, code, reason, text)
     _, kind, body, truncated = message
     return QueryResult(kind=kind, body=body, truncated=truncated)
 

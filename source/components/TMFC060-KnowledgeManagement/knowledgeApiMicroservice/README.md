@@ -40,6 +40,10 @@ The API is mounted under `/{COMPONENT_NAME}/tmf-api/knowledgeManagement/v5`.
 | `GIT_CACHE_DIR`, `GIT_TIMEOUT` | `/tmp/tmfc060-git`, `120` | Clone cache and timeout |
 | `MOUNT_ROOTS` | `/etc/tmfc060/ontologies` | Comma-separated directories that `mount` sources must be under |
 | `LOG_LEVEL` | `INFO` | Level of the application loggers |
+| `FEDERATION_RELAY_PORT` | `8099` | Loopback port of the federation relay |
+| `FEDERATION_SECRETS_DIR` | | Folder of per-module OAuth2 client Secrets (`<moduleId>/tokenUrl`, `clientId`, `clientSecret`) |
+| `FEDERATION_CALL_TIMEOUT` | `10` | Seconds a federated SERVICE call may take |
+| `FEDERATION_CACHE_TTL` | `60` | Seconds federated answers are cached (0 = off) |
 | `EMBEDDING_DIMENSION` | `1024` | Dense vector size of a knowledge-base's Qdrant collection |
 | `GOVERNANCE_REQUIRE_VALIDATION` | `true` | A ruling `agreed` needs the module's validation to conform |
 | `DB_STARTUP_TIMEOUT` | `120` | Seconds the API retries Postgres at startup (backoff 1–10 s) before it exits |
@@ -81,8 +85,21 @@ serve `/knowledgeSpecification` (list, create, get, patch fields, delete) and it
 - `/knowledge/{id}/graph` is the Graph Store Protocol (GET, PUT, POST, DELETE) in Turtle or JSON-LD.
 - `/knowledge/{id}/query` runs a read-only SPARQL query (`application/sparql-query` or the form field `query`) over
   the KB graph plus its conformsTo closure, in a killable worker: `timeout` capped by `QUERY_TIMEOUT_MAX` (504),
-  the row cap (`X-Result-Truncated`), updates refused (400). SERVICE is refused (403 `SERVICE_NOT_ALLOWED`) until
-  federation (#31) adds the allowlist.
+  the row cap (`X-Result-Truncated`), updates refused (400), and SERVICE only to allowlisted peers (below).
+
+## Federation
+
+[`app/ontology/federation.py`](app/ontology/federation.py): a `SERVICE` clause may only name the endpoint
+(`source.url`) of a **published** `specKind: remote` module; anything else, a variable or a prefixed endpoint is
+refused with 403 `SERVICE_NOT_ALLOWED` before any remote call. Allowed endpoints are rewritten to a relay that the
+API runs on `127.0.0.1:FEDERATION_RELAY_PORT` only (never exposed by the Service). The relay forwards the SPARQL
+request with:
+
+- an OAuth2 client-credentials token when `FEDERATION_SECRETS_DIR/<moduleId>/` holds `tokenUrl`, `clientId` and
+  `clientSecret` (for a peer TMFC060, whose Keycloak grants that client `knowledge-viewer`), cached until it expires;
+- `FEDERATION_CALL_TIMEOUT` (10 s, never past the query deadline): a peer that doesn't answer gives 504
+  `FEDERATION_TIMEOUT`, a failing one 502 `FEDERATION_ERROR` (`SERVICE SILENT` continues without it);
+- an answer cache of `FEDERATION_CACHE_TTL` seconds (60; 0 turns it off).
 
 ## Governance
 
