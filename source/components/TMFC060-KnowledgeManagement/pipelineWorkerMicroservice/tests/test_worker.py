@@ -191,7 +191,8 @@ async def test_km_fx_01_result_reaches_km_fx_02(api):
     async def capture(task, client):
         seen["input"] = task["input"]
         return {}
-    worker = make_worker(api, "w1", {**default_handlers(), "KM-FX-02": capture})
+    from worker.steps import noop
+    worker = make_worker(api, "w1", {**default_handlers(), "KM-FX-02": capture, "KM-FX-03": noop})
     worker.start()
     try:
         assert (await wait_done(api, pid))["state"] == "completed"

@@ -62,6 +62,16 @@ ontology (its conformsTo closure, read with the internal SPARQL call and cached 
   document declares itself (classes, properties, `rdfs:subClassOf`/`domain`/`range`) is kept with it, and its own
   terms are valid in it. Everything else is dropped and listed in `proposedTerms` for KM-FX-04.
 
+## KM-FX-03 Knowledge Generation
+
+[`worker/steps/km_fx_03.py`](worker/steps/km_fx_03.py) links extracted entities to existing ones: an entity whose
+normalised label (rdfs:label, skos:prefLabel or altLabel; case, accents and punctuation ignored) and class (or a sub-
+or superclass) match exactly one KB entity takes that entity's IRI; several matches are left unlinked and reported
+as `linkCandidates`. It adds PROV-O, which travels with the facts to the document's source graph: entity
+`prov:wasDerivedFrom` chunk, chunk `prov:wasDerivedFrom` document (TMF: `prov:hadPrimarySource` the resource),
+entity `prov:wasGeneratedBy` the ingestion process (a `prov:Activity`) and `prov:generatedAtTime`. Re-ingesting a
+document yields the same IRIs and replaces its source graph, so nothing is duplicated.
+
 ## Settings
 
 | Variable | Default | Meaning |
