@@ -185,7 +185,8 @@ rules:
       - "charts/identityconfig-operator-keycloak/**"
     canvasSections:
       - identityconfig-operator-keycloak
-    tags: "@UC005 or @UC010"
+    # UC018-F002: a data-resource binding creates a DependentAPI and grants a provider role
+    tags: "@UC005 or @UC010 or @UC018-F002"
 
   - name: Dependency Management operators
     paths:
@@ -195,7 +196,8 @@ rules:
     canvasSections:
       - dependentapi-simple-operator
       - dependency-management-keycloak-authz
-    tags: "@UC007"
+    # UC018-F002: a data-resource binding creates a DependentAPI and grants a provider role
+    tags: "@UC007 or @UC018-F002"
 
   # The dependent API operator registers resolved dependencies in the
   # canvas info service (TMF638).

@@ -13,6 +13,8 @@ const VERSION = "v1"
 const EXPOSED_APIS_PLURAL = "exposedapis"
 const DEPENDENT_APIS_PLURAL = "dependentapis"
 const COMPONENTS_PLURAL = "components"
+const DATA_RESOURCE_CONFIGS_PLURAL = "dataresourceconfigs"
+const DATA_RESOURCE_CONFIG_VERSION = "v1alpha1"
 
 
 const resourceInventoryUtils = {
@@ -905,6 +907,89 @@ const resourceInventoryUtils = {
       }
       // Ignore 404 errors (policy already deleted)
     }
+  },
+
+  /**
+   * Function that creates a DataResourceConfig custom resource (ADR-010)
+   * @param    {String} name              Name of the DataResourceConfig
+   * @param    {String} inNamespace       Namespace where to create it
+   * @param    {Object} labels            Labels, for example oda.tmforum.org/componentName
+   * @param    {Object} spec              The DataResourceConfig spec
+   * @return   {Object}                   The created DataResourceConfig
+   */
+  createDataResourceConfig: async function (name, inNamespace, labels, spec) {
+    const k8sCustomApi = kc.makeApiClient(k8s.CustomObjectsApi)
+    const body = {
+      apiVersion: GROUP + '/' + DATA_RESOURCE_CONFIG_VERSION,
+      kind: 'DataResourceConfig',
+      metadata: { name: name, namespace: inNamespace, labels: labels || {} },
+      spec: spec
+    }
+    const response = await k8sCustomApi.createNamespacedCustomObject(GROUP, DATA_RESOURCE_CONFIG_VERSION, inNamespace, DATA_RESOURCE_CONFIGS_PLURAL, body)
+    return response.body
+  },
+
+  /**
+   * Function that gets a DataResourceConfig custom resource
+   * @param    {String} name              Name of the DataResourceConfig
+   * @param    {String} inNamespace       Namespace where it is located
+   * @return   {Object}                   The DataResourceConfig, or null if it is not found
+   */
+  getDataResourceConfig: async function (name, inNamespace) {
+    try {
+      const k8sCustomApi = kc.makeApiClient(k8s.CustomObjectsApi)
+      const response = await k8sCustomApi.getNamespacedCustomObject(GROUP, DATA_RESOURCE_CONFIG_VERSION, inNamespace, DATA_RESOURCE_CONFIGS_PLURAL, name)
+      return response.body
+    } catch (error) {
+      if (error.response && error.response.statusCode === 404) return null
+      throw error
+    }
+  },
+
+  /**
+   * Function that deletes a DataResourceConfig custom resource
+   * @param    {String} name              Name of the DataResourceConfig
+   * @param    {String} inNamespace       Namespace where it is located
+   */
+  deleteDataResourceConfig: async function (name, inNamespace) {
+    try {
+      const k8sCustomApi = kc.makeApiClient(k8s.CustomObjectsApi)
+      await k8sCustomApi.deleteNamespacedCustomObject(GROUP, DATA_RESOURCE_CONFIG_VERSION, inNamespace, DATA_RESOURCE_CONFIGS_PLURAL, name)
+    } catch (error) {
+      if (error.response && error.response.statusCode !== 404) throw error
+      // Ignore 404 errors (already deleted)
+    }
+  },
+
+  /**
+   * Function that gets a Secret
+   * @param    {String} name              Name of the Secret
+   * @param    {String} inNamespace       Namespace where it is located
+   * @return   {Object}                   The Secret, or null if it is not found
+   */
+  getSecret: async function (name, inNamespace) {
+    try {
+      const k8sCoreApi = kc.makeApiClient(k8s.CoreV1Api)
+      const response = await k8sCoreApi.readNamespacedSecret(name, inNamespace)
+      return response.body
+    } catch (error) {
+      if (error.response && error.response.statusCode === 404) return null
+      throw error
+    }
+  },
+
+  /**
+   * Function that lists the DependentAPI resources owned (ownerReferences) by a given resource
+   * @param    {String} ownerKind         Kind of the owner, for example DataResourceConfig
+   * @param    {String} ownerName         Name of the owner
+   * @param    {String} inNamespace       Namespace where the DependentAPIs are located
+   * @return   {Array}                    The DependentAPI resources owned by it
+   */
+  getDependentAPIsOwnedBy: async function (ownerKind, ownerName, inNamespace) {
+    const k8sCustomApi = kc.makeApiClient(k8s.CustomObjectsApi)
+    const response = await k8sCustomApi.listNamespacedCustomObject(GROUP, VERSION, inNamespace, DEPENDENT_APIS_PLURAL)
+    return response.body.items.filter(item =>
+      (item.metadata.ownerReferences || []).some(ref => ref.kind === ownerKind && ref.name === ownerName))
   }
 }
 

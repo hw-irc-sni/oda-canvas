@@ -130,7 +130,7 @@ test('canvas-oda chart files are mapped by the sections that changed', async t =
       '-    imagePullPolicy: IfNotPresent',
       '+    imagePullPolicy: Always'
     ].join('\n')
-    assert.equal(selectWith({ [VALUES]: patch }).tagExpression, '(@UC002-F001) or (@UC002 or @UC013) or (@UC005 or @UC010)')
+    assert.equal(selectWith({ [VALUES]: patch }).tagExpression, '(@UC002-F001) or (@UC002 or @UC013) or (@UC005 or @UC010 or @UC018-F002)')
   })
 
   await t.test('a Kong section selects the Kong gateway run', () => {
