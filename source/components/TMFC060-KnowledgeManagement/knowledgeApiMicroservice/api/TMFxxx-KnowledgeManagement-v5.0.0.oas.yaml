@@ -62,6 +62,8 @@ servers:
 tags:
   - name: knowledge
     description: Operations for knowledge-bases
+  - name: knowledgeSpecification
+    description: Operations for ontology modules
   - name: events subscription
     description: Endpoints to register and terminate an Event Listener
   - name: notification listener
@@ -933,6 +935,264 @@ paths:
           $ref: '#/components/responses/409'
         '500':
           $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  /knowledgeSpecification:
+    get:
+      operationId: listKnowledgeSpecification
+      summary: List or find KnowledgeSpecification objects
+      description: This operation lists the ontology modules, filtered and paged.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Success
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/X-Total-Count'
+            X-Result-Count:
+              $ref: '#/components/headers/X-Result-Count'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KnowledgeSpecification'
+              examples:
+                list:
+                  $ref: '#/components/examples/KnowledgeSpecification_list'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createKnowledgeSpecification
+      summary: Creates a KnowledgeSpecification
+      description: >-
+        This operation registers an ontology module. The module always starts as `draft`. Its
+        content is loaded from `source`; an `upload` module gets its content through `…/content`.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeSpecification_FVO'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSpecification'
+              examples:
+                telecomFromGit:
+                  $ref: '#/components/examples/KnowledgeSpecification_telecomGit'
+                remotePeer:
+                  $ref: '#/components/examples/KnowledgeSpecification_remotePeer'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledgeSpecification/{id}':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: retrieveKnowledgeSpecification
+      summary: Retrieves a KnowledgeSpecification by ID
+      description: This operation retrieves an ontology module.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSpecification'
+              examples:
+                telecomFromGit:
+                  $ref: '#/components/examples/KnowledgeSpecification_telecomGit'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: patchKnowledgeSpecification
+      summary: Updates partially a KnowledgeSpecification
+      description: >-
+        This operation updates an ontology module with a JSON merge patch.
+
+
+        **Lifecycle.** Changing `lifecycleStatus` is a governance transition. Each transition is
+        allowed to one role, as listed in the `x-lifecycle` extension of the
+        `KnowledgeSpecification` schema; a transition that is not listed, or that the caller's
+        roles don't allow, gets `409` or `403`. A transition publishes a
+        `KnowledgeSpecificationStateChangeEvent` and is recorded in the review history.
+
+
+        **Other fields** can be changed by an `ontology-editor` while the module is `draft` or
+        `rejected`. `linkStatus` is set by an `ontology-approver` when ruling.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeSpecification_MVO'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSpecification'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteKnowledgeSpecification
+      summary: Deletes a KnowledgeSpecification
+      description: >-
+        This operation deletes an ontology module and its content. An `ontology-editor` may delete
+        a module that is `draft` or `rejected`; an `ontology-approver` may delete a module in any
+        state, though deprecating a published module is preferred. A module that a knowledge-base
+        conforms to, or that another module imports, gets `409`.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+        - ontology-approver
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  /listener/knowledgeSpecificationCreateEvent:
+    post:
+      operationId: knowledgeSpecificationCreateEvent
+      summary: Client listener for entity KnowledgeSpecificationCreateEvent
+      description: Example of a client listener for receiving the notification KnowledgeSpecificationCreateEvent
+      tags:
+        - notification listener
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeSpecificationCreateEvent'
+      responses:
+        '204':
+          description: Notified
+        default:
+          $ref: '#/components/responses/Error'
+  /listener/knowledgeSpecificationAttributeValueChangeEvent:
+    post:
+      operationId: knowledgeSpecificationAttributeValueChangeEvent
+      summary: Client listener for entity KnowledgeSpecificationAttributeValueChangeEvent
+      description: Example of a client listener for receiving the notification KnowledgeSpecificationAttributeValueChangeEvent
+      tags:
+        - notification listener
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeSpecificationAttributeValueChangeEvent'
+      responses:
+        '204':
+          description: Notified
+        default:
+          $ref: '#/components/responses/Error'
+  /listener/knowledgeSpecificationStateChangeEvent:
+    post:
+      operationId: knowledgeSpecificationStateChangeEvent
+      summary: Client listener for entity KnowledgeSpecificationStateChangeEvent
+      description: Example of a client listener for receiving the notification KnowledgeSpecificationStateChangeEvent
+      tags:
+        - notification listener
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeSpecificationStateChangeEvent'
+      responses:
+        '204':
+          description: Notified
+        default:
+          $ref: '#/components/responses/Error'
+  /listener/knowledgeSpecificationDeleteEvent:
+    post:
+      operationId: knowledgeSpecificationDeleteEvent
+      summary: Client listener for entity KnowledgeSpecificationDeleteEvent
+      description: Example of a client listener for receiving the notification KnowledgeSpecificationDeleteEvent
+      tags:
+        - notification listener
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeSpecificationDeleteEvent'
+      responses:
+        '204':
+          description: Notified
         default:
           $ref: '#/components/responses/Error'
   /listener/knowledgeCreateEvent:
@@ -1863,6 +2123,374 @@ components:
       description: >-
         Reference to a TMF701 process flow (`…/processFlowManagement/v4/processFlow/{id}`), served by
         the component's process flow API.
+    OntologyLayerType:
+      type: string
+      description: The FTO layer of an ontology module (fto:layer).
+      enum:
+        - Foundational
+        - Telecom
+        - Implementation
+    SpecKindType:
+      type: string
+      description: >-
+        What an ontology module is. `bridge` modules hold mappings between modules; a `remote`
+        module is a federation peer (a remote SPARQL endpoint or a peer TMFC060) found by IRI.
+      enum:
+        - ontology
+        - vocabulary
+        - shapes
+        - bridge
+        - remote
+    OntologyLifecycleStatusType:
+      type: string
+      description: The governance lifecycle of ontology modules and mappings.
+      enum:
+        - draft
+        - proposed
+        - inReview
+        - agreed
+        - rejected
+        - published
+        - deprecated
+    LinkStatusType:
+      type: string
+      description: How settled the module's links to its parents are (fto:linkStatus).
+      enum:
+        - provisional
+        - confirmed
+    KnowledgeSpecificationSource:
+      description: Where the content of an ontology module comes from.
+      oneOf:
+        - $ref: '#/components/schemas/UploadSource'
+        - $ref: '#/components/schemas/GitSource'
+        - $ref: '#/components/schemas/MountSource'
+        - $ref: '#/components/schemas/ComponentContributionSource'
+        - $ref: '#/components/schemas/RemoteEndpointSource'
+      discriminator:
+        propertyName: kind
+        mapping:
+          upload: '#/components/schemas/UploadSource'
+          git: '#/components/schemas/GitSource'
+          mount: '#/components/schemas/MountSource'
+          componentContribution: '#/components/schemas/ComponentContributionSource'
+          remoteEndpoint: '#/components/schemas/RemoteEndpointSource'
+    UploadSource:
+      type: object
+      description: The content is uploaded through `…/content`.
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - upload
+    GitSource:
+      type: object
+      description: The content is a file in a git repository.
+      required:
+        - kind
+        - url
+        - path
+      properties:
+        kind:
+          type: string
+          enum:
+            - git
+        url:
+          type: string
+          description: The repository URL.
+        ref:
+          type: string
+          default: main
+          description: Branch, tag or commit.
+        path:
+          type: string
+          description: Path of the module file in the repository.
+        secretRef:
+          type: string
+          description: Name of the Kubernetes Secret with the git credentials, for a private repository.
+    MountSource:
+      type: object
+      description: The content is a file on a volume mounted into the component (Secret or PVC).
+      required:
+        - kind
+        - path
+      properties:
+        kind:
+          type: string
+          enum:
+            - mount
+        path:
+          type: string
+          description: Path of the module file in the container.
+    ComponentContributionSource:
+      type: object
+      description: The content is contributed by another ODA Component.
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - componentContribution
+        componentId:
+          type: string
+          description: The catalog id of the contributing component, for example TMFC001.
+        componentName:
+          type: string
+          description: The name of the contributing component instance.
+    RemoteEndpointSource:
+      type: object
+      description: >-
+        A federation peer. Its content stays remote; queries reach it through SPARQL SERVICE once
+        the module is published.
+      required:
+        - kind
+        - url
+      properties:
+        kind:
+          type: string
+          enum:
+            - remoteEndpoint
+        url:
+          type: string
+          format: uri
+          description: The SPARQL endpoint, or the query URL of the peer knowledge-base.
+        endpointKind:
+          type: string
+          enum:
+            - sparql
+            - tmfc060
+          default: sparql
+          description: A plain SPARQL endpoint, or a peer TMFC060 knowledge-base.
+    KnowledgeSpecification:
+      allOf:
+        - $ref: '#/components/schemas/Entity'
+        - type: object
+          description: >-
+            An ontology module of the federated ontology, modelled on FTO's module registry.
+          properties:
+            name:
+              type: string
+              description: Name of the module (FTO label).
+            description:
+              type: string
+              description: Purpose of the module.
+            version:
+              type: string
+            iri:
+              type: string
+              format: uri
+              description: The ontology IRI of the module. Unique; used to resolve owl:imports.
+            prefix:
+              type: string
+              description: >-
+                The preferred namespace prefix. A module that declares several prefixes lists them
+                comma-separated, as in FTO modules.json.
+            layer:
+              $ref: '#/components/schemas/OntologyLayerType'
+            specKind:
+              $ref: '#/components/schemas/SpecKindType'
+            depth:
+              type: string
+              description: How complete the module is, for example Full ontology, Vocabulary or Scaffold.
+            owner:
+              $ref: '#/components/schemas/RelatedPartyRefOrPartyRoleRef'
+            imports:
+              type: array
+              description: The modules this module imports (owl:imports).
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            describes:
+              type: array
+              description: For a vocabulary, the modules whose terms it describes.
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            source:
+              $ref: '#/components/schemas/KnowledgeSpecificationSource'
+            lifecycleStatus:
+              $ref: '#/components/schemas/OntologyLifecycleStatusType'
+            linkStatus:
+              $ref: '#/components/schemas/LinkStatusType'
+            lastUpdate:
+              type: string
+              format: date-time
+              readOnly: true
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeSpecification: '#/components/schemas/KnowledgeSpecification'
+      x-lifecycle:
+        description: >-
+          Allowed lifecycleStatus transitions and the role that may make each one. Confirmed in
+          hw-irc-sni/oda-canvas#5. A module is created as draft.
+        initial: draft
+        transitions:
+          - {from: draft, to: proposed, role: ontology-editor}
+          - {from: proposed, to: inReview, role: ontology-reviewer}
+          - {from: inReview, to: agreed, role: ontology-approver, condition: validation passes}
+          - {from: inReview, to: rejected, role: ontology-approver}
+          - {from: rejected, to: draft, role: ontology-editor, condition: review history kept}
+          - {from: agreed, to: published, role: ontology-approver}
+          - {from: published, to: deprecated, role: ontology-approver}
+        reviewComments: [proposed, inReview]
+    KnowledgeSpecification_FVO:
+      allOf:
+        - $ref: '#/components/schemas/Extensible'
+        - type: object
+          description: An ontology module, as given to register it. It starts as draft.
+          required:
+            - name
+            - iri
+            - specKind
+            - source
+          properties:
+            name:
+              type: string
+              description: Name of the module (FTO label).
+            description:
+              type: string
+              description: Purpose of the module.
+            version:
+              type: string
+            iri:
+              type: string
+              format: uri
+              description: The ontology IRI of the module. Unique; used to resolve owl:imports.
+            prefix:
+              type: string
+              description: >-
+                The preferred namespace prefix. A module that declares several prefixes lists them
+                comma-separated, as in FTO modules.json.
+            layer:
+              $ref: '#/components/schemas/OntologyLayerType'
+            specKind:
+              $ref: '#/components/schemas/SpecKindType'
+            depth:
+              type: string
+              description: How complete the module is, for example Full ontology, Vocabulary or Scaffold.
+            owner:
+              $ref: '#/components/schemas/RelatedPartyRefOrPartyRoleRef'
+            imports:
+              type: array
+              description: The modules this module imports (owl:imports).
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            describes:
+              type: array
+              description: For a vocabulary, the modules whose terms it describes.
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            source:
+              $ref: '#/components/schemas/KnowledgeSpecificationSource'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeSpecification: '#/components/schemas/KnowledgeSpecification_FVO'
+    KnowledgeSpecification_MVO:
+      allOf:
+        - $ref: '#/components/schemas/Extensible'
+        - type: object
+          description: >-
+            The fields of an ontology module that can be changed. A change of lifecycleStatus is a
+            governance transition (see x-lifecycle). The iri cannot change.
+          properties:
+            name:
+              type: string
+              description: Name of the module (FTO label).
+            description:
+              type: string
+              description: Purpose of the module.
+            version:
+              type: string
+            prefix:
+              type: string
+              description: >-
+                The preferred namespace prefix. A module that declares several prefixes lists them
+                comma-separated, as in FTO modules.json.
+            layer:
+              $ref: '#/components/schemas/OntologyLayerType'
+            specKind:
+              $ref: '#/components/schemas/SpecKindType'
+            depth:
+              type: string
+              description: How complete the module is, for example Full ontology, Vocabulary or Scaffold.
+            owner:
+              $ref: '#/components/schemas/RelatedPartyRefOrPartyRoleRef'
+            imports:
+              type: array
+              description: The modules this module imports (owl:imports).
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            describes:
+              type: array
+              description: For a vocabulary, the modules whose terms it describes.
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            source:
+              $ref: '#/components/schemas/KnowledgeSpecificationSource'
+            lifecycleStatus:
+              $ref: '#/components/schemas/OntologyLifecycleStatusType'
+            linkStatus:
+              $ref: '#/components/schemas/LinkStatusType'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeSpecification: '#/components/schemas/KnowledgeSpecification_MVO'
+    KnowledgeSpecificationCreateEvent:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          description: KnowledgeSpecificationCreateEvent generic structure
+          properties:
+            event:
+              $ref: '#/components/schemas/KnowledgeSpecificationEventPayload'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeSpecificationCreateEvent: '#/components/schemas/KnowledgeSpecificationCreateEvent'
+    KnowledgeSpecificationAttributeValueChangeEvent:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          description: KnowledgeSpecificationAttributeValueChangeEvent generic structure
+          properties:
+            event:
+              $ref: '#/components/schemas/KnowledgeSpecificationEventPayload'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeSpecificationAttributeValueChangeEvent: '#/components/schemas/KnowledgeSpecificationAttributeValueChangeEvent'
+    KnowledgeSpecificationStateChangeEvent:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          description: KnowledgeSpecificationStateChangeEvent generic structure
+          properties:
+            event:
+              $ref: '#/components/schemas/KnowledgeSpecificationEventPayload'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeSpecificationStateChangeEvent: '#/components/schemas/KnowledgeSpecificationStateChangeEvent'
+    KnowledgeSpecificationDeleteEvent:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          description: KnowledgeSpecificationDeleteEvent generic structure
+          properties:
+            event:
+              $ref: '#/components/schemas/KnowledgeSpecificationEventPayload'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeSpecificationDeleteEvent: '#/components/schemas/KnowledgeSpecificationDeleteEvent'
+    KnowledgeSpecificationEventPayload:
+      type: object
+      description: The payload of a KnowledgeSpecification event
+      properties:
+        knowledgeSpecification:
+          $ref: '#/components/schemas/KnowledgeSpecification'
   parameters:
     Id:
       name: id
@@ -2000,6 +2628,55 @@ components:
         application/ld+json:
           schema:
             $ref: '#/components/schemas/JsonLdDocument'
+    KnowledgeSpecification_FVO:
+      description: The KnowledgeSpecification to be created
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeSpecification_FVO'
+          examples:
+            telecomFromGit:
+              $ref: '#/components/examples/KnowledgeSpecification_FVO_telecomGit'
+            remotePeer:
+              $ref: '#/components/examples/KnowledgeSpecification_FVO_remotePeer'
+    KnowledgeSpecification_MVO:
+      description: The KnowledgeSpecification to be patched
+      required: true
+      content:
+        application/merge-patch+json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeSpecification_MVO'
+          examples:
+            propose:
+              summary: The ontology-editor proposes the module
+              value:
+                '@type': KnowledgeSpecification
+                lifecycleStatus: proposed
+    KnowledgeSpecificationCreateEvent:
+      description: KnowledgeSpecification Create Event payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeSpecificationCreateEvent'
+    KnowledgeSpecificationAttributeValueChangeEvent:
+      description: KnowledgeSpecification AttributeValueChange Event payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeSpecificationAttributeValueChangeEvent'
+    KnowledgeSpecificationStateChangeEvent:
+      description: KnowledgeSpecification StateChange Event payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeSpecificationStateChangeEvent'
+    KnowledgeSpecificationDeleteEvent:
+      description: KnowledgeSpecification Delete Event payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeSpecificationDeleteEvent'
   responses:
     Hub:
       description: Notified
@@ -2366,3 +3043,114 @@ components:
         status: '403'
         title: SERVICE endpoint not allowed
         detail: https://other.example.net/sparql is not an allowlisted peer
+    KnowledgeSpecification_FVO_telecomGit:
+      summary: A Telecom-layer ontology module from a private git repository
+      value:
+        '@type': KnowledgeSpecification
+        name: Telecom assurance ontology
+        description: Incidents, alarms, problems and their resolutions
+        version: '0.3'
+        iri: https://example.org/ontology/telecom/assurance
+        prefix: as
+        layer: Telecom
+        specKind: ontology
+        depth: Full ontology
+        owner:
+          '@type': RelatedPartyRefOrPartyRoleRef
+          role: owner
+          partyOrPartyRole:
+            '@type': PartyRoleRef
+            id: assurance-team
+            name: Assurance ontology team
+        imports:
+          - '@type': KnowledgeSpecificationRef
+            id: fto-foundational-core
+            iri: https://example.org/ontology/foundational/core
+        source:
+          kind: git
+          url: https://git.example.org/ontologies/federation.git
+          ref: main
+          path: telecom/assurance/assurance.ttl
+          secretRef: ontology-git-credentials
+    KnowledgeSpecification_telecomGit:
+      summary: A Telecom-layer ontology module from a private git repository
+      value:
+        '@type': KnowledgeSpecification
+        id: fto-telecom-assurance
+        href: https://host/tmf-api/knowledgeManagement/v5/knowledgeSpecification/fto-telecom-assurance
+        name: Telecom assurance ontology
+        description: Incidents, alarms, problems and their resolutions
+        version: '0.3'
+        iri: https://example.org/ontology/telecom/assurance
+        prefix: as
+        layer: Telecom
+        specKind: ontology
+        depth: Full ontology
+        owner:
+          '@type': RelatedPartyRefOrPartyRoleRef
+          role: owner
+          partyOrPartyRole:
+            '@type': PartyRoleRef
+            id: assurance-team
+            name: Assurance ontology team
+        imports:
+          - '@type': KnowledgeSpecificationRef
+            id: fto-foundational-core
+            iri: https://example.org/ontology/foundational/core
+        source:
+          kind: git
+          url: https://git.example.org/ontologies/federation.git
+          ref: main
+          path: telecom/assurance/assurance.ttl
+          secretRef: ontology-git-credentials
+        lifecycleStatus: draft
+        linkStatus: provisional
+        lastUpdate: '2026-11-22T10:00:00Z'
+    KnowledgeSpecification_FVO_remotePeer:
+      summary: A federation peer, a remote SPARQL endpoint
+      value:
+        '@type': KnowledgeSpecification
+        name: Partner network inventory graph
+        description: The inventory knowledge graph of a partner operator, queried through SPARQL SERVICE
+        iri: https://partner.example.net/ontology/inventory
+        layer: Implementation
+        specKind: remote
+        source:
+          kind: remoteEndpoint
+          url: https://partner.example.net/sparql
+          endpointKind: sparql
+    KnowledgeSpecification_remotePeer:
+      summary: A federation peer, a remote SPARQL endpoint
+      value:
+        '@type': KnowledgeSpecification
+        id: partner-inventory
+        href: https://host/tmf-api/knowledgeManagement/v5/knowledgeSpecification/partner-inventory
+        name: Partner network inventory graph
+        description: The inventory knowledge graph of a partner operator, queried through SPARQL SERVICE
+        iri: https://partner.example.net/ontology/inventory
+        layer: Implementation
+        specKind: remote
+        source:
+          kind: remoteEndpoint
+          url: https://partner.example.net/sparql
+          endpointKind: sparql
+        lifecycleStatus: draft
+    KnowledgeSpecification_list:
+      summary: A list of ontology modules, with selected fields
+      value:
+        - '@type': KnowledgeSpecification
+          id: fto-foundational-core
+          name: Foundational core ontology
+          iri: https://example.org/ontology/foundational/core
+          layer: Foundational
+          specKind: ontology
+          lifecycleStatus: published
+          linkStatus: confirmed
+        - '@type': KnowledgeSpecification
+          id: fto-telecom-assurance
+          name: Telecom assurance ontology
+          iri: https://example.org/ontology/telecom/assurance
+          layer: Telecom
+          specKind: ontology
+          lifecycleStatus: draft
+          linkStatus: provisional
