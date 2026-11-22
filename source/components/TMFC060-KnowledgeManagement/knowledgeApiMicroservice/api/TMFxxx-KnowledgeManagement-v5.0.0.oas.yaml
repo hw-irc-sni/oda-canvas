@@ -297,6 +297,644 @@ paths:
           $ref: '#/components/responses/500'
         default:
           $ref: '#/components/responses/Error'
+  '/knowledge/{id}/graph':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: retrieveKnowledgeGraph
+      summary: Retrieves the graph of a Knowledge
+      description: >-
+        Returns the RDF graph of the knowledge-base (Graph Store Protocol GET), in Turtle or
+        JSON-LD depending on the Accept header. The graph holds the instance data only, not the
+        ontology modules it conforms to.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      responses:
+        '200':
+          description: The graph of the knowledge-base
+          content:
+            text/turtle:
+              schema:
+                type: string
+              example: |
+                @prefix ex: <https://example.org/incident/> .
+                @prefix as: <https://example.org/ontology/telecom/assurance#> .
+                ex:INC-1042 a as:Incident ;
+                    as:affects ex:cell-4711 ;
+                    as:resolvedBy ex:RES-17 .
+            application/ld+json:
+              schema:
+                $ref: '#/components/schemas/JsonLdDocument'
+              example:
+                '@context':
+                  as: https://example.org/ontology/telecom/assurance#
+                '@id': https://example.org/incident/INC-1042
+                '@type': as:Incident
+                as:affects:
+                  '@id': https://example.org/incident/cell-4711
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '406':
+          $ref: '#/components/responses/406'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: replaceKnowledgeGraph
+      summary: Replaces the graph of a Knowledge
+      description: Replaces the whole graph of the knowledge-base (Graph Store Protocol PUT).
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      requestBody:
+        $ref: '#/components/requestBodies/RdfGraph'
+      responses:
+        '204':
+          description: Replaced
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '415':
+          $ref: '#/components/responses/415'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: mergeKnowledgeGraph
+      summary: Adds triples to the graph of a Knowledge
+      description: Merges the given triples into the graph of the knowledge-base (Graph Store Protocol POST).
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      requestBody:
+        $ref: '#/components/requestBodies/RdfGraph'
+      responses:
+        '204':
+          description: Merged
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '415':
+          $ref: '#/components/responses/415'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: clearKnowledgeGraph
+      summary: Empties the graph of a Knowledge
+      description: Removes every triple from the graph of the knowledge-base (Graph Store Protocol DELETE). The knowledge-base itself is kept.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      responses:
+        '204':
+          description: Emptied
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/query':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      operationId: queryKnowledge
+      summary: Runs a read-only SPARQL query on a Knowledge
+      description: >-
+        Runs a SPARQL 1.1 query (SELECT, ASK, CONSTRUCT or DESCRIBE) over the dataset of the
+        knowledge-base: its graph plus the graphs of the ontology modules it conforms to. Update
+        operations are rejected with `400`.
+
+
+        **Limits.** A query runs for at most the `timeout` it asks for, capped by the server
+        maximum; a query that runs longer gets `504`. A SELECT result is capped at the server's row
+        limit; when the cap applies, the response has the header `X-Result-Truncated: true`.
+
+
+        **Federation.** `SERVICE` clauses may only name the endpoint of a published
+        `knowledgeSpecification` with `specKind: remote` (an allowlisted peer). Any other `SERVICE`
+        IRI is rejected with `403` and the error `code` `SERVICE_NOT_ALLOWED`, before any remote
+        call.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      parameters:
+        - name: timeout
+          in: query
+          description: Query timeout in seconds, capped by the server maximum.
+          schema:
+            type: integer
+            minimum: 1
+            default: 30
+      requestBody:
+        required: true
+        content:
+          application/sparql-query:
+            schema:
+              type: string
+            example: |
+              PREFIX as: <https://example.org/ontology/telecom/assurance#>
+              SELECT ?incident ?cell WHERE { ?incident a as:Incident ; as:affects ?cell } LIMIT 10
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - query
+              properties:
+                query:
+                  type: string
+                  description: The SPARQL query.
+      responses:
+        '200':
+          description: The query result
+          headers:
+            X-Result-Truncated:
+              description: Present and `true` when the row cap was applied to a SELECT result.
+              schema:
+                type: boolean
+          content:
+            application/sparql-results+json:
+              schema:
+                $ref: '#/components/schemas/SparqlResults'
+              example:
+                head:
+                  vars:
+                    - incident
+                    - cell
+                results:
+                  bindings:
+                    - incident:
+                        type: uri
+                        value: https://example.org/incident/INC-1042
+                      cell:
+                        type: uri
+                        value: https://example.org/incident/cell-4711
+            text/turtle:
+              schema:
+                type: string
+            application/ld+json:
+              schema:
+                $ref: '#/components/schemas/JsonLdDocument'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403Query'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        '504':
+          $ref: '#/components/responses/504'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/search':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      operationId: searchKnowledge
+      summary: Searches a Knowledge
+      description: >-
+        Hybrid search over the chunks of the knowledge-base: dense (embedding) and sparse (BM25)
+        scores fused. Fields not set in the request fall back to the knowledge-base's `retrieval`
+        settings. `iriFilter` keeps only chunks that mention at least one of the given ontology
+        IRIs.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+            example:
+              query: cell outage after a power alarm
+              topK: 3
+              hybrid: true
+              iriFilter:
+                - https://example.org/ontology/telecom/assurance#PowerAlarm
+      responses:
+        '200':
+          description: The search hits, best first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResult'
+              example:
+                hits:
+                  - chunkId: 9c2d-0004
+                    text: After the mains power alarm the cell went down; the battery backup had failed.
+                    score: 0.87
+                    documentId: 7a10b3
+                    entityIri:
+                      - https://example.org/incident/INC-1042
+                      - https://example.org/ontology/telecom/assurance#PowerAlarm
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/recommend':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      operationId: recommendFromKnowledge
+      summary: Recommends knowledge for a context
+      description: >-
+        Knowledge recommendation (KM-FX-06): ranks entities, documents or chunks for a context,
+        using relevance and the ranking signals the knowledge-base has learnt (success rate,
+        applicability, usage). Report what was used through `recommend/feedback`.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecommendationRequest'
+            example:
+              context: Cell 4711 is down after a mains power alarm
+              iri:
+                - https://example.org/incident/cell-4711
+              topK: 3
+      responses:
+        '200':
+          description: The recommended items, best first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationResult'
+              example:
+                recommendationId: rec-5521
+                items:
+                  - itemId: RES-17
+                    kind: entity
+                    iri: https://example.org/incident/RES-17
+                    label: Replace the battery backup and reset the site power unit
+                    score: 0.91
+                    signals:
+                      successRate: 0.82
+                      applicability: 0.95
+                      usage: 41
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/recommend/feedback':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      operationId: createRecommendationFeedback
+      summary: Records feedback on a recommendation
+      description: Records whether a recommended item was used and its outcome. The feedback updates the ranking signals.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecommendationFeedback'
+            example:
+              recommendationId: rec-5521
+              itemId: RES-17
+              used: true
+              outcome: success
+      responses:
+        '204':
+          description: Recorded
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/document':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: listKnowledgeDocument
+      summary: Lists the documents of a Knowledge
+      description: Lists the documents uploaded to the knowledge-base.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Success
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/X-Total-Count'
+            X-Result-Count:
+              $ref: '#/components/headers/X-Result-Count'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Document'
+              example:
+                - id: 7a10b3
+                  href: https://host/tmf-api/knowledgeManagement/v5/knowledge/3f1e2c8a/document/7a10b3
+                  name: site-power-runbook.pdf
+                  mediaType: application/pdf
+                  size: 482113
+                  ingestionState: ingested
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createKnowledgeDocument
+      summary: Uploads a document to a Knowledge
+      description: >-
+        Uploads a document (PDF, Markdown, HTML, Turtle, JSON-LD or JSON). The document is stored
+        but not ingested; start ingestion with `ingest`. A document larger than the server's size
+        cap gets `413`.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The document content.
+                name:
+                  type: string
+                  description: Name of the document; defaults to the file name.
+                description:
+                  type: string
+            example:
+              file: (the PDF file content)
+              name: site-power-runbook.pdf
+              description: Runbook for site power failures
+            encoding:
+              file:
+                contentType: application/pdf, text/markdown, text/html, text/turtle, application/ld+json, application/json
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+              examples:
+                runbook:
+                  $ref: '#/components/examples/Document_runbook'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '413':
+          $ref: '#/components/responses/413'
+        '415':
+          $ref: '#/components/responses/415'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/document/{documentId}':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      operationId: retrieveKnowledgeDocument
+      summary: Retrieves the metadata of a document
+      description: Retrieves the metadata of a document. Download its content from `…/content`.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+              examples:
+                runbook:
+                  $ref: '#/components/examples/Document_runbook'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteKnowledgeDocument
+      summary: Deletes a document
+      description: >-
+        Deletes a document with its chunks and vectors. Triples extracted from it stay in the
+        graph; their provenance still names the document.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/document/{documentId}/content':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      operationId: retrieveKnowledgeDocumentContent
+      summary: Downloads a document
+      description: Downloads the content of a document, in its original media type.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      responses:
+        '200':
+          description: The document content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/ingest':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      operationId: createKnowledgeIngestion
+      summary: Starts the ingestion of knowledge
+      description: >-
+        Starts an ingestion: a TMF701 process flow with one task flow per Knowledge Management
+        function (KM-FX-01 data processing to KM-FX-06 knowledge recommendation). Without
+        `documentId`, every document not yet ingested is ingested. Follow the progress through the
+        component's TMF701 Process Flow Management API.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestRequest'
+            example:
+              source: upload
+              documentId:
+                - 7a10b3
+      responses:
+        '201':
+          description: The process flow of the ingestion was created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessFlowRef'
+              example:
+                '@type': ProcessFlowRef
+                '@referredType': ProcessFlow
+                id: pf-8812
+                href: https://host/tmf-api/processFlowManagement/v4/processFlow/pf-8812
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
   /listener/knowledgeCreateEvent:
     post:
       operationId: knowledgeCreateEvent
@@ -966,6 +1604,265 @@ components:
       properties:
         knowledge:
           $ref: '#/components/schemas/Knowledge'
+    JsonLdDocument:
+      description: A JSON-LD document.
+      oneOf:
+        - type: object
+          additionalProperties: true
+        - type: array
+          items:
+            type: object
+            additionalProperties: true
+    SparqlResults:
+      type: object
+      description: SPARQL 1.1 query results in JSON (application/sparql-results+json), for SELECT and ASK.
+      properties:
+        head:
+          type: object
+          properties:
+            vars:
+              type: array
+              items:
+                type: string
+            link:
+              type: array
+              items:
+                type: string
+        results:
+          type: object
+          properties:
+            bindings:
+              type: array
+              items:
+                type: object
+                additionalProperties:
+                  type: object
+                  required:
+                    - type
+                    - value
+                  properties:
+                    type:
+                      type: string
+                      enum:
+                        - uri
+                        - literal
+                        - bnode
+                        - triple
+                    value:
+                      type: string
+                    datatype:
+                      type: string
+                    xml:lang:
+                      type: string
+        boolean:
+          type: boolean
+          description: The result of an ASK query.
+    SearchRequest:
+      type: object
+      description: A hybrid search over the chunks of a knowledge-base.
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          description: The search text.
+        topK:
+          type: integer
+          minimum: 1
+        scoreThreshold:
+          type: number
+          minimum: 0
+          maximum: 1
+        hybrid:
+          type: boolean
+        iriFilter:
+          type: array
+          description: Keep only chunks that mention at least one of these IRIs.
+          items:
+            type: string
+            format: uri
+    SearchHit:
+      type: object
+      required:
+        - chunkId
+        - text
+        - score
+      properties:
+        chunkId:
+          type: string
+        text:
+          type: string
+          description: The text of the chunk.
+        score:
+          type: number
+          description: The fused relevance score.
+        documentId:
+          type: string
+          description: The document the chunk comes from, if any.
+        entityIri:
+          type: array
+          description: The IRIs of the graph entities the chunk mentions.
+          items:
+            type: string
+            format: uri
+    SearchResult:
+      type: object
+      properties:
+        hits:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchHit'
+    RecommendationRequest:
+      type: object
+      description: The context to recommend knowledge for.
+      properties:
+        context:
+          type: string
+          description: A description of the situation, in text.
+        iri:
+          type: array
+          description: Entities of the situation, by IRI.
+          items:
+            type: string
+            format: uri
+        topK:
+          type: integer
+          minimum: 1
+          default: 5
+    RecommendationItem:
+      type: object
+      required:
+        - itemId
+        - kind
+        - score
+      properties:
+        itemId:
+          type: string
+        kind:
+          type: string
+          enum:
+            - entity
+            - document
+            - chunk
+        iri:
+          type: string
+          format: uri
+          description: The IRI of the item, for an entity.
+        label:
+          type: string
+        score:
+          type: number
+        signals:
+          type: object
+          description: The ranking signals behind the score.
+          properties:
+            successRate:
+              type: number
+              minimum: 0
+              maximum: 1
+            applicability:
+              type: number
+              minimum: 0
+              maximum: 1
+            usage:
+              type: integer
+              minimum: 0
+              description: How often the item was used.
+    RecommendationResult:
+      type: object
+      properties:
+        recommendationId:
+          type: string
+          description: Identifies this recommendation, for feedback.
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecommendationItem'
+    RecommendationFeedback:
+      type: object
+      required:
+        - recommendationId
+        - itemId
+      properties:
+        recommendationId:
+          type: string
+        itemId:
+          type: string
+        used:
+          type: boolean
+          description: Whether the item was used.
+        outcome:
+          type: string
+          enum:
+            - success
+            - failure
+            - ignored
+          description: The outcome of using the item.
+    Document:
+      type: object
+      description: A document uploaded to a knowledge-base.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        href:
+          type: string
+          readOnly: true
+        name:
+          type: string
+        description:
+          type: string
+        mediaType:
+          type: string
+          example: application/pdf
+        size:
+          type: integer
+          minimum: 0
+          description: Size in bytes.
+        sha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        uploadDate:
+          type: string
+          format: date-time
+        ingestionState:
+          type: string
+          enum:
+            - pending
+            - ingested
+            - failed
+        lastIngestion:
+          $ref: '#/components/schemas/ProcessFlowRef'
+    IngestRequest:
+      type: object
+      description: What to ingest.
+      properties:
+        source:
+          type: string
+          description: The kind of source to ingest from, one of the knowledge-base's `source[].kind`.
+          enum:
+            - upload
+            - tmf639
+            - tmf638
+            - tmf642
+            - tmf628
+            - tmf921
+            - remote
+        documentId:
+          type: array
+          description: For `upload`, the documents to ingest. Every document not yet ingested when empty.
+          items:
+            type: string
+        params:
+          type: object
+          description: Source-specific parameters, for example a TMF filter for an inventory snapshot.
+          additionalProperties: true
+    ProcessFlowRef:
+      allOf:
+        - $ref: '#/components/schemas/EntityRef'
+      description: >-
+        Reference to a TMF701 process flow (`…/processFlowManagement/v4/processFlow/{id}`), served by
+        the component's process flow API.
   parameters:
     Id:
       name: id
@@ -1010,6 +1907,13 @@ components:
       schema:
         type: string
         example: knowledge[?(@.storeKind=='hybrid')]
+    DocumentId:
+      name: documentId
+      required: true
+      schema:
+        type: string
+      in: path
+      description: Identifier of the document
   headers:
     X-Total-Count:
       description: Total number of items matching criteria
@@ -1081,6 +1985,21 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/KnowledgeDeleteEvent'
+    RdfGraph:
+      description: An RDF graph, in Turtle or JSON-LD
+      required: true
+      content:
+        text/turtle:
+          schema:
+            type: string
+          example: |
+            @prefix ex: <https://example.org/incident/> .
+            @prefix as: <https://example.org/ontology/telecom/assurance#> .
+            ex:INC-1043 a as:Incident ;
+                as:affects ex:cell-4712 .
+        application/ld+json:
+          schema:
+            $ref: '#/components/schemas/JsonLdDocument'
   responses:
     Hub:
       description: Notified
@@ -1226,6 +2145,58 @@ components:
           examples:
             list:
               $ref: '#/components/examples/Knowledge_list'
+    '406':
+      description: Not Acceptable. None of the media types in the Accept header can be produced.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '413':
+      description: Payload Too Large. The document is larger than the server's size cap.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '415':
+      description: Unsupported Media Type
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '504':
+      description: Gateway Timeout. The query, or a federated SERVICE call, exceeded its timeout.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    403Query:
+      description: >-
+        Forbidden. Either the token does not hold any of the roles in `x-required-roles`, or a
+        `SERVICE` clause names an endpoint that is not an allowlisted peer (`code` `SERVICE_NOT_ALLOWED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missingRole:
+              $ref: '#/components/examples/Error403'
+            serviceNotAllowed:
+              $ref: '#/components/examples/Error403ServiceNotAllowed'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
   examples:
     Error400:
       summary: A request that fails validation
@@ -1369,3 +2340,29 @@ components:
             name: incident-knowledge
             lifecycleStatus: active
             storeKind: hybrid
+    Document_runbook:
+      summary: An uploaded runbook
+      value:
+        id: 7a10b3
+        href: https://host/tmf-api/knowledgeManagement/v5/knowledge/3f1e2c8a/document/7a10b3
+        name: site-power-runbook.pdf
+        description: Runbook for site power failures
+        mediaType: application/pdf
+        size: 482113
+        sha256: 9f2b5c0d1e7a4b3c8d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c
+        uploadDate: '2026-11-22T09:12:00Z'
+        ingestionState: ingested
+        lastIngestion:
+          '@type': ProcessFlowRef
+          id: pf-8812
+          href: https://host/tmf-api/processFlowManagement/v4/processFlow/pf-8812
+    Error403ServiceNotAllowed:
+      summary: A SPARQL SERVICE clause names an endpoint that is not an allowlisted peer
+      value:
+        '@type': Error
+        code: SERVICE_NOT_ALLOWED
+        reason: SERVICE endpoint not allowed
+        message: Only the endpoints of published remote ontology modules may be used in SERVICE
+        status: '403'
+        title: SERVICE endpoint not allowed
+        detail: https://other.example.net/sparql is not an allowlisted peer

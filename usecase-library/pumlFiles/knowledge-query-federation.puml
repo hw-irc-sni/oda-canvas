@@ -32,7 +32,7 @@ group Federated query
             KM --> User : 504 Gateway Timeout (RFC 7807)
         end
     else a SERVICE endpoint is not allowlisted
-        KM --> User : 400 Bad Request (RFC 7807):\nendpoint not allowed
+        KM --> User : 403 Forbidden (RFC 7807),\ncode SERVICE_NOT_ALLOWED
         note right of Other
             The non-allowlisted
             endpoint is never called
