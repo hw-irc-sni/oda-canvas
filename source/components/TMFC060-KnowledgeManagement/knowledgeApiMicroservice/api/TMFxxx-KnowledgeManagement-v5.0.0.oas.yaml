@@ -176,6 +176,8 @@ paths:
           $ref: '#/components/responses/403'
         '500':
           $ref: '#/components/responses/500'
+        '501':
+          $ref: '#/components/responses/501'
         default:
           $ref: '#/components/responses/Error'
     post:
@@ -206,6 +208,8 @@ paths:
           $ref: '#/components/responses/409'
         '500':
           $ref: '#/components/responses/500'
+        '503':
+          $ref: '#/components/responses/503'
         default:
           $ref: '#/components/responses/Error'
   '/knowledge/{id}':
@@ -302,6 +306,8 @@ paths:
           $ref: '#/components/responses/409'
         '500':
           $ref: '#/components/responses/500'
+        '503':
+          $ref: '#/components/responses/503'
         default:
           $ref: '#/components/responses/Error'
   '/knowledge/{id}/graph':
@@ -531,6 +537,8 @@ paths:
           $ref: '#/components/responses/403Query'
         '404':
           $ref: '#/components/responses/404'
+        '415':
+          $ref: '#/components/responses/415'
         '500':
           $ref: '#/components/responses/500'
         '502':
@@ -547,9 +555,12 @@ paths:
       summary: Searches a Knowledge
       description: >-
         Hybrid search over the chunks of the knowledge-base: dense (embedding) and sparse (BM25)
-        scores fused. Fields not set in the request fall back to the knowledge-base's `retrieval`
-        settings. `iriFilter` keeps only chunks that mention at least one of the given ontology
-        IRIs.
+        scores fused (reciprocal rank fusion, normalised so that a chunk ranked first by both scores 1);
+        with `hybrid: false`, dense only, scored by cosine similarity. Fields not set in the request fall
+        back to the knowledge-base's `retrieval` settings. `iriFilter` keeps only chunks that mention at
+        least one of the given ontology IRIs or a subclass of one. Without an embedding model a hybrid
+        search runs on the sparse side alone (`X-Search-Mode: sparse`) and a dense-only one answers `503`.
+        A `graph` knowledge-base has no chunks (`409`).
       tags:
         - knowledge
       x-required-roles:
@@ -571,6 +582,17 @@ paths:
       responses:
         '200':
           description: The search hits, best first
+          headers:
+            X-Search-Mode:
+              description: >-
+                Which search ran: `hybrid` (dense and sparse fused), `dense` (with `hybrid: false`), or `sparse`
+                (the keyword side alone, when no embedding model is available).
+              schema:
+                type: string
+                enum:
+                  - hybrid
+                  - dense
+                  - sparse
           content:
             application/json:
               schema:
@@ -592,8 +614,12 @@ paths:
           $ref: '#/components/responses/403'
         '404':
           $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
         '500':
           $ref: '#/components/responses/500'
+        '503':
+          $ref: '#/components/responses/503'
         default:
           $ref: '#/components/responses/Error'
   '/knowledge/{id}/recommend':
@@ -743,6 +769,8 @@ paths:
           $ref: '#/components/responses/404'
         '500':
           $ref: '#/components/responses/500'
+        '501':
+          $ref: '#/components/responses/501'
         default:
           $ref: '#/components/responses/Error'
     post:
@@ -868,6 +896,8 @@ paths:
           $ref: '#/components/responses/409'
         '500':
           $ref: '#/components/responses/500'
+        '503':
+          $ref: '#/components/responses/503'
         default:
           $ref: '#/components/responses/Error'
   '/knowledge/{id}/document/{documentId}/content':
@@ -999,6 +1029,8 @@ paths:
           $ref: '#/components/responses/403'
         '500':
           $ref: '#/components/responses/500'
+        '501':
+          $ref: '#/components/responses/501'
         default:
           $ref: '#/components/responses/Error'
     post:
@@ -1345,6 +1377,8 @@ paths:
           $ref: '#/components/responses/409'
         '500':
           $ref: '#/components/responses/500'
+        '501':
+          $ref: '#/components/responses/501'
         default:
           $ref: '#/components/responses/Error'
     post:
@@ -1423,6 +1457,8 @@ paths:
           $ref: '#/components/responses/403'
         '404':
           $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
         '500':
           $ref: '#/components/responses/500'
         default:
@@ -1534,6 +1570,8 @@ paths:
           $ref: '#/components/responses/404'
         '500':
           $ref: '#/components/responses/500'
+        '501':
+          $ref: '#/components/responses/501'
         default:
           $ref: '#/components/responses/Error'
     post:

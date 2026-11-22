@@ -107,7 +107,7 @@ knowledge-base (409 for a graph one). `topK`, `scoreThreshold` and `hybrid` defa
   answers 503. The response header `X-Search-Mode` says which ran: `hybrid`, `dense` or `sparse`.
 - `iriFilter` keeps chunks whose `entityIri` or `classIri` payload holds one of the IRIs or a subclass of one
   (`rdfs:subClassOf*` over the KB's query dataset).
-- Chunks are written (by the pipeline, #40) with `Vectors.upsert_chunks`, which computes the sparse vector with the
+- Chunks are written (by the pipeline, #44) with `Vectors.upsert_chunks`, which computes the sparse vector with the
   same encoder.
 
 ## Documents
