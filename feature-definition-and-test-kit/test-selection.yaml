@@ -74,6 +74,9 @@ noTests:
   - "charts/carbon-intensity-service/**"
   - "source/tmf-services/TMF628_Performance_Management/**"
   - "source/tmf-services/MCP_Resource_Inventory/**"
+  # TMFC060 Knowledge Management sources: no BDD feature installs their images yet (the
+  # knowledgemanagement-v1 test chart uses stand-ins). Map them to @UC018 when #58 swaps the chart.
+  - "source/components/TMFC060-KnowledgeManagement/**"
   - "charts/observability-stack/**"
   # Tools and UIs outside the canvas install
   - "canvas-portal/**"
@@ -121,6 +124,7 @@ noTests:
   - ".github/workflows/bdd-selection-comment.yml"
   - ".github/workflows/canvas-log-viewer-unit-tests.yml"
   - ".github/workflows/canvas-portal-v2-backend-unit-tests.yml"
+  - ".github/workflows/tmfc060-unit-tests.yml"
   - ".github/workflows/local-test.yml"
   - ".github/workflows/Chart-Releaser-ReleasedChartTester-TrivyScanner.yml"
 

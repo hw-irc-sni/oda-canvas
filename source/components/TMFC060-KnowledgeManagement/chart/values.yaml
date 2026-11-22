@@ -1,0 +1,15 @@
+# TMFC060 Knowledge Management chart values.
+# Minimal for now: the image names and versions that the generated docker build workflows read
+# (automation/generators/dockerbuild-workflow-generator). The chart itself is built in PHASE 3 (#51).
+knowledgeApi:
+  image: tmforumodacanvas/tmfc060-knowledge-api
+  version: 0.1.0
+  prereleaseSuffix: ai-knowledge
+pipelineWorker:
+  image: tmforumodacanvas/tmfc060-pipeline-worker
+  version: 0.1.0
+  prereleaseSuffix: ai-knowledge
+mcpServer:
+  image: tmforumodacanvas/tmfc060-mcp-server
+  version: 0.1.0
+  prereleaseSuffix: ai-knowledge
