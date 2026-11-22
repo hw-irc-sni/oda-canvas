@@ -1,0 +1,33 @@
+{
+ "iss": "http://localhost:18083/auth/realms/odari",
+ "aud": [
+  "s1km-knowledgemanagement",
+  "account"
+ ],
+ "azp": "canvas-portal",
+ "typ": "Bearer",
+ "scope": "profile email",
+ "resource_access": {
+  "s1km-knowledgemanagement": {
+   "roles": [
+    "knowledge-viewer"
+   ]
+  },
+  "account": {
+   "roles": [
+    "manage-account",
+    "manage-account-links",
+    "view-profile"
+   ]
+  }
+ },
+ "realm_access": {
+  "roles": [
+   "offline_access",
+   "uma_authorization",
+   "default-roles-odari"
+  ]
+ },
+ "preferred_username": "s1-viewer",
+ "groups": []
+}

@@ -347,7 +347,11 @@ Roles are enforced in two places:
 * **In the component.** `auth.py` validates the JWT against the Canvas Keycloak JWKS and reads the component client roles from `resource_access`. Any call without the required role gets a **403**, whatever its origin.
 * **In the portal.** The portal backend forwards the **user's own bearer token** to the component. It returns a `capabilities` object computed from the user's component roles, and the frontend hides actions those capabilities don't allow. The portal never echoes an upstream 401: it passes a 403 through and maps a 401, a 5xx or a timeout to a 502. Uploads stream through with a size cap (413 above it).
 
-Whether the portal's access token carries each TMFC060 instance's client roles is an unverified mechanic (spike S1). If it doesn't, the fallback is an audience/role mapper on the `canvas-portal` client, or Keycloak token exchange per instance in the backend.
+Spike S1 ([#70](https://github.com/hw-irc-sni/oda-canvas/issues/70)) confirmed on the kind Canvas that a portal token carries the instance's client roles. The `canvas-portal` client in realm `odari` has full scope and the default `roles` scope, so the token has `resource_access["<instance>"].roles`, and the instance's client id in `aud`. The component's token check therefore:
+* verifies the signature against the in-cluster JWKS;
+* accepts `iss` from a configured list (the public and the in-cluster Keycloak URL);
+* requires its own client id in `aud`;
+* reads the roles from `resource_access[<instance>]`. The OAS's symbolic `canvasSystemRole` maps to the configured system role name (by default `canvasRole`).
 
 The internal graph-write endpoint is reachable only inside the cluster and is authenticated by a service token. The MCP server calls the REST API with the token of its caller, so MCP clients get exactly the rights of their role.
 
@@ -417,7 +421,7 @@ These mechanics are unverified. Each is checked by a short spike at the start of
 
 | Spike | Question | Section |
 |---|---|---|
-| S1 | Does the portal access token carry the component client roles? | [Security](#security) |
+| S1 | Does the portal access token carry the component client roles? **Done (#70):** yes, in `resource_access`, with the client id in `aud` | [Security](#security) |
 | S2 | Can the portal pod reach the ExposedAPI URL from Resource Inventory? If not, the in-cluster Service URL is built from the ExposedAPI implementation | [Canvas integration](#canvas-integration) |
 | S3 | Does pyoxigraph execute SPARQL `SERVICE`, with an allowlist? **Done (#20):** yes natively, no allowlist or timeout; rdflib pre-check plus killable read-only workers | [Federation](#federation) |
 | S4 | How does an operator obtain a canvasSystemRole token? | [Canvas integration](#canvas-integration) |
