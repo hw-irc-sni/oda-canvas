@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     # How long the API keeps retrying Postgres at startup before it exits (migrations need it)
     db_startup_timeout: float = 120.0
 
+    # Size of the dense vectors of a knowledge-base's Qdrant collection (the embedding model's dimension)
+    embedding_dimension: int = 1024
+
     # Governance: a ruling 'agreed' runs validation and needs it to conform
     governance_require_validation: bool = True
 

@@ -40,6 +40,7 @@ The API is mounted under `/{COMPONENT_NAME}/tmf-api/knowledgeManagement/v5`.
 | `GIT_CACHE_DIR`, `GIT_TIMEOUT` | `/tmp/tmfc060-git`, `120` | Clone cache and timeout |
 | `MOUNT_ROOTS` | `/etc/tmfc060/ontologies` | Comma-separated directories that `mount` sources must be under |
 | `LOG_LEVEL` | `INFO` | Level of the application loggers |
+| `EMBEDDING_DIMENSION` | `1024` | Dense vector size of a knowledge-base's Qdrant collection |
 | `GOVERNANCE_REQUIRE_VALIDATION` | `true` | A ruling `agreed` needs the module's validation to conform |
 | `DB_STARTUP_TIMEOUT` | `120` | Seconds the API retries Postgres at startup (backoff 1–10 s) before it exits |
 
@@ -62,6 +63,26 @@ serve `/knowledgeSpecification` (list, create, get, patch fields, delete) and it
   `urn:tmfc060:federation:<source>:<key>`. A module gone from the repository becomes `deprecated`.
 - **Shapes:** an `ONTOLOGY_SOURCES` entry may list `"shapes": [{"id": "tio-shacl-ext", "path": "implementation/tio-shacl-ext/rdf"}]`;
   each path (file or folder of `.ttl`) becomes a `specKind: shapes` module.
+
+## Knowledge-bases
+
+[`app/kb/`](app/kb/) serves `/knowledge` and `/knowledge/{id}`, with metadata in the `knowledge` table:
+
+- `storeKind` `vector` or `hybrid` creates the Qdrant collection `tmfc060-kb-{id}` (dense vector `dense`, cosine,
+  `EMBEDDING_DIMENSION`; sparse vector `sparse` with IDF) at creation, and 503 if Qdrant is down. Deleting the KB
+  drops the collection, the graph and the documents. `storeKind` cannot change.
+- `conformsTo` refs must name registered modules (by id or IRI), in any state; only published and deprecated ones
+  reach the query dataset. A module named by a KB cannot be deleted (409).
+- `statistics` (`triples`, `documents`, `chunks`) are computed on every read; `chunks` is left out when Qdrant is
+  unreachable.
+- A KB can be changed in every lifecycle state except deprecated (409). `lifecycleStatus` follows the `Knowledge`
+  `x-lifecycle` (PATCH it alone). A `canvasSystemRole` caller is recorded as the owner of the KBs it creates and may
+  change only those; a `knowledge-editor` may change any.
+- `/knowledge/{id}/graph` is the Graph Store Protocol (GET, PUT, POST, DELETE) in Turtle or JSON-LD.
+- `/knowledge/{id}/query` runs a read-only SPARQL query (`application/sparql-query` or the form field `query`) over
+  the KB graph plus its conformsTo closure, in a killable worker: `timeout` capped by `QUERY_TIMEOUT_MAX` (504),
+  the row cap (`X-Result-Truncated`), updates refused (400). SERVICE is refused (403 `SERVICE_NOT_ALLOWED`) until
+  federation (#31) adds the allowlist.
 
 ## Governance
 

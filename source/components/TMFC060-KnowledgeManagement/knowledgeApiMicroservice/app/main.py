@@ -15,6 +15,9 @@ from .graphstore import GraphStore
 from .ontology import sync
 from .ontology.governance import load_lifecycles
 from .ontology.registry import Registry
+from qdrant_client import AsyncQdrantClient
+
+from .kb import router as kb_router
 from .routers import specifications, terms
 from .store import get_store
 from .errors import ApiError
@@ -35,6 +38,7 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
         app.state.engine = engine
         app.state.sessions = make_sessionmaker(engine)
         app.state.graphs = GraphStore(get_store(settings.store_path))
+        app.state.qdrant = AsyncQdrantClient(url=settings.qdrant_url, timeout=10)
         sources = sync.parse_sources(settings.ontology_sources)
         sync_task = None
         if sources:
@@ -45,6 +49,7 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
         finally:
             if sync_task:
                 sync_task.cancel()
+            await app.state.qdrant.close()
             await engine.dispose()
 
     app = FastAPI(title="Knowledge Management", version="5.0.0", lifespan=lifespan)
@@ -80,6 +85,7 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
     api = APIRouter(prefix=settings.base_path)
     api.include_router(specifications.router)
     api.include_router(terms.router)
+    api.include_router(kb_router.router)
     app.include_router(api)
     app.state.api_router = api
     return app

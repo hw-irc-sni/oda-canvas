@@ -41,8 +41,15 @@ def assert_routes_match_oas(app):
 
 
 def test_routes_match_the_oas():
-    from .test_auth import make_app
-    app, _, _ = make_app()
+    from app.auth import TokenValidator
+    from app.main import create_app
+
+    from .tokens import CLIENT, ISSUER, KeyPair, StaticJWKClient
+    settings = Settings(component_name=CLIENT, keycloak_jwks_url="http://jwks.invalid/certs", keycloak_issuers=[ISSUER])
+    app = create_app(settings, TokenValidator(settings, StaticJWKClient(KeyPair("k"))))
     found = {operation_id for _, operation_id in routes_with_operations(app)}
-    assert {"listKnowledgeSpecification", "createKnowledgeSpecification", "retrieveSchema"} <= found
+    assert {"listKnowledgeSpecification", "createKnowledgeSpecification", "retrieveSchema", "retrieveKnowledgeTerm",
+            "listKnowledge", "createKnowledge", "retrieveKnowledge", "patchKnowledge", "deleteKnowledge",
+            "retrieveKnowledgeGraph", "replaceKnowledgeGraph", "mergeKnowledgeGraph", "clearKnowledgeGraph",
+            "queryKnowledge"} <= found
     assert_routes_match_oas(app)

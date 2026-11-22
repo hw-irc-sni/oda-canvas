@@ -18,15 +18,15 @@ def make_app(**overrides):
     jwks = StaticJWKClient(KEY)
     from app.auth import TokenValidator
     app = create_app(settings, TokenValidator(settings, jwks))
-    # Probe routes standing in for real resources until they are implemented: one read, one write.
+    # Probe routes guarded like a read and a write operation (paths of their own, so they need no database).
     read = require_operation("listKnowledge")
     write = require_operation("createKnowledge")
 
-    @app.get(settings.base_path + "/knowledge")
+    @app.get(settings.base_path + "/_probe")
     async def list_knowledge(principal: Principal = Depends(read)):
         return {"user": principal.username, "roles": sorted(principal.roles)}
 
-    @app.post(settings.base_path + "/knowledge")
+    @app.post(settings.base_path + "/_probe")
     async def create_knowledge(principal: Principal = Depends(write)):
         return {"ok": True}
 
@@ -42,7 +42,7 @@ async def call(app, method, path, token=None, headers=None, **kw):
 @pytest.fixture
 def api():
     app, settings, jwks = make_app()
-    return app, settings.base_path + "/knowledge", jwks
+    return app, settings.base_path + "/_probe", jwks
 
 
 async def test_valid_token_with_role_is_allowed(api):
@@ -129,7 +129,7 @@ async def test_jwks_is_cached_and_refetched_for_an_unknown_kid(api):
 async def test_auth_disabled_grants_every_role(monkeypatch):
     monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
     app, settings, _ = make_app(auth_enabled=False)
-    response = await call(app, "POST", settings.base_path + "/knowledge")
+    response = await call(app, "POST", settings.base_path + "/_probe")
     assert response.status_code == 200
 
 
