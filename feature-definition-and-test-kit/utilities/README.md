@@ -99,6 +99,24 @@ The utilities follow a modular architecture where each utility module focuses on
 
 **Usage**: Used in `ObservabilitySteps.js` for testing ServiceMonitor creation, configuration, and cleanup as part of ODA Component observability testing.
 
+### 6. ai-gateway-utils-agentgateway
+**Purpose**: Provides utilities for checking the MCP targets that the Canvas registers with the AI gateway, implemented for agentgateway. agentgateway keeps its MCP targets in a ConfigMap (`config.yaml` → `mcp.targets[]`) and lists each target's tools through its MCP endpoint as `<target>_<tool>`.
+
+**Key Functions**:
+- `mcpTargetNameForExposedAPI(namespace, exposedAPIName)` - Name of the Canvas-owned MCP target for an MCP ExposedAPI (`oda-<namespace>-<name>`)
+- `getMcpTargets()` - Lists the MCP targets in the gateway configuration
+- `listToolsThroughGateway()` - Lists all tools through the gateway's MCP endpoint (`tools/list`)
+- `listToolsOfTarget(targetName)` - Lists the tools of one MCP target through the gateway
+
+**Configuration**: `AI_GATEWAY_NAMESPACE` (default `canvas`), `AI_GATEWAY_CONFIGMAP` (default `agentgateway-config`), `AI_GATEWAY_CONFIG_KEY` (default `config.yaml`) and `AI_GATEWAY_MCP_URL` (default `http://localhost:8080/mcp`, for example through `kubectl port-forward -n canvas svc/agentgateway 8080:80`).
+
+**Dependencies**:
+- `@kubernetes/client-node` - Kubernetes API client
+- `axios` - HTTP client for the MCP endpoint
+- `yaml` - YAML parsing of the gateway configuration
+
+**Usage**: Used in `AIGatewaySteps.js` (UC018-F003).
+
 ## Standards and Structure
 
 ### File Naming Convention
