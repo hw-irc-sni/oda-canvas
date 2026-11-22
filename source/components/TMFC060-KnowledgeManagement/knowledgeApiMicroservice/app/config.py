@@ -38,6 +38,9 @@ class Settings(BaseSettings):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
 
+    # How long the API keeps retrying Postgres at startup before it exits (migrations need it)
+    db_startup_timeout: float = 120.0
+
     # Timeout in seconds for each dependency check of /health and /ready
     health_check_timeout: float = 2.0
 

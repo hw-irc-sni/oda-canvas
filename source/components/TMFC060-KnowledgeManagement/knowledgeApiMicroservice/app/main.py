@@ -1,9 +1,13 @@
 """FastAPI application of the TMFC060 knowledge API. Run with: uvicorn --factory app.main:create_app"""
+from contextlib import asynccontextmanager
+
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from .auth import TokenValidator, check_auth_settings, load_operations
 from .config import Settings, get_settings
+from .db.migrate import upgrade, wait_for_database
+from .db.session import make_engine, make_sessionmaker
 from .errors import ApiError
 from .health import is_ready, run_checks
 
@@ -11,7 +15,20 @@ from .health import is_ready, run_checks
 def create_app(settings: Settings | None = None, token_validator: TokenValidator | None = None) -> FastAPI:
     settings = settings or get_settings()
     check_auth_settings(settings)
-    app = FastAPI(title="Knowledge Management", version="5.0.0")
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        engine = make_engine(settings.database_url)
+        await wait_for_database(engine, settings.db_startup_timeout)
+        await upgrade(engine)
+        app.state.engine = engine
+        app.state.sessions = make_sessionmaker(engine)
+        try:
+            yield
+        finally:
+            await engine.dispose()
+
+    app = FastAPI(title="Knowledge Management", version="5.0.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.operations = load_operations(settings.oas_path)
     app.state.token_validator = token_validator or (TokenValidator(settings) if settings.auth_enabled else None)

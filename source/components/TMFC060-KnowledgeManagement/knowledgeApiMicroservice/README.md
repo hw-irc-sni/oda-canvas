@@ -31,6 +31,25 @@ The API is mounted under `/{COMPONENT_NAME}/tmf-api/knowledgeManagement/v5`.
 | `AUTH_ENABLED` | `true` | `false` skips token validation and grants every role. Local development only: refused in Kubernetes |
 | `OAS_PATH` | `api/TMFxxx-KnowledgeManagement-v5.0.0.oas.yaml` | The OAS whose `x-required-roles` drive the guards |
 | `HEALTH_CHECK_TIMEOUT` | `2.0` | Seconds per dependency check |
+| `DB_STARTUP_TIMEOUT` | `120` | Seconds the API retries Postgres at startup (backoff 1–10 s) before it exits |
+
+## PostgreSQL schema
+
+SQLAlchemy 2 async models in [`app/db/models.py`](app/db/models.py), migrated by Alembic
+([`app/db/migrations/`](app/db/migrations)) **at API startup**, under a Postgres advisory lock. The worker never
+migrates.
+
+| Table | Holds |
+|---|---|
+| `knowledge`, `knowledge_specification`, `mapping` | Resource metadata: indexed columns plus the served body (JSONB) |
+| `document`, `document_blob` | Document metadata, and its content in 1 MiB `bytea` rows (deleted with the document) |
+| `process`, `task` | TMF701 v5 processes and their KM-FX tasks; workers claim tasks with `FOR UPDATE SKIP LOCKED` |
+| `review_item`, `state_transition` | Proposals, comments and rulings, and the audit trail of lifecycle transitions |
+| `hub_subscription` | Event subscriptions registered through `/hub` |
+| `recommend_feedback` | Feedback on recommendations (KM-FX-06) |
+
+To add a migration, change the models and autogenerate a revision against a database at head (see
+`app/db/migrate.py` for running Alembic on a connection), then review it.
 
 ## Authentication and roles
 
