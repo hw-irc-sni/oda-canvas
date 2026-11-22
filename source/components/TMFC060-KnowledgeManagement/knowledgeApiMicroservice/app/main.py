@@ -18,6 +18,7 @@ from .ontology.registry import Registry
 from qdrant_client import AsyncQdrantClient
 
 from .kb import router as kb_router
+from .models import ModelResolver
 from .ontology.federation import Relay
 from .routers import specifications, terms
 from .store import get_store
@@ -42,6 +43,8 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
         app.state.qdrant = AsyncQdrantClient(url=settings.qdrant_url, timeout=10)
         app.state.relay = Relay(settings, app.state.sessions)
         await app.state.relay.start()
+        app.state.models = ModelResolver(settings)
+        models_task = asyncio.create_task(app.state.models.run_periodically())
         sources = sync.parse_sources(settings.ontology_sources)
         sync_task = None
         if sources:
@@ -52,6 +55,8 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
         finally:
             if sync_task:
                 sync_task.cancel()
+            models_task.cancel()
+            await app.state.models.aclose()
             await app.state.relay.stop()
             await app.state.qdrant.close()
             await engine.dispose()
@@ -72,14 +77,14 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
 
     @app.get("/health", include_in_schema=False)
     async def health() -> JSONResponse:
-        checks = await run_checks(settings)
+        checks = await run_checks(settings, getattr(app.state, "models", None))
         body = {"status": "ready" if is_ready(checks) else "degraded",
                 "checks": {name: check.as_dict() for name, check in checks.items()}}
         return JSONResponse(body, status_code=200)
 
     @app.get("/ready", include_in_schema=False)
     async def ready() -> JSONResponse:
-        checks = await run_checks(settings)
+        checks = await run_checks(settings, getattr(app.state, "models", None))
         ok = is_ready(checks)
         body = {"status": "ready" if ok else "not-ready",
                 "checks": {name: check.as_dict() for name, check in checks.items()}}

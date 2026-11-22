@@ -1,6 +1,6 @@
 """Dependency checks for /health (liveness, always 200) and /ready (readiness, 503 unless the required checks pass)."""
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import httpx
 import psycopg
@@ -13,11 +13,12 @@ REQUIRED = ("store", "postgres", "qdrant")
 
 @dataclass
 class Check:
-    status: str  # "up", "down" or "not-configured"
+    status: str  # "up", "down", "unknown" or "not-configured"
     detail: str = ""
+    extra: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
-        return {"status": self.status, **({"detail": self.detail} if self.detail else {})}
+        return {"status": self.status, **({"detail": self.detail} if self.detail else {}), **self.extra}
 
 
 async def check_store(settings: Settings) -> Check:
@@ -48,15 +49,18 @@ async def check_qdrant(settings: Settings) -> Check:
         return Check("down", f"{type(exc).__name__}: {exc}")
 
 
-async def check_model_route(settings: Settings) -> Check:
-    # The model resolver chain arrives with #34; until then there is no route to report.
-    return Check("not-configured")
+async def check_model_route(resolver) -> Check:
+    """The active model route (informational: /ready does not require it)."""
+    if resolver is None:
+        return Check("not-configured")
+    status = resolver.status()
+    return Check(status.pop("status"), extra=status)
 
 
-async def run_checks(settings: Settings) -> dict[str, Check]:
+async def run_checks(settings: Settings, resolver=None) -> dict[str, Check]:
     names = ("store", "postgres", "qdrant", "modelRoute")
     results = await asyncio.gather(
-        check_store(settings), check_postgres(settings), check_qdrant(settings), check_model_route(settings)
+        check_store(settings), check_postgres(settings), check_qdrant(settings), check_model_route(resolver)
     )
     return dict(zip(names, results))
 

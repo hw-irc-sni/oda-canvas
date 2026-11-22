@@ -65,6 +65,21 @@ class Settings(BaseSettings):
     federation_call_timeout: float = 10.0
     federation_cache_ttl: int = 60
 
+    # Model routes (see app/models.py): 1. a ModelGatewayService CR, 2. agentgateway, 3. an OpenAI-compatible URL
+    model_gateway_service: str | None = None  # "name" in the pod's namespace, or "namespace/name"
+    mgs_chat_model: str | None = None
+    mgs_embedding_model: str | None = None
+    agentgateway_url: str | None = None  # for example http://agentgateway.<ns>.svc:8080/v1
+    agentgateway_chat_model: str | None = None
+    agentgateway_embedding_model: str | None = None
+    openai_base_url: str | None = None
+    openai_api_key_file: str | None = None  # a mounted Secret file holding the key
+    openai_chat_model: str | None = None
+    openai_embedding_model: str | None = None
+    model_route_interval: int = 300
+    model_probe_timeout: float = 5.0
+    model_call_timeout: float = 120.0
+
     # Largest document a knowledge-base accepts, in bytes (50 MiB)
     document_max_bytes: int = 50 * 1024 * 1024
 

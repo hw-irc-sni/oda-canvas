@@ -45,6 +45,11 @@ The API is mounted under `/{COMPONENT_NAME}/tmf-api/knowledgeManagement/v5`.
 | `FEDERATION_CALL_TIMEOUT` | `10` | Seconds a federated SERVICE call may take |
 | `FEDERATION_CACHE_TTL` | `60` | Seconds federated answers are cached (0 = off) |
 | `DOCUMENT_MAX_BYTES` | `52428800` | Largest document a knowledge-base accepts (50 MiB) |
+| `MODEL_GATEWAY_SERVICE`, `MGS_CHAT_MODEL`, `MGS_EMBEDDING_MODEL` | | Route 1: the ModelGatewayService CR and its model names |
+| `AGENTGATEWAY_URL`, `AGENTGATEWAY_CHAT_MODEL`, `AGENTGATEWAY_EMBEDDING_MODEL` | | Route 2: the agentgateway `/v1` URL and model names |
+| `OPENAI_BASE_URL`, `OPENAI_API_KEY_FILE`, `OPENAI_CHAT_MODEL`, `OPENAI_EMBEDDING_MODEL` | | Route 3: an OpenAI-compatible URL, the key file and model names |
+| `MODEL_ROUTE_INTERVAL` | `300` | Seconds between route evaluations |
+| `MODEL_PROBE_TIMEOUT` / `MODEL_CALL_TIMEOUT` | `5` / `120` | Seconds for the `/models` probe and for a model call |
 | `EMBEDDING_DIMENSION` | `1024` | Dense vector size of a knowledge-base's Qdrant collection |
 | `GOVERNANCE_REQUIRE_VALIDATION` | `true` | A ruling `agreed` needs the module's validation to conform |
 | `DB_STARTUP_TIMEOUT` | `120` | Seconds the API retries Postgres at startup (backoff 1–10 s) before it exits |
@@ -103,6 +108,24 @@ can read it from Postgres.
 - `…/{documentId}/content` streams the original bytes back. Delete removes the metadata, the blobs and the
   document's chunks in Qdrant (`documentId` payload); triples extracted from it and their provenance stay.
 - Uploading does not ingest; ingestion starts with `…/ingest`.
+
+## Model routes
+
+[`app/models.py`](app/models.py) finds the LLM and embedding endpoints (OpenAI-compatible, `…/v1`) through a chain,
+re-evaluated every `MODEL_ROUTE_INTERVAL` seconds:
+
+1. **modelGatewayService**: the ModelGatewayService CR `MODEL_GATEWAY_SERVICE` (`name` or `namespace/name`), when its
+   CRD exists, read with the pod's service account; its endpoint comes from the CR status or spec, else its proxy
+   Service (as in the portal). Skipped if the CR lists models and not both `MGS_CHAT_MODEL`/`MGS_EMBEDDING_MODEL`.
+2. **agentgateway**: `AGENTGATEWAY_URL`, with `AGENTGATEWAY_CHAT_MODEL`/`AGENTGATEWAY_EMBEDDING_MODEL`.
+3. **openaiCompatible**: `OPENAI_BASE_URL`, the key from the file `OPENAI_API_KEY_FILE`, and
+   `OPENAI_CHAT_MODEL`/`OPENAI_EMBEDDING_MODEL`.
+
+A route needs both of its model names and is selected when `GET {base}/models` answers 2xx; a probe embedding then
+detects the dimension, and `/health` flags a mismatch with `EMBEDDING_DIMENSION`. A call failing with a connection
+error, a timeout or a 5xx fails over to the next route and is retried once; a 4xx is returned as is. `/health`
+shows the active route, its models and the reason each other route was skipped (never the key); `/ready` does not
+depend on it.
 
 ## Federation
 
