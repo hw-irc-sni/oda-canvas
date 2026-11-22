@@ -27,6 +27,24 @@ docker build -t tmforumodacanvas/tmfc060-pipeline-worker:dev .
 - `WORKER_HEALTH_PORT` serves `/health` (the loop is alive; in-flight tasks, last claim) and `/ready` (the internal
   API accepts the token).
 
+## KM-FX-01 Data Processing
+
+[`worker/steps/km_fx_01.py`](worker/steps/km_fx_01.py) reads the document through the internal API and:
+
+- **PDF** (`pypdf`), **Markdown**, **HTML** (Python's `html.parser`; `script`, `style`, `nav`, `header`, `footer` and
+  `aside` dropped) and plain **JSON** (`path: value` lines) become structural blocks (headings, paragraphs, list
+  items, table rows, code), cleaned of control characters and extra whitespace. PDF lines found on more than half
+  of the pages (running headers, footers, page numbers) are dropped.
+- Blocks are chunked by section (a heading starts one) up to `CHUNK_MAX_TOKENS` (400), overlapping by about
+  `CHUNK_OVERLAP_TOKENS` (60); tokens are estimated as characters / 4. A long block is split on sentences, then words.
+  Each chunk has its `start`/`end` in the extracted text.
+- **Turtle and JSON-LD** are not chunked: the content goes on to KM-FX-02 to be lifted directly.
+- **TMF batches** (TMF639/638/642/628/921: `params.resources`, or a TMF event in `params.event`) give one record per
+  resource for lifting and one `key: value` text chunk per resource for search.
+
+The result is handed to KM-FX-02 as its `input` (at most `TASK_RESULT_MAX_BYTES` on the API; a larger result fails
+the step).
+
 ## Settings
 
 | Variable | Default | Meaning |
@@ -40,3 +58,4 @@ docker build -t tmforumodacanvas/tmfc060-pipeline-worker:dev .
 | `WORKER_REQUEST_TIMEOUT` | `30` | Seconds per internal API call |
 | `WORKER_HEALTH_HOST` / `WORKER_HEALTH_PORT` | `0.0.0.0` / `8082` | The probe server |
 | `LOG_LEVEL` | `INFO` | Log level |
+| `CHUNK_MAX_TOKENS` / `CHUNK_OVERLAP_TOKENS` | `400` / `60` | KM-FX-01 chunk size and overlap (tokens ≈ characters / 4) |

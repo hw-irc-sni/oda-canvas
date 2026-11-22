@@ -179,3 +179,37 @@ async def test_health_and_ready_and_token_rotation(api, tmp_path):
             assert (await client.get("/ready")).status_code == 200
         finally:
             await worker.stop()
+
+
+async def test_km_fx_01_result_reaches_km_fx_02(api):
+    content = b"# Runbook\n\nMains power alarms come first.\n\n## Escalation\n\nCall the NOC."
+    r = await api.post(f"{api.base}/knowledge/kb/document", files={"file": ("r.md", content, "text/markdown")})
+    doc_id = r.json()["id"]
+    pid = (await api.post(f"{api.base}/knowledge/kb/ingest", json={})).json()["id"]
+    seen = {}
+
+    async def capture(task, client):
+        seen["input"] = task["input"]
+        return {}
+    worker = make_worker(api, "w1", {**default_handlers(), "KM-FX-02": capture})
+    worker.start()
+    try:
+        assert (await wait_done(api, pid))["state"] == "completed"
+    finally:
+        await worker.stop()
+    result = seen["input"]
+    assert result["kind"] == "text" and result["documentId"] == doc_id
+    assert [c["section"] for c in result["chunks"]] == ["Runbook", "Escalation"]
+    assert all(result["text"][c["start"]:c["end"]] == c["text"] for c in result["chunks"])
+
+
+async def test_a_result_over_the_cap_fails_the_step(api):
+    pid = await ingest(api, 1)
+    api.app.state.settings.task_result_max_bytes = 100
+    worker = make_worker(api, "w1")
+    worker.start()
+    try:
+        p = await wait_done(api, pid)
+    finally:
+        await worker.stop()
+    assert p["state"] == "failed" and "KM-FX-01 result too large" in p["errorMessage"]

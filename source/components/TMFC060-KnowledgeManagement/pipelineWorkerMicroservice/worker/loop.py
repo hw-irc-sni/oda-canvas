@@ -5,7 +5,7 @@ import asyncio
 import logging
 import time
 
-from .client import InternalClient, LeaseLost
+from .client import InternalClient, LeaseLost, ResultTooLarge
 from .config import Settings
 from .steps import Handler, StepError, default_handlers
 
@@ -16,7 +16,7 @@ class Worker:
     def __init__(self, settings: Settings, client: InternalClient, handlers: dict[str, Handler] | None = None):
         self.settings = settings
         self.client = client
-        self.handlers = handlers or default_handlers()
+        self.handlers = handlers or default_handlers(settings)
         self.stopping = asyncio.Event()
         self.in_flight: dict[str, dict] = {}
         self.last_claim: float | None = None
@@ -47,7 +47,11 @@ class Worker:
                 log.exception("task %s (%s) failed", task["id"], task["step"])
                 await self.client.fail(task["id"], f"{type(exc).__name__}: {exc}", True)
                 return
-            await self.client.complete(task["id"], result or {})
+            try:
+                await self.client.complete(task["id"], result or {})
+            except ResultTooLarge as exc:
+                await self.client.fail(task["id"], f"{task['step']} result too large: {exc}", False)
+                return
             self.processed.append(task["id"])
         except LeaseLost:
             log.warning("task %s: lease lost, abandoned", task["id"])

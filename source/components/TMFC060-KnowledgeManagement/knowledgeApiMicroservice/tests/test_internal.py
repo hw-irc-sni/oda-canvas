@@ -133,3 +133,33 @@ async def test_absent_from_the_public_api(api):
 async def test_no_token_no_listener(postgres_url, tmp_path):
     async with running_api(postgres_url, str(tmp_path / "store"), internal_token_file=str(tmp_path / "missing")) as api:
         assert api.app.state.internal.server is None and api.app.state.internal.port is None
+
+
+async def test_document_content_claim_input_and_result_cap(postgres_url, tmp_path):
+    token = tmp_path / "token"
+    token.write_text("s3cret-token")
+    async with running_api(postgres_url, str(tmp_path / "store"), internal_token_file=str(token),
+                           task_result_max_bytes=1000) as api:
+        i = httpx.AsyncClient(base_url=f"http://127.0.0.1:{api.app.state.internal.port}")
+        await api.post(f"{api.base}/knowledge", json={"id": "kb", "name": "KB", "storeKind": "graph"},
+                       headers=auth(EDITOR))
+        content = b"# Title\n\n" + b"x" * 3000
+        doc = (await api.post(f"{api.base}/knowledge/kb/document", files={"file": ("a.md", content, "text/markdown")},
+                              headers=auth(EDITOR))).json()
+        meta = await i.get(f"/internal/knowledge/kb/document/{doc['id']}", headers=TOKEN)
+        assert meta.json()["mediaType"] == "text/markdown" and meta.json()["size"] == len(content)
+        got = await i.get(f"/internal/knowledge/kb/document/{doc['id']}/content", headers=TOKEN)
+        assert got.content == content and got.headers["content-type"].startswith("text/markdown")
+        assert (await i.get(f"/internal/knowledge/kb/document/{doc['id']}/content")).status_code == 401
+        assert (await i.get("/internal/knowledge/kb/document/doc-x/content", headers=TOKEN)).status_code == 404
+        await api.post(f"{api.base}/knowledge/kb/ingest", json={}, headers=auth(EDITOR))
+        first = (await i.post("/internal/task/claim", json={"worker": "w"}, headers=TOKEN)).json()
+        assert first["input"] is None
+        too_big = await i.post(f"/internal/task/{first['id']}/complete", json={"worker": "w", "result": {"t": "y" * 2000}},
+                               headers=TOKEN)
+        assert too_big.status_code == 413
+        await i.post(f"/internal/task/{first['id']}/complete", json={"worker": "w", "result": {"chunks": 3}},
+                     headers=TOKEN)
+        second = (await i.post("/internal/task/claim", json={"worker": "w"}, headers=TOKEN)).json()
+        assert second["step"] == "KM-FX-02" and second["input"] == {"chunks": 3}
+        await i.aclose()

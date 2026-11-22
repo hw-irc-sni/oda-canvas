@@ -8,6 +8,10 @@ class LeaseLost(Exception):
     """The API says this worker no longer holds the task."""
 
 
+class ResultTooLarge(Exception):
+    """The API refused a task result over TASK_RESULT_MAX_BYTES."""
+
+
 class Token:
     def __init__(self, path: str):
         self.path = Path(path)
@@ -49,10 +53,23 @@ class InternalClient:
         await self._post(f"/internal/task/{task_id}/heartbeat", {})
 
     async def complete(self, task_id: str, result: dict) -> None:
-        await self._post(f"/internal/task/{task_id}/complete", {"result": result})
+        try:
+            await self._post(f"/internal/task/{task_id}/complete", {"result": result})
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 413:
+                raise ResultTooLarge(exc.response.json().get("message", "the result is too large")) from exc
+            raise
 
     async def fail(self, task_id: str, error: str, retryable: bool) -> None:
         await self._post(f"/internal/task/{task_id}/fail", {"error": error, "retryable": retryable})
+
+    async def document(self, kb_id: str, doc_id: str) -> tuple[dict, bytes]:
+        """A document's metadata and content (KM-FX-01)."""
+        meta = await self.http.get(f"/internal/knowledge/{kb_id}/document/{doc_id}", headers=self.headers())
+        meta.raise_for_status()
+        content = await self.http.get(f"/internal/knowledge/{kb_id}/document/{doc_id}/content", headers=self.headers())
+        content.raise_for_status()
+        return meta.json(), content.content
 
     async def ready(self) -> bool:
         """The internal API answers and accepts the token (a claim without a worker: 400 means authenticated)."""

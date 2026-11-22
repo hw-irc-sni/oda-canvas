@@ -103,6 +103,8 @@ class Settings(BaseSettings):
     task_lease_seconds: int = 300
     task_max_attempts: int = 3
     task_retry_delay: int = 30
+    # The largest result a step may hand to the next one (the internal complete call)
+    task_result_max_bytes: int = 32 * 1024 * 1024
 
     # Largest document a knowledge-base accepts, in bytes (50 MiB)
     document_max_bytes: int = 50 * 1024 * 1024

@@ -19,3 +19,6 @@ class Settings(BaseSettings):
     worker_health_host: str = "0.0.0.0"
     worker_health_port: int = 8082
     log_level: str = "INFO"
+    # KM-FX-01 chunking (tokens are estimated as characters / 4)
+    chunk_max_tokens: int = 400
+    chunk_overlap_tokens: int = 60

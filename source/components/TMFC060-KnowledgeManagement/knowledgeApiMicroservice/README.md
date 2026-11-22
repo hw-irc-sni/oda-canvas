@@ -110,8 +110,10 @@ not started. The workers reach the component only through this API.
 - `POST /internal/knowledge/{id}/graph` merges triples into the KB graph; `PUT …/graph?source=<src>` replaces what
   that source (a document or a batch) contributed, kept in `urn:tmfc060:kb:{id}:source:{src}`. Each write is a
   `prov:Activity` in the governance graph (with `?task=` as `prov:wasInformedBy`).
-- `POST /internal/task/claim` (`{"worker": …}`; 204 when nothing is due), `…/task/{id}/heartbeat`, `/complete`
-  (`result`) and `/fail` (`error`, `retryable`); 409 when the worker no longer holds the task.
+- `POST /internal/task/claim` (`{"worker": …}`; 204 when nothing is due) returns the task with `input`, the result of
+  the previous step of its chain; `…/task/{id}/heartbeat`, `/complete` (`result`, at most `TASK_RESULT_MAX_BYTES`,
+  32 MiB, else 413) and `/fail` (`error`, `retryable`); 409 when the worker no longer holds the task.
+- `GET /internal/knowledge/{id}/document/{doc}` and `…/content`: a document's metadata and bytes (KM-FX-01).
 - The public `/knowledge/{id}/graph` shows the KB graph and its source graphs together; its PUT and DELETE replace
   or clear all of them, and queries and `statistics` include them.
 

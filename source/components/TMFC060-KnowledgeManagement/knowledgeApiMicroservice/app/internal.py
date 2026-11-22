@@ -21,10 +21,12 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import Depends, FastAPI, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from sqlalchemy import select
 from pyoxigraph import Literal, NamedNode, Quad
 
 from . import processes
+from .db.models import Document, DocumentBlob, Task
 from .db.models import Knowledge as KnowledgeRow
 from .errors import ApiError
 from .events import Event
@@ -142,9 +144,9 @@ def build_app(main: FastAPI, token: InternalToken) -> FastAPI:
             raise ApiError(400, "400", "Bad Request", "worker is required")
         return payload
 
-    def task_json(task) -> dict:
+    def task_json(task, previous: dict | None) -> dict:
         return {"id": task.id, "processId": task.process_id, "step": task.step, "chain": task.chain,
-                "attempt": task.attempts, "payload": task.payload,
+                "attempt": task.attempts, "payload": task.payload, "input": previous,
                 "leaseSeconds": state.settings.task_lease_seconds}
 
     @app.post("/internal/task/claim", dependencies=[Depends(authorized)])
@@ -152,7 +154,40 @@ def build_app(main: FastAPI, token: InternalToken) -> FastAPI:
         payload = await body_of(request)
         async with state.sessions() as session:
             task = await processes.claim(session, state.settings, payload["worker"])
-        return JSONResponse(task_json(task)) if task else Response(status_code=204)
+            if task is None:
+                return Response(status_code=204)
+            previous = await session.scalar(select(Task.result).where(
+                Task.process_id == task.process_id, Task.chain == task.chain, Task.seq == task.seq - 1))
+        return JSONResponse(task_json(task, previous))
+
+    # ---- documents (KM-FX-01) ------------------------------------------------------------------------------
+    async def document_of(session, kb_id: str, doc_id: str) -> Document:
+        doc = await session.get(Document, doc_id)
+        if doc is None or doc.knowledge_id != kb_id:
+            raise ApiError(404, "404", "Not Found", f"No document '{doc_id}' in '{kb_id}'")
+        return doc
+
+    @app.get("/internal/knowledge/{kb_id}/document/{doc_id}", dependencies=[Depends(authorized)])
+    async def document(kb_id: str, doc_id: str):
+        async with state.sessions() as session:
+            doc = await document_of(session, kb_id, doc_id)
+            return {"id": doc.id, "name": doc.name, "mediaType": doc.media_type, "size": doc.size,
+                    "sha256": doc.sha256}
+
+    @app.get("/internal/knowledge/{kb_id}/document/{doc_id}/content", dependencies=[Depends(authorized)])
+    async def document_content(kb_id: str, doc_id: str):
+        async with state.sessions() as session:
+            doc = await document_of(session, kb_id, doc_id)
+            media_type, size = doc.media_type, doc.size
+
+        async def chunks():
+            async with state.sessions() as session:
+                seq = 0
+                while (data := await session.scalar(select(DocumentBlob.data).where(
+                        DocumentBlob.document_id == doc_id, DocumentBlob.seq == seq))) is not None:
+                    yield data
+                    seq += 1
+        return StreamingResponse(chunks(), media_type=media_type, headers={"Content-Length": str(size)})
 
     async def held(call):
         try:
@@ -169,6 +204,9 @@ def build_app(main: FastAPI, token: InternalToken) -> FastAPI:
 
     @app.post("/internal/task/{task_id}/complete", dependencies=[Depends(authorized)])
     async def complete(task_id: str, request: Request):
+        cap = state.settings.task_result_max_bytes
+        if int(request.headers.get("content-length") or 0) > cap or len(await request.body()) > cap:
+            raise ApiError(413, "413", "Payload Too Large", f"A task result may be at most {cap} bytes")
         payload = await body_of(request)
         result = payload.get("result") if isinstance(payload.get("result"), dict) else None
         return await held(lambda s: processes.complete(s, task_id, payload["worker"], result))
