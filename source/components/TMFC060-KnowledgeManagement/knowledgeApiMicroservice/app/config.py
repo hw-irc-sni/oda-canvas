@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     federation_call_timeout: float = 10.0
     federation_cache_ttl: int = 60
 
+    # Largest document a knowledge-base accepts, in bytes (50 MiB)
+    document_max_bytes: int = 50 * 1024 * 1024
+
     # Size of the dense vectors of a knowledge-base's Qdrant collection (the embedding model's dimension)
     embedding_dimension: int = 1024
 

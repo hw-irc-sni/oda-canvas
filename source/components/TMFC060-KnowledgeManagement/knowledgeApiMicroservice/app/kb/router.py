@@ -1,9 +1,9 @@
 """/knowledge, /knowledge/{id}, its /graph (Graph Store Protocol) and /query (read-only SPARQL)."""
 import time
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, quote
 
 from fastapi import APIRouter, Depends, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,7 @@ from ..ontology import federation
 from ..query import effective_timeout, precheck, run_query
 from ..routers.deps import session
 from ..routers.specifications import json_body
+from .documents import Documents
 from .service import KnowledgeBases
 from .vectors import Vectors
 
@@ -104,6 +105,48 @@ async def merge_graph(id: str, request: Request, s: AsyncSession = Depends(sessi
 async def clear_graph(id: str, request: Request, s: AsyncSession = Depends(session),
                       principal: Principal = Depends(require_operation("clearKnowledgeGraph"))):
     await kbs_for(request, s).write_graph(id, principal, "clear")
+    return Response(status_code=204)
+
+
+# ---- documents -------------------------------------------------------------------------------------------------
+def documents_for(request: Request, s: AsyncSession) -> Documents:
+    return Documents(kbs_for(request, s))
+
+
+@router.get("/knowledge/{id}/document")
+async def list_documents(id: str, request: Request, s: AsyncSession = Depends(session),
+                         _: Principal = Depends(require_operation("listKnowledgeDocument"))):
+    return list_response(request, await documents_for(request, s).list(id))
+
+
+@router.post("/knowledge/{id}/document", status_code=201)
+async def create_document(id: str, request: Request, s: AsyncSession = Depends(session),
+                          principal: Principal = Depends(require_operation("createKnowledgeDocument"))):
+    body = await documents_for(request, s).upload(id, principal, request.headers.get("content-type", ""),
+                                                  request.headers.get("content-length"), request.stream())
+    return JSONResponse(present(request, body), status_code=201)
+
+
+@router.get("/knowledge/{id}/document/{documentId}")
+async def retrieve_document(id: str, documentId: str, request: Request, s: AsyncSession = Depends(session),
+                            _: Principal = Depends(require_operation("retrieveKnowledgeDocument"))):
+    documents = documents_for(request, s)
+    return present(request, documents.present(await documents.get(id, documentId)))
+
+
+@router.get("/knowledge/{id}/document/{documentId}/content")
+async def retrieve_document_content(id: str, documentId: str, request: Request, s: AsyncSession = Depends(session),
+                                    _: Principal = Depends(require_operation("retrieveKnowledgeDocumentContent"))):
+    doc, chunks = await documents_for(request, s).content(id, documentId, request.app.state.sessions)
+    filename = quote(doc.name)
+    return StreamingResponse(chunks, media_type=doc.media_type, headers={
+        "Content-Length": str(doc.size), "Content-Disposition": f"attachment; filename*=UTF-8''{filename}"})
+
+
+@router.delete("/knowledge/{id}/document/{documentId}", status_code=204)
+async def delete_document(id: str, documentId: str, request: Request, s: AsyncSession = Depends(session),
+                          principal: Principal = Depends(require_operation("deleteKnowledgeDocument"))):
+    await documents_for(request, s).delete(id, documentId, principal)
     return Response(status_code=204)
 
 

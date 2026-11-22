@@ -44,6 +44,7 @@ The API is mounted under `/{COMPONENT_NAME}/tmf-api/knowledgeManagement/v5`.
 | `FEDERATION_SECRETS_DIR` | | Folder of per-module OAuth2 client Secrets (`<moduleId>/tokenUrl`, `clientId`, `clientSecret`) |
 | `FEDERATION_CALL_TIMEOUT` | `10` | Seconds a federated SERVICE call may take |
 | `FEDERATION_CACHE_TTL` | `60` | Seconds federated answers are cached (0 = off) |
+| `DOCUMENT_MAX_BYTES` | `52428800` | Largest document a knowledge-base accepts (50 MiB) |
 | `EMBEDDING_DIMENSION` | `1024` | Dense vector size of a knowledge-base's Qdrant collection |
 | `GOVERNANCE_REQUIRE_VALIDATION` | `true` | A ruling `agreed` needs the module's validation to conform |
 | `DB_STARTUP_TIMEOUT` | `120` | Seconds the API retries Postgres at startup (backoff 1–10 s) before it exits |
@@ -86,6 +87,22 @@ serve `/knowledgeSpecification` (list, create, get, patch fields, delete) and it
 - `/knowledge/{id}/query` runs a read-only SPARQL query (`application/sparql-query` or the form field `query`) over
   the KB graph plus its conformsTo closure, in a killable worker: `timeout` capped by `QUERY_TIMEOUT_MAX` (504),
   the row cap (`X-Result-Truncated`), updates refused (400), and SERVICE only to allowlisted peers (below).
+
+## Documents
+
+[`app/kb/documents.py`](app/kb/documents.py) serves `/knowledge/{id}/document`: a `multipart/form-data` upload
+(`file`, optional `name` and `description`) is streamed into 1 MiB `document_blob` rows, so every worker replica
+can read it from Postgres.
+
+- `DOCUMENT_MAX_BYTES` (50 MiB) is enforced while streaming, and from `Content-Length` before reading: 413, with
+  nothing stored.
+- The same bytes (sha256) twice in one knowledge-base: 409 naming the existing document.
+- The media type is PDF, Markdown, HTML, Turtle, JSON-LD or JSON (415 otherwise): `%PDF-` content is a PDF, parseable
+  JSON is JSON-LD when it has `@context` and JSON otherwise; then the part's Content-Type, then the file extension.
+  A declared type the content contradicts gets 415.
+- `…/{documentId}/content` streams the original bytes back. Delete removes the metadata, the blobs and the
+  document's chunks in Qdrant (`documentId` payload); triples extracted from it and their provenance stay.
+- Uploading does not ingest; ingestion starts with `…/ingest`.
 
 ## Federation
 
