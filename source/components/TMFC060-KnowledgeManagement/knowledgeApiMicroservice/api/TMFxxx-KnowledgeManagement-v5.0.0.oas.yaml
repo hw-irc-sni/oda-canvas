@@ -60,6 +60,8 @@ servers:
       apiRoot:
         default: localhost:8080
 tags:
+  - name: knowledge
+    description: Operations for knowledge-bases
   - name: events subscription
     description: Endpoints to register and terminate an Event Listener
   - name: notification listener
@@ -142,6 +144,217 @@ paths:
           $ref: '#/components/responses/404'
         '500':
           $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  /knowledge:
+    get:
+      operationId: listKnowledge
+      summary: List or find Knowledge objects
+      description: This operation lists the knowledge-bases, filtered and paged.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          $ref: '#/components/responses/200KnowledgeArray'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createKnowledge
+      summary: Creates a Knowledge
+      description: >-
+        This operation creates a knowledge-base, with its graph and its vector collection. The
+        knowledge-base's `lifecycleStatus` starts as `active`.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+      requestBody:
+        $ref: '#/components/requestBodies/Knowledge_FVO'
+      responses:
+        '201':
+          $ref: '#/components/responses/201Knowledge'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}':
+    get:
+      operationId: retrieveKnowledge
+      summary: Retrieves a Knowledge by ID
+      description: This operation retrieves a knowledge-base.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        '200':
+          $ref: '#/components/responses/200Knowledge'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: patchKnowledge
+      summary: Updates partially a Knowledge
+      description: >-
+        This operation updates a knowledge-base with a JSON merge patch. Changing `lifecycleStatus`
+        publishes a `KnowledgeStateChangeEvent`; changing other fields publishes a
+        `KnowledgeAttributeValueChangeEvent`.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Fields'
+      requestBody:
+        $ref: '#/components/requestBodies/Knowledge_MVO'
+      responses:
+        '200':
+          $ref: '#/components/responses/200Knowledge'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '405':
+          $ref: '#/components/responses/405'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteKnowledge
+      summary: Deletes a Knowledge
+      description: >-
+        This operation deletes a knowledge-base with its graph, its vector collection and its
+        documents.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  /listener/knowledgeCreateEvent:
+    post:
+      operationId: knowledgeCreateEvent
+      summary: Client listener for entity KnowledgeCreateEvent
+      description: Example of a client listener for receiving the notification KnowledgeCreateEvent
+      tags:
+        - notification listener
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeCreateEvent'
+      responses:
+        '204':
+          description: Notified
+        default:
+          $ref: '#/components/responses/Error'
+  /listener/knowledgeAttributeValueChangeEvent:
+    post:
+      operationId: knowledgeAttributeValueChangeEvent
+      summary: Client listener for entity KnowledgeAttributeValueChangeEvent
+      description: Example of a client listener for receiving the notification KnowledgeAttributeValueChangeEvent
+      tags:
+        - notification listener
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeAttributeValueChangeEvent'
+      responses:
+        '204':
+          description: Notified
+        default:
+          $ref: '#/components/responses/Error'
+  /listener/knowledgeStateChangeEvent:
+    post:
+      operationId: knowledgeStateChangeEvent
+      summary: Client listener for entity KnowledgeStateChangeEvent
+      description: Example of a client listener for receiving the notification KnowledgeStateChangeEvent
+      tags:
+        - notification listener
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeStateChangeEvent'
+      responses:
+        '204':
+          description: Notified
+        default:
+          $ref: '#/components/responses/Error'
+  /listener/knowledgeDeleteEvent:
+    post:
+      operationId: knowledgeDeleteEvent
+      summary: Client listener for entity KnowledgeDeleteEvent
+      description: Example of a client listener for receiving the notification KnowledgeDeleteEvent
+      tags:
+        - notification listener
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeDeleteEvent'
+      responses:
+        '204':
+          description: Notified
         default:
           $ref: '#/components/responses/Error'
 components:
@@ -449,6 +662,310 @@ components:
               type: string
               format: uri-reference
               description: RFC 7807 - a URI reference that identifies the specific occurrence of the problem.
+    KnowledgeCategoryType:
+      type: string
+      description: The kind of knowledge a knowledge-base holds, from the TMFC060 inception form.
+      enum:
+        - know-what
+        - know-why
+        - know-how
+        - know-who
+    StoreKindType:
+      type: string
+      description: >-
+        How a knowledge-base stores its knowledge: an RDF graph, a document and vector store, or
+        both, linked (hybrid).
+      enum:
+        - graph
+        - vector
+        - hybrid
+    KnowledgeSource:
+      type: object
+      description: >-
+        A source the knowledge-base ingests from. `upload` takes documents uploaded to the
+        knowledge-base. The `tmf…` kinds take events of that TM Forum API, delivered to the component
+        through its subscribed events. `remote` takes content from a URL.
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - upload
+            - tmf639
+            - tmf638
+            - tmf642
+            - tmf628
+            - tmf921
+            - remote
+          description: The kind of source.
+        dependentApiName:
+          type: string
+          description: For `tmf…` kinds, the name of the component's dependent API that provides the events.
+        eventTypes:
+          type: array
+          description: For `tmf…` kinds, the event types to ingest. All events of the API when empty.
+          items:
+            type: string
+        query:
+          type: string
+          description: An optional filter on the source, in the source API's filter syntax.
+        url:
+          type: string
+          format: uri
+          description: For `remote`, the URL to ingest from.
+    RetrievalSettings:
+      type: object
+      description: Default retrieval settings of a knowledge-base, used when a search request does not set them.
+      properties:
+        topK:
+          type: integer
+          minimum: 1
+          default: 8
+          description: Number of hits to return.
+        scoreThreshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0
+          description: Minimum score of a hit.
+        hybrid:
+          type: boolean
+          default: true
+          description: Fuse dense (embedding) and sparse (BM25) scores.
+    KnowledgeStatistics:
+      type: object
+      description: Size of a knowledge-base, computed by the component.
+      readOnly: true
+      properties:
+        triples:
+          type: integer
+          minimum: 0
+          description: Number of triples in the knowledge-base graph.
+        documents:
+          type: integer
+          minimum: 0
+          description: Number of documents.
+        chunks:
+          type: integer
+          minimum: 0
+          description: Number of indexed chunks in the vector store.
+    Knowledge:
+      allOf:
+        - $ref: '#/components/schemas/Entity'
+        - type: object
+          description: >-
+            A knowledge-base: an RDF instance graph and a document and vector store, linked so that
+            search hits carry the IRIs of the entities they mention. It is typed by the ontology
+            modules it conforms to.
+          properties:
+            name:
+              type: string
+              description: Name of the knowledge-base.
+            description:
+              type: string
+              description: Description of the knowledge-base.
+            version:
+              type: string
+              description: Version of the knowledge-base.
+            lifecycleStatus:
+              type: string
+              description: >-
+                Lifecycle status of the knowledge-base: `active`, `suspended` (no ingestion) or
+                `retired` (read-only).
+              example: active
+            lastUpdate:
+              type: string
+              format: date-time
+              readOnly: true
+              description: Date and time of the last update.
+            knowledgeCategory:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeCategoryType'
+            storeKind:
+              $ref: '#/components/schemas/StoreKindType'
+            conformsTo:
+              type: array
+              description: The ontology modules that type the knowledge-base.
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            source:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeSource'
+            retrieval:
+              $ref: '#/components/schemas/RetrievalSettings'
+            statistics:
+              $ref: '#/components/schemas/KnowledgeStatistics'
+            relatedParty:
+              type: array
+              items:
+                $ref: '#/components/schemas/RelatedPartyRefOrPartyRoleRef'
+            validFor:
+              $ref: '#/components/schemas/TimePeriod'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          Knowledge: '#/components/schemas/Knowledge'
+    Knowledge_FVO:
+      allOf:
+        - $ref: '#/components/schemas/Extensible'
+        - type: object
+          description: A knowledge-base, as given to create it.
+          required:
+            - name
+          properties:
+            name:
+              type: string
+            description:
+              type: string
+            version:
+              type: string
+            knowledgeCategory:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeCategoryType'
+            storeKind:
+              allOf:
+                - $ref: '#/components/schemas/StoreKindType'
+              default: hybrid
+            conformsTo:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            source:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeSource'
+            retrieval:
+              $ref: '#/components/schemas/RetrievalSettings'
+            relatedParty:
+              type: array
+              items:
+                $ref: '#/components/schemas/RelatedPartyRefOrPartyRoleRef'
+            validFor:
+              $ref: '#/components/schemas/TimePeriod'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          Knowledge: '#/components/schemas/Knowledge_FVO'
+    Knowledge_MVO:
+      allOf:
+        - $ref: '#/components/schemas/Extensible'
+        - type: object
+          description: >-
+            The fields of a knowledge-base that can be changed. `storeKind` cannot change once the
+            knowledge-base exists.
+          properties:
+            name:
+              type: string
+            description:
+              type: string
+            version:
+              type: string
+            lifecycleStatus:
+              type: string
+            knowledgeCategory:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeCategoryType'
+            conformsTo:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            source:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeSource'
+            retrieval:
+              $ref: '#/components/schemas/RetrievalSettings'
+            relatedParty:
+              type: array
+              items:
+                $ref: '#/components/schemas/RelatedPartyRefOrPartyRoleRef'
+            validFor:
+              $ref: '#/components/schemas/TimePeriod'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          Knowledge: '#/components/schemas/Knowledge_MVO'
+    KnowledgeRef:
+      allOf:
+        - $ref: '#/components/schemas/EntityRef'
+      description: Reference to a knowledge-base.
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeRef: '#/components/schemas/KnowledgeRef'
+    KnowledgeSpecificationRef:
+      allOf:
+        - $ref: '#/components/schemas/EntityRef'
+        - type: object
+          properties:
+            iri:
+              type: string
+              format: uri
+              description: The IRI of the ontology module, as an alternative way to identify it.
+      description: Reference to an ontology module.
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeSpecificationRef: '#/components/schemas/KnowledgeSpecificationRef'
+    KnowledgeCreateEvent:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          description: KnowledgeCreateEvent generic structure
+          properties:
+            event:
+              $ref: '#/components/schemas/KnowledgeEventPayload'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeCreateEvent: '#/components/schemas/KnowledgeCreateEvent'
+    KnowledgeAttributeValueChangeEvent:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          description: KnowledgeAttributeValueChangeEvent generic structure
+          properties:
+            event:
+              $ref: '#/components/schemas/KnowledgeEventPayload'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeAttributeValueChangeEvent: '#/components/schemas/KnowledgeAttributeValueChangeEvent'
+    KnowledgeStateChangeEvent:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          description: KnowledgeStateChangeEvent generic structure
+          properties:
+            event:
+              $ref: '#/components/schemas/KnowledgeEventPayload'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeStateChangeEvent: '#/components/schemas/KnowledgeStateChangeEvent'
+    KnowledgeDeleteEvent:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          description: KnowledgeDeleteEvent generic structure
+          properties:
+            event:
+              $ref: '#/components/schemas/KnowledgeEventPayload'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeDeleteEvent: '#/components/schemas/KnowledgeDeleteEvent'
+    KnowledgeEventPayload:
+      type: object
+      description: The payload of a Knowledge event
+      properties:
+        knowledge:
+          $ref: '#/components/schemas/Knowledge'
   parameters:
     Id:
       name: id
@@ -517,6 +1034,53 @@ components:
                 '@type': Hub
                 callback: https://host/tmf-api/knowledgeManagement/v5/listener/knowledgeCreateEvent
                 query: eventType=KnowledgeCreateEvent
+    Knowledge_FVO:
+      description: The Knowledge to be created
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Knowledge_FVO'
+          examples:
+            hybrid:
+              $ref: '#/components/examples/Knowledge_FVO_hybrid'
+    Knowledge_MVO:
+      description: The Knowledge to be patched
+      required: true
+      content:
+        application/merge-patch+json:
+          schema:
+            $ref: '#/components/schemas/Knowledge_MVO'
+          examples:
+            retrieval:
+              $ref: '#/components/examples/Knowledge_MVO_retrieval'
+    KnowledgeCreateEvent:
+      description: Knowledge create Event payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeCreateEvent'
+          examples:
+            created:
+              $ref: '#/components/examples/KnowledgeCreateEvent_example'
+    KnowledgeAttributeValueChangeEvent:
+      description: Knowledge attributeValueChange Event payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeAttributeValueChangeEvent'
+    KnowledgeStateChangeEvent:
+      description: Knowledge stateChange Event payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeStateChangeEvent'
+    KnowledgeDeleteEvent:
+      description: Knowledge delete Event payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeDeleteEvent'
   responses:
     Hub:
       description: Notified
@@ -628,6 +1192,40 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Error'
+    200Knowledge:
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Knowledge'
+          examples:
+            hybrid:
+              $ref: '#/components/examples/Knowledge_hybrid'
+    201Knowledge:
+      description: Created
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Knowledge'
+          examples:
+            hybrid:
+              $ref: '#/components/examples/Knowledge_hybrid'
+    200KnowledgeArray:
+      description: Success
+      headers:
+        X-Total-Count:
+          $ref: '#/components/headers/X-Total-Count'
+        X-Result-Count:
+          $ref: '#/components/headers/X-Result-Count'
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/Knowledge'
+          examples:
+            list:
+              $ref: '#/components/examples/Knowledge_list'
   examples:
     Error400:
       summary: A request that fails validation
@@ -653,3 +1251,121 @@ components:
         title: Missing role
         detail: The token holds the role knowledge-viewer only
         instance: /tmf-api/knowledgeManagement/v5/knowledge
+    Knowledge_FVO_hybrid:
+      summary: A hybrid knowledge-base conforming to two ontology modules
+      value:
+        '@type': Knowledge
+        name: incident-knowledge
+        description: Network incidents, alarms and trouble tickets, with their resolutions
+        knowledgeCategory:
+          - know-what
+          - know-how
+        storeKind: hybrid
+        conformsTo:
+          - '@type': KnowledgeSpecificationRef
+            id: fto-telecom-assurance
+            iri: https://example.org/ontology/telecom/assurance
+          - '@type': KnowledgeSpecificationRef
+            id: fto-foundational-core
+            iri: https://example.org/ontology/foundational/core
+        source:
+          - kind: upload
+          - kind: tmf642
+            dependentApiName: alarmmanagement
+            eventTypes:
+              - AlarmCreateEvent
+          - kind: tmf628
+            dependentApiName: performancemanagement
+        retrieval:
+          topK: 8
+          scoreThreshold: 0.3
+          hybrid: true
+        relatedParty:
+          - '@type': RelatedPartyRefOrPartyRoleRef
+            role: owner
+            partyOrPartyRole:
+              '@type': PartyRoleRef
+              id: noc-operations
+              name: NOC operations
+    Knowledge_hybrid:
+      summary: A hybrid knowledge-base conforming to two ontology modules
+      value:
+        '@type': Knowledge
+        id: 3f1e2c8a
+        href: https://host/tmf-api/knowledgeManagement/v5/knowledge/3f1e2c8a
+        name: incident-knowledge
+        description: Network incidents, alarms and trouble tickets, with their resolutions
+        version: '1.0'
+        lifecycleStatus: active
+        lastUpdate: '2026-11-22T10:00:00Z'
+        knowledgeCategory:
+          - know-what
+          - know-how
+        storeKind: hybrid
+        conformsTo:
+          - '@type': KnowledgeSpecificationRef
+            id: fto-telecom-assurance
+            href: https://host/tmf-api/knowledgeManagement/v5/knowledgeSpecification/fto-telecom-assurance
+            iri: https://example.org/ontology/telecom/assurance
+          - '@type': KnowledgeSpecificationRef
+            id: fto-foundational-core
+            href: https://host/tmf-api/knowledgeManagement/v5/knowledgeSpecification/fto-foundational-core
+            iri: https://example.org/ontology/foundational/core
+        source:
+          - kind: upload
+          - kind: tmf642
+            dependentApiName: alarmmanagement
+            eventTypes:
+              - AlarmCreateEvent
+          - kind: tmf628
+            dependentApiName: performancemanagement
+        retrieval:
+          topK: 8
+          scoreThreshold: 0.3
+          hybrid: true
+        statistics:
+          triples: 48210
+          documents: 312
+          chunks: 5840
+        relatedParty:
+          - '@type': RelatedPartyRefOrPartyRoleRef
+            role: owner
+            partyOrPartyRole:
+              '@type': PartyRoleRef
+              id: noc-operations
+              name: NOC operations
+    Knowledge_list:
+      summary: A list with one knowledge-base, with selected fields
+      value:
+        - '@type': Knowledge
+          id: 3f1e2c8a
+          href: https://host/tmf-api/knowledgeManagement/v5/knowledge/3f1e2c8a
+          name: incident-knowledge
+          lifecycleStatus: active
+          storeKind: hybrid
+          statistics:
+            triples: 48210
+            documents: 312
+            chunks: 5840
+    Knowledge_MVO_retrieval:
+      summary: Change the default retrieval settings
+      value:
+        '@type': Knowledge
+        retrieval:
+          topK: 5
+          scoreThreshold: 0.4
+    KnowledgeCreateEvent_example:
+      summary: A knowledge-base was created
+      value:
+        '@type': KnowledgeCreateEvent
+        eventId: 0b6c9f2e
+        eventTime: '2026-11-22T10:00:00Z'
+        eventType: KnowledgeCreateEvent
+        event:
+          knowledge:
+            '@type': Knowledge
+            id: 3f1e2c8a
+            href: https://host/tmf-api/knowledgeManagement/v5/knowledge/3f1e2c8a
+            name: incident-knowledge
+            lifecycleStatus: active
+            storeKind: hybrid
