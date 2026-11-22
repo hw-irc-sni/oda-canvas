@@ -281,7 +281,12 @@ flowchart LR
 5. **KM-FX-05 Knowledge Storage** writes triples through the API's internal endpoint, upserts chunks and vectors into Qdrant, and links chunks to the graph entities they mention.
 6. **KM-FX-06 Knowledge Recommendation** maintains ranking signals: success rate, applicability, and usage feedback recorded on `/recommend` calls.
 
-Inventory, assurance and intent events (TMF639, TMF638, TMF642, TMF628 and TMF921) are declared as `eventNotification.subscribedEvents` in the Component CR and delivered by the Event Management operator (TMFOP006). What TMFOP006 supports is an unverified mechanic (spike S5). The fallback is a direct hub registration on the URL resolved for the dependent API (TMFOP005).
+Inventory, assurance and intent events (TMF639, TMF638, TMF642, TMF628 and TMF921) are declared as `eventNotification.subscribedEvents` in the Component CR and delivered by the Event Management operator (TMFOP006). Spike S5 ([#21](https://github.com/hw-irc-sni/oda-canvas/issues/21)) found that TMFOP006 is not implemented: the Component operator turns `subscribedEvents` into `SubscribedNotification` resources, but nothing acts on them. So TMFC060 subscribes itself:
+* it declares the source APIs as optional dependent APIs, with the providers' exact specification URLs (TMFOP005 matches on them);
+* it reads each resolved URL from the canvas-info service (TMF638), as the reference components do;
+* it registers a hub on each provider for the knowledge-bases that use that source.
+
+The Component keeps `subscribedEvents`, so that a future TMFOP006 can take over.
 
 ## Model resolution
 
@@ -416,7 +421,7 @@ These mechanics are unverified. Each is checked by a short spike at the start of
 | S2 | Can the portal pod reach the ExposedAPI URL from Resource Inventory? If not, the in-cluster Service URL is built from the ExposedAPI implementation | [Canvas integration](#canvas-integration) |
 | S3 | Does pyoxigraph execute SPARQL `SERVICE`, with an allowlist? **Done (#20):** yes natively, no allowlist or timeout; rdflib pre-check plus killable read-only workers | [Federation](#federation) |
 | S4 | How does an operator obtain a canvasSystemRole token? | [Canvas integration](#canvas-integration) |
-| S5 | What does TMFOP006 support for `subscribedEvents` delivery? | [Ingestion pipeline](#ingestion-pipeline) |
+| S5 | What does TMFOP006 support for `subscribedEvents` delivery? **Done (#21):** nothing (not implemented); TMFC060 registers hubs on the providers, with URLs from canvas-info | [Ingestion pipeline](#ingestion-pipeline) |
 | S6 | Does a standalone CRD need a webhook conversion change? | [Canvas integration](#canvas-integration) |
 
 ## Related Documentation
