@@ -2029,6 +2029,57 @@ paths:
           $ref: '#/components/responses/404'
         default:
           $ref: '#/components/responses/Error'
+  '/knowledgeSpecification/{id}/validation/document':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      operationId: validateDocument
+      summary: Validates a document against a shapes module
+      description: >-
+        SHACL-validates the submitted RDF (for example an intent expression) against this module, which must be a
+        `shapes` module (`409` otherwise), together with the shapes and ontology modules it imports. Nothing is
+        stored. The FTO `validate` tool of the MCP server wraps this operation.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      requestBody:
+        required: true
+        content:
+          text/turtle:
+            schema:
+              type: string
+          application/ld+json:
+            schema:
+              $ref: '#/components/schemas/JsonLdDocument'
+      responses:
+        '200':
+          description: The SHACL report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentValidationReport'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '415':
+          $ref: '#/components/responses/415'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearerAuth:
@@ -2039,6 +2090,21 @@ components:
         An access token from the Canvas identity platform. The component client roles in
         `resource_access` are checked against the `x-required-roles` of each operation.
   schemas:
+    DocumentValidationReport:
+      type: object
+      description: The SHACL validation of a submitted document against a shapes module.
+      properties:
+        shapesModule:
+          type: string
+        runAt:
+          type: string
+          format: date-time
+        conforms:
+          type: boolean
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShaclResult'
     KnowledgeProposal:
       type: object
       description: A change the ingestion pipeline proposes for a knowledge-base; a person accepts or rejects it.

@@ -272,6 +272,31 @@ class Registry:
             stack.extend(r["id"] for r in bodies[current].get("imports") or [])
         return seen
 
+    async def validate_document(self, shapes_id: str, data: bytes, media_type: str) -> dict:
+        """SHACL-validate submitted RDF against a shapes module (and its imports: more shapes, and the ontology)."""
+        from rdflib import Graph
+
+        from .checks import shacl_validate
+        row = await self.get_row(shapes_id)
+        if row.spec_kind != "shapes":
+            raise conflict(f"'{shapes_id}' is a {row.spec_kind} module; validate documents against a shapes module")
+        fmt = {"text/turtle": "turtle", "application/ld+json": "json-ld"}.get(media_type.split(";")[0].strip())
+        if fmt is None:
+            raise ApiError(415, "415", "Unsupported Media Type", "Send the document as text/turtle or application/ld+json")
+        try:
+            document = Graph().parse(data=data.decode("utf-8", errors="replace"), format=fmt)
+        except Exception as exc:  # noqa: BLE001 - any parse error is the client's
+            raise bad_request(f"Invalid RDF: {exc}") from exc
+        bodies = {b["id"]: b for b in await self.all_bodies()}
+        shapes, ontology = Graph(), Graph()
+        for mid in [shapes_id, *await self.import_closure(shapes_id, bodies)]:  # the closure excludes the module
+            if bodies[mid].get("specKind") == "shapes":
+                shapes += self.rdflib_graph(mid)
+            else:
+                ontology += self.rdflib_graph(mid)
+        result = shacl_validate(document, shapes, ontology)
+        return {"shapesModule": shapes_id, "runAt": now(), **result}
+
     async def validate(self, module_id: str) -> dict:
         from rdflib import Graph
 

@@ -174,6 +174,13 @@ async def run_validation(id: str, request: Request, s: AsyncSession = Depends(se
     return await registry_for(request, s).validate(id)
 
 
+@router.post("/knowledgeSpecification/{id}/validation/document")
+async def validate_document(id: str, request: Request, s: AsyncSession = Depends(session),
+                            _: Principal = Depends(require_operation("validateDocument"))):
+    return await registry_for(request, s).validate_document(id, await request.body(),
+                                                           request.headers.get("content-type", "text/turtle"))
+
+
 @router.get("/schema/{name}")
 async def retrieve_schema(name: str, _: Principal = Depends(require_operation("retrieveSchema"))):
     path = SCHEMAS_DIR / name

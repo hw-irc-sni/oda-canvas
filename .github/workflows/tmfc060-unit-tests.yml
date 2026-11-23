@@ -22,6 +22,7 @@ jobs:
         microservice:
           - knowledgeApiMicroservice
           - pipelineWorkerMicroservice
+          - mcpServerMicroservice
     defaults:
       run:
         working-directory: source/components/TMFC060-KnowledgeManagement/${{ matrix.microservice }}

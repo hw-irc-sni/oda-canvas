@@ -375,3 +375,16 @@ tmfc060-pipeline-worker:
   paths:
     - source/components/TMFC060-KnowledgeManagement/pipelineWorkerMicroservice/**/*
   buildContext: source/components/TMFC060-KnowledgeManagement/pipelineWorkerMicroservice
+
+tmfc060-mcp-server:
+  displayName: TMFC060-MCP-Server
+  fileName: tmfc060-mcp-server
+
+  valuesYamlFile: source/components/TMFC060-KnowledgeManagement/chart/values.yaml
+  valuesPathImage: .mcpServer.image
+  valuesPathVersion: .mcpServer.version
+  valuesPathPrereleaseSuffix: .mcpServer.prereleaseSuffix
+
+  paths:
+    - source/components/TMFC060-KnowledgeManagement/mcpServerMicroservice/**/*
+  buildContext: source/components/TMFC060-KnowledgeManagement/mcpServerMicroservice

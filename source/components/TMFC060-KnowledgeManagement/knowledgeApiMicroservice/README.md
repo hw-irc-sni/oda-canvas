@@ -265,6 +265,12 @@ request with:
   `FEDERATION_TIMEOUT`, a failing one 502 `FEDERATION_ERROR` (`SERVICE SILENT` continues without it);
 - an answer cache of `FEDERATION_CACHE_TTL` seconds (60; 0 turns it off).
 
+## Validating documents
+
+`POST /knowledgeSpecification/{id}/validation/document` SHACL-validates submitted RDF (Turtle or JSON-LD) against a
+`shapes` module (409 for another kind) and the modules it imports, returning `{shapesModule, runAt, conforms,
+results}`; nothing is stored. The MCP server's `validate` tool wraps it.
+
 ## Governance
 
 [`app/ontology/governance.py`](app/ontology/governance.py) runs the governed lifecycle
