@@ -43,6 +43,10 @@ def collection_name(kb_id: str) -> str:
 
 
 def unavailable(exc: Exception) -> ApiError:
+    """A vector store failure: refused requests (Qdrant 4xx) are the caller's (400); anything else is 503."""
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int) and 400 <= status < 500 and status != 404:
+        return ApiError(400, "400", "Bad Request", f"The vector store refused the request ({status})")
     return ApiError(503, "503", "Service Unavailable", f"The vector store is not available: {type(exc).__name__}")
 
 

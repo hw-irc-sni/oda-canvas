@@ -94,8 +94,8 @@ async def recommend(session, kbs, row, payload: dict, dataset: list[str], search
         raise bad_request("context must be text")
     if not isinstance(iris, list) or not all(isinstance(i, str) and IRI.match(i) for i in iris):
         raise bad_request("iri must be a list of IRIs")
-    if not isinstance(top_k, int) or isinstance(top_k, bool) or top_k < 1:
-        raise bad_request("topK must be an integer >= 1")
+    if not isinstance(top_k, int) or isinstance(top_k, bool) or not 1 <= top_k <= 100:
+        raise bad_request("topK must be an integer from 1 to 100")
     if not context.strip() and not iris:
         raise bad_request("give a context, context IRIs, or both")
     store = kbs.graphs.store

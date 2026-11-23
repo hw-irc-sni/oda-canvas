@@ -2573,6 +2573,7 @@ components:
         topK:
           type: integer
           minimum: 1
+          maximum: 100
           default: 8
           description: Number of hits to return.
         scoreThreshold:
@@ -2929,6 +2930,7 @@ components:
         topK:
           type: integer
           minimum: 1
+          maximum: 100
         scoreThreshold:
           type: number
           minimum: 0
@@ -2988,6 +2990,7 @@ components:
         topK:
           type: integer
           minimum: 1
+          maximum: 100
           default: 5
     RecommendationItem:
       type: object

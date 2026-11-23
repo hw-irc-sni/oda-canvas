@@ -7,6 +7,8 @@ optional everywhere in a request, references included (the API sets it): it is d
 """
 import copy
 import json
+import re
+from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -17,6 +19,22 @@ from referencing.jsonschema import DRAFT7
 from .errors import ApiError
 
 HTTP_METHODS = ("get", "put", "post", "delete", "patch")
+RFC3339 = re.compile(r"^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$")
+FORMATS = FormatChecker()
+
+
+@FORMATS.checks("date-time")
+def _date_time(value) -> bool:
+    """RFC 3339 date-time (jsonschema checks it only with an optional package)."""
+    if not isinstance(value, str):
+        return True
+    if not RFC3339.match(value):
+        return False
+    try:
+        datetime.fromisoformat(value.replace("z", "Z").replace("t", "T"))
+    except ValueError:
+        return False
+    return True
 JSON_TYPES = ("application/json", "application/merge-patch+json")
 
 
@@ -63,7 +81,7 @@ def load_body_validators(oas_path: str) -> dict[str, Draft7Validator]:
             schema = next((content[t]["schema"] for t in JSON_TYPES if t in content and "schema" in content[t]), None)
             if schema is not None:
                 validators[op["operationId"]] = Draft7Validator(_absolute_refs(copy.deepcopy(schema), base),
-                                                                registry=registry, format_checker=FormatChecker())
+                                                                registry=registry, format_checker=FORMATS)
     return validators
 
 

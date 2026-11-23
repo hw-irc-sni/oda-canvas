@@ -71,8 +71,8 @@ def validate_fields(payload: dict, *, creating: bool) -> None:
         if not isinstance(source, dict) or source.get("kind") not in SOURCE_KINDS:
             raise bad_request(f"source kind must be one of {', '.join(sorted(SOURCE_KINDS))}")
     retrieval = payload.get("retrieval") or {}
-    if "topK" in retrieval and not (isinstance(retrieval["topK"], int) and retrieval["topK"] >= 1):
-        raise bad_request("retrieval.topK must be an integer >= 1")
+    if "topK" in retrieval and not (isinstance(retrieval["topK"], int) and 1 <= retrieval["topK"] <= 100):
+        raise bad_request("retrieval.topK must be an integer from 1 to 100")
     if "scoreThreshold" in retrieval and not (isinstance(retrieval["scoreThreshold"], (int, float))
                                               and 0 <= retrieval["scoreThreshold"] <= 1):
         raise bad_request("retrieval.scoreThreshold must be between 0 and 1")

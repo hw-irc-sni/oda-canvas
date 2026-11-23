@@ -263,8 +263,8 @@ async def search_knowledge(id: str, request: Request, s: AsyncSession = Depends(
     threshold = payload.get("scoreThreshold", defaults["scoreThreshold"])
     hybrid = payload.get("hybrid", defaults["hybrid"])
     iris = payload.get("iriFilter")
-    if not isinstance(top_k, int) or isinstance(top_k, bool) or top_k < 1:
-        raise ApiError(400, "400", "Bad Request", "topK must be an integer >= 1")
+    if not isinstance(top_k, int) or isinstance(top_k, bool) or not 1 <= top_k <= 100:
+        raise ApiError(400, "400", "Bad Request", "topK must be an integer from 1 to 100")
     if not isinstance(threshold, (int, float)) or isinstance(threshold, bool) or not 0 <= threshold <= 1:
         raise ApiError(400, "400", "Bad Request", "scoreThreshold must be between 0 and 1")
     if not isinstance(hybrid, bool):

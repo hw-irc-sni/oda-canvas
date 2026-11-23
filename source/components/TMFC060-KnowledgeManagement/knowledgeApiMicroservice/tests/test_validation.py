@@ -43,3 +43,14 @@ async def test_type_is_optional_in_requests_but_checked_when_given(api):
 async def test_roles_are_checked_before_the_body(api):
     r = await api.post(f"{api.base}/knowledgeSpecification", json={"name": ["x"]}, headers=auth("knowledge-viewer"))
     assert r.status_code == 403
+
+
+async def test_date_times_are_checked(api):
+    base = f"{api.base}/knowledge"
+    await api.post(base, json={"id": "a", "name": "A", "storeKind": "graph"}, headers=auth("knowledge-editor"))
+    for bad in ["", "yesterday", "2026-13-01T00:00:00Z", "2026-01-01"]:
+        r = await api.patch(f"{base}/a", json={"validFor": {"endDateTime": bad}}, headers=auth("knowledge-editor"))
+        assert r.status_code == 400 and "validFor/endDateTime" in r.json()["message"], bad
+    ok = await api.patch(f"{base}/a", json={"validFor": {"endDateTime": "2027-01-01T00:00:00Z"}},
+                         headers=auth("knowledge-editor"))
+    assert ok.status_code == 200

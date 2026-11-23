@@ -46,3 +46,15 @@ async def test_ready_is_503_when_postgres_is_down(settings):
 def test_base_path_uses_the_component_name():
     settings = Settings(component_name="km-knowledgemanagement")
     assert settings.base_path == "/km-knowledgemanagement/tmf-api/knowledgeManagement/v5"
+
+
+async def test_405_allow_lists_the_documented_methods(settings):
+    app = create_app(settings)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        r = await client.request("PUT", f"{settings.base_path}/knowledge/kb")
+        assert r.status_code == 405 and r.headers["allow"] == "DELETE, GET, PATCH"
+        assert r.json()["code"] == "405"
+        r = await client.request("DELETE", f"{settings.process_base_path}/task/t1")
+        assert r.status_code == 405 and r.headers["allow"] == "GET"
+        missing = await client.get(f"{settings.base_path}/nowhere")
+        assert missing.status_code == 404 and missing.json()["code"] == "404"

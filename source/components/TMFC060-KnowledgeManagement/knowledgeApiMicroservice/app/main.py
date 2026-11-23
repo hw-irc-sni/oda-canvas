@@ -1,10 +1,14 @@
 """FastAPI application of the TMFC060 knowledge API. Run with: uvicorn --factory app.main:create_app"""
 import asyncio
 import logging
+import re
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse
+from qdrant_client import AsyncQdrantClient
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .auth import TokenValidator, check_auth_settings, load_operations
 from .config import Settings, get_settings
@@ -15,12 +19,20 @@ from .graphstore import GraphStore
 from .ontology import sync
 from .ontology.governance import load_lifecycles
 from .ontology.registry import Registry
-from qdrant_client import AsyncQdrantClient
 
 from .kb import router as kb_router
 from .event_sources import Batcher, Registrar
 from .internal import InternalServer
 from .validation import load_body_validators
+
+
+def allowed_methods(operations) -> list[tuple[re.Pattern, set[str]]]:
+    """(path pattern, methods) from the OAS operations, most specific path first."""
+    by_path: dict[str, set[str]] = {}
+    for op in operations.values():
+        by_path.setdefault(op.base + op.path, set()).add(op.method)
+    patterns = [(re.compile(re.sub(r"\\{[^}]+\\}", "[^/]+", re.escape(p))), m) for p, m in by_path.items()]
+    return sorted(patterns, key=lambda pm: -len(pm[0].pattern))
 from .models import ModelResolver
 from .ontology.federation import Relay
 from .routers import hub, processes, specifications, terms
@@ -88,6 +100,21 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
     app.state.lifecycles = load_lifecycles(settings.oas_path)
     app.state.body_validators = {**load_body_validators(settings.oas_path),
                                  **load_body_validators(settings.process_oas_path)}
+
+    allowed = allowed_methods(app.state.operations)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        """Framework errors (404 for an unknown path, 405 for a method) as TMF630 errors; a 405's Allow header lists
+        the methods the OAS documents for the path (Starlette only sees one route of the path)."""
+        headers = dict(exc.headers or {})
+        if exc.status_code == 405:
+            methods = next((m for pattern, m in allowed if pattern.fullmatch(request.url.path)), None)
+            if methods:
+                headers["Allow"] = ", ".join(sorted(methods))
+        error = ApiError(exc.status_code, str(exc.status_code), HTTPStatus(exc.status_code).phrase,
+                         str(exc.detail), headers=headers)
+        return await api_error(request, error)
 
     @app.exception_handler(ApiError)
     async def api_error(request: Request, exc: ApiError) -> JSONResponse:
