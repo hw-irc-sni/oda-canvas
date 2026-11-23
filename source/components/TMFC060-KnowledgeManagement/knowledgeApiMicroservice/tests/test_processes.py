@@ -207,3 +207,17 @@ async def test_process_read_api(api):
     assert (await api.get(f"{base}/process/pf-nope", headers=auth())).status_code == 404
     assert (await api.get(f"{base}/task/tk-nope", headers=auth())).status_code == 404
     assert (await api.get(f"{base}/process")).status_code == 401
+
+
+async def test_chains_finishing_together_close_the_process(api):
+    """Regression: two chains completing at the same moment must still close their process (each transaction used
+    to see the other's task as open)."""
+    for n in range(8):
+        a, b = [(await api.post(f"{api.base}/knowledge/kb/document", headers=auth(EDITOR), files={
+            "file": (f"r{n}{x}.md", f"# round {n} {x}".encode(), "text/markdown")})).json()["id"] for x in "ab"]
+        ref = (await ingest(api, documentId=[a, b])).json()
+        await sql(api, "UPDATE task SET state = 'completed' WHERE process_id = :p AND seq < 6", p=ref["id"])
+        first, second = await claim(api, "w1"), await claim(api, "w2")
+        assert {first.seq, second.seq} == {6}
+        await asyncio.gather(complete(api, first, "w1"), complete(api, second, "w2"))
+        assert (await get(api, Process, ref["id"])).state == "completed"

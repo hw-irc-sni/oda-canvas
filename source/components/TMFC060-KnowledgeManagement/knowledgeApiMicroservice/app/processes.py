@@ -208,6 +208,9 @@ async def _fail_for_good(session, task: Task, error: str) -> None:
 
 
 async def _close_if_done(session, process_id: str) -> None:
+    # Lock the process first: two chains finishing at once would otherwise each see the other's task as still open
+    # (neither committed yet) and leave the process inProgress. Whoever locks second sees the first's commit.
+    await session.execute(select(Process.id).where(Process.id == process_id).with_for_update())
     open_left = await session.scalar(select(exists().where(Task.process_id == process_id, Task.state.in_(OPEN))))
     if open_left:
         return
