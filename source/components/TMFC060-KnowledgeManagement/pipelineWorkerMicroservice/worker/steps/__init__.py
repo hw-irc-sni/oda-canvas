@@ -23,10 +23,12 @@ def default_handlers(settings=None) -> dict[str, Handler]:
     from .km_fx_03 import handler as km_fx_03
     from .km_fx_04 import handler as km_fx_04
     from .km_fx_05 import handler as km_fx_05
+    from .km_fx_06 import handler as km_fx_06
     handlers: dict[str, Handler] = {step: noop for step in STEPS}
     handlers["KM-FX-01"] = km_fx_01(settings)
     handlers["KM-FX-02"] = km_fx_02(settings)
     handlers["KM-FX-03"] = km_fx_03(settings)
     handlers["KM-FX-04"] = km_fx_04(settings)
     handlers["KM-FX-05"] = km_fx_05(settings)
+    handlers["KM-FX-06"] = km_fx_06(settings)
     return handlers

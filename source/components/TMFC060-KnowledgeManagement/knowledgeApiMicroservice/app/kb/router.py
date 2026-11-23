@@ -23,7 +23,7 @@ from ..ontology import federation
 from ..query import effective_timeout, precheck, run_query
 from ..routers.deps import session
 from ..routers.specifications import json_body
-from . import proposals
+from . import proposals, recommend
 from .documents import Documents
 from .service import KnowledgeBases
 from .vectors import Vectors
@@ -154,6 +154,37 @@ async def retrieve_document_content(id: str, documentId: str, request: Request, 
 async def delete_document(id: str, documentId: str, request: Request, s: AsyncSession = Depends(session),
                           principal: Principal = Depends(require_operation("deleteKnowledgeDocument"))):
     await documents_for(request, s).delete(id, documentId, principal)
+    return Response(status_code=204)
+
+
+# ---- recommend (KM-FX-06) --------------------------------------------------------------------------------------
+@router.post("/knowledge/{id}/recommend")
+async def recommend_knowledge(id: str, request: Request, s: AsyncSession = Depends(session),
+                              _: Principal = Depends(require_operation("recommendFromKnowledge"))):
+    kbs = kbs_for(request, s)
+    row = await kbs.get_row(id)
+    resolver = getattr(request.app.state, "models", None)
+
+    async def search(text: str, limit: int) -> list[dict]:
+        dense, mode = None, "hybrid"
+        try:
+            if resolver is None:
+                raise ModelError("No model resolver")
+            dense = (await resolver.embed([text]))[0]
+        except (ModelError, httpx.HTTPError, LookupError, ValueError):
+            mode = "sparse"
+        return await kbs.vectors.search(id, text, dense, top_k=limit, threshold=0.0, mode=mode, iris=None)
+
+    result = await recommend.recommend(s, kbs, row, await json_body(request), await dataset_for(s, kbs.graphs, row),
+                                       search)
+    return JSONResponse(result)
+
+
+@router.post("/knowledge/{id}/recommend/feedback", status_code=204)
+async def recommend_feedback(id: str, request: Request, s: AsyncSession = Depends(session),
+                             principal: Principal = Depends(require_operation("createRecommendationFeedback"))):
+    await kbs_for(request, s).get_row(id)
+    await recommend.feedback(s, id, await json_body(request), principal.username)
     return Response(status_code=204)
 
 

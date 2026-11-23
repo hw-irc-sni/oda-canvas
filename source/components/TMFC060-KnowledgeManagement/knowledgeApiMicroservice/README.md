@@ -120,6 +120,7 @@ not started. The workers reach the component only through this API.
 - `GET /internal/knowledge/{id}` (its `storeKind`, state, conformsTo) and `PUT /internal/knowledge/{id}/chunks?source=…`
   (`chunks`, `dense`): replaces that source's chunks in the vector store, adding the sparse vectors; point ids are a
   hash of the document, offsets and text; 409 for a graph KB or an embedding dimension other than the collection's.
+- `PUT /internal/knowledge/{id}/profiles`: entities' applicability profiles for recommendation (KM-FX-06).
 - `GET /internal/knowledge/{id}/ontology?part=ontology|shapes`: the Turtle of the KB's conformsTo modules (KM-FX-04);
   `POST /internal/knowledge/{id}/proposal`: record proposed changes, replacing a source's undecided ones.
 - The public `/knowledge/{id}/graph` shows the KB graph and its source graphs together; its PUT and DELETE replace
@@ -158,6 +159,18 @@ already being ingested.
 - The component's **processflow** API (TMF701 v5 subset,
   [`api/TMF701-ProcessManagement-v5.0.0-subset.oas.yaml`](api/TMF701-ProcessManagement-v5.0.0-subset.oas.yaml)) reads
   them at `/{component}/tmf-api/process/v5/process` and `/task` (filter tasks with `processId=` or `documentId=`).
+
+## Recommendation
+
+`POST /knowledge/{id}/recommend` ([`app/kb/recommend.py`](app/kb/recommend.py)) ranks entities and chunks for a
+`context` (text) and/or context `iri`s: the chunks hybrid search finds (not for a graph KB), the entities they
+mention, and the entities one hop from the context IRIs.
+`score = relevance × (0.5 + 0.5 × applicability) × (0.5 + successRate)`: relevance is the search score (1 for a
+neighbour of a context IRI), applicability the share of the context IRIs and their classes the item is connected to
+(from the profiles KM-FX-06 stores), successRate `(successes + 1) / (uses + 2)` from the feedback, live. Usage breaks
+ties, then the item id, so the ranking is deterministic; `topK` defaults to 5. `POST …/recommend/feedback` records
+`used`/`outcome` for an item of a recommendation kept for 30 days (404 unknown, 400 for an item it did not contain);
+one feedback per recommendation, item and caller.
 
 ## Proposals
 

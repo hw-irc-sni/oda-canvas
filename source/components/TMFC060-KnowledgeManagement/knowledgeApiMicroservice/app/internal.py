@@ -261,6 +261,17 @@ def build_app(main: FastAPI, token: InternalToken) -> FastAPI:
         await Vectors(state.qdrant, state.settings.embedding_dimension).replace_source(kb_id, source, chunks, dense)
         return {"indexed": len(chunks)}
 
+    @app.put("/internal/knowledge/{kb_id}/profiles", dependencies=[Depends(authorized)])
+    async def profiles(kb_id: str, request: Request):
+        from .kb import recommend
+        payload = await json_of(request)
+        if not isinstance(payload.get("profiles"), list):
+            raise ApiError(400, "400", "Bad Request", "profiles must be a list")
+        async with state.sessions() as session:
+            await writable_kb(session, kb_id)
+            count = await recommend.store_profiles(session, kb_id, payload["profiles"])
+        return {"stored": count}
+
     # ---- ontology and proposals (KM-FX-04) -----------------------------------------------------------------
     @app.get("/internal/knowledge/{kb_id}/ontology", dependencies=[Depends(authorized)])
     async def ontology(kb_id: str, request: Request):

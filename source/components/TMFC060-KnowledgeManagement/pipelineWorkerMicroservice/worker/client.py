@@ -145,6 +145,13 @@ class InternalClient:
         response.raise_for_status()
         return response.json()["indexed"]
 
+    async def store_profiles(self, kb_id: str, profiles: list[dict]) -> int:
+        """Store entities' applicability profiles for recommendation (KM-FX-06)."""
+        response = await self.http.put(f"/internal/knowledge/{kb_id}/profiles", json={"profiles": profiles},
+                                       headers=self.headers())
+        response.raise_for_status()
+        return response.json()["stored"]
+
     async def ready(self) -> bool:
         """The internal API answers and accepts the token (a claim without a worker: 400 means authenticated)."""
         try:

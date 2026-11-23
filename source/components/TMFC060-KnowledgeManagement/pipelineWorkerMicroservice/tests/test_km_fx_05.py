@@ -134,6 +134,15 @@ async def test_triples_queryable_and_chunks_searchable_with_entity_iris(store_ap
     assert "The mains alarm took cell 4711 down." not in texts  # the old whole-paragraph chunk is gone
     stats = (await api.get(f"{api.base}/knowledge/hyb")).json()["statistics"]
     assert stats["chunks"] == len(points) and stats["triples"] > 0
+    # KM-FX-06 stored the entities' applicability profiles, which recommend uses
+    from sqlalchemy import select
+    from app.db.models import RecommendProfile
+    async with api.app.state.sessions() as s:
+        profiles = {p.entity_iri: p.iris for p in (await s.scalars(select(RecommendProfile))).all()}
+    assert ALARM in profiles[CELL] and AS + "Site" in profiles[CELL] and CELL in profiles[ALARM]
+    r = await api.post(f"{api.base}/knowledge/hyb/recommend", json={"context": "outage", "iri": [CELL], "topK": 3})
+    assert r.status_code == 200 and r.json()["items"]
+    assert any(i["itemId"] == ALARM and i["signals"]["applicability"] > 0 for i in r.json()["items"])
 
 
 async def test_graph_and_vector_knowledge_bases(store_api):

@@ -2,7 +2,7 @@
 from datetime import datetime
 
 from sqlalchemy import (BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, LargeBinary, String, Text,
-                        func)
+                        UniqueConstraint, func)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -208,9 +208,29 @@ class KnowledgeProposal(Base):
     created: Mapped[datetime] = created_at()
 
 
+class Recommendation(Base):
+    """A recommendation made (its items), so feedback can be checked against it; purged after 30 days."""
+    __tablename__ = "recommendation"
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    knowledge_id: Mapped[str] = mapped_column(Text, ForeignKey("knowledge.id", ondelete="CASCADE"), nullable=False,
+                                              index=True)
+    items: Mapped[list] = mapped_column(JSONB, nullable=False)
+    created: Mapped[datetime] = created_at()
+
+
+class RecommendProfile(Base):
+    """What an entity is connected to (its neighbours, types and their superclasses), for applicability (KM-FX-06)."""
+    __tablename__ = "recommend_profile"
+    knowledge_id: Mapped[str] = mapped_column(Text, ForeignKey("knowledge.id", ondelete="CASCADE"), primary_key=True)
+    entity_iri: Mapped[str] = mapped_column(Text, primary_key=True)
+    iris: Mapped[list] = mapped_column(JSONB, nullable=False)
+    updated: Mapped[datetime] = updated_at()
+
+
 class RecommendFeedback(Base):
-    """Feedback on a recommended item (KM-FX-06 ranking signals)."""
+    """Feedback on a recommended item (KM-FX-06 ranking signals): one per recommendation, item and caller."""
     __tablename__ = "recommend_feedback"
+    __table_args__ = (UniqueConstraint("recommendation_id", "item_id", "actor", name="uq_recommend_feedback"),)
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     knowledge_id: Mapped[str] = mapped_column(Text, ForeignKey("knowledge.id", ondelete="CASCADE"), nullable=False,
                                               index=True)

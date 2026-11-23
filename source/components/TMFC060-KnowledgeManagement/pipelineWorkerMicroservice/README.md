@@ -1,8 +1,8 @@
 # TMFC060 pipeline worker
 
 The ingestion worker of the TMFC060 Knowledge Management component. It claims the KM-FX tasks of ingestion processes
-and runs them: KM-FX-01 data processing to KM-FX-06 knowledge recommendation (the step handlers arrive with issues
-#40–#45; until then every step completes as a no-op).
+and runs them: KM-FX-01 data processing to KM-FX-06 knowledge recommendation (the step handlers are described
+below).
 
 The worker reaches the component **only through the knowledge API's internal port** (`INTERNAL_PORT`, see the API
 README): it has no database, Qdrant or model access, and shares no code with the API. Run several replicas: the API
@@ -94,6 +94,12 @@ document yields the same IRIs and replaces its source graph, so nothing is dupli
 (with their entity and class IRIs as payload), `hybrid` both. Chunks are embedded through the API's model route in
 batches of `EMBEDDING_BATCH` and indexed by the API (which adds the sparse BM25 vector); a re-ingest replaces the
 document's chunks, so nothing stale stays searchable.
+
+## KM-FX-06 Knowledge Recommendation
+
+[`worker/steps/km_fx_06.py`](worker/steps/km_fx_06.py) stores the applicability profile of every entity the document
+produced (its neighbours, types and superclasses) for `/knowledge/{id}/recommend`; the success and usage signals are
+aggregated live from the feedback by the API.
 
 ## Settings
 
