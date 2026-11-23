@@ -189,6 +189,25 @@ class EventDelivery(Base):
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class KnowledgeProposal(Base):
+    """A change KM-FX-04 proposes for a knowledge-base (a data conflict, an ontology term, an entity link); a person
+    accepts or rejects it, it is never applied directly."""
+    __tablename__ = "knowledge_proposal"
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    knowledge_id: Mapped[str] = mapped_column(Text, ForeignKey("knowledge.id", ondelete="CASCADE"), nullable=False,
+                                              index=True)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # dataConflict, ontologyTerm, entityLink
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="proposed")
+    source: Mapped[str | None] = mapped_column(Text)  # the document or batch it came from
+    process_id: Mapped[str | None] = mapped_column(Text)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    details: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    suggestion: Mapped[dict | None] = mapped_column(JSONB)
+    decided_by: Mapped[str | None] = mapped_column(Text)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created: Mapped[datetime] = created_at()
+
+
 class RecommendFeedback(Base):
     """Feedback on a recommended item (KM-FX-06 ranking signals)."""
     __tablename__ = "recommend_feedback"

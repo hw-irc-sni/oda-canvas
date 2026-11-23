@@ -117,6 +117,8 @@ not started. The workers reach the component only through this API.
 - `POST /internal/models/chat` and `/internal/models/embeddings`: calls through the model route (503 without a route,
   400 when the model refuses the request, 502 on other failures).
 - `POST /internal/knowledge/{id}/query`: a read-only SPARQL query over the KB's dataset (no SERVICE).
+- `GET /internal/knowledge/{id}/ontology?part=ontology|shapes`: the Turtle of the KB's conformsTo modules (KM-FX-04);
+  `POST /internal/knowledge/{id}/proposal`: record proposed changes, replacing a source's undecided ones.
 - The public `/knowledge/{id}/graph` shows the KB graph and its source graphs together; its PUT and DELETE replace
   or clear all of them, and queries and `statistics` include them.
 
@@ -153,6 +155,15 @@ already being ingested.
 - The component's **processflow** API (TMF701 v5 subset,
   [`api/TMF701-ProcessManagement-v5.0.0-subset.oas.yaml`](api/TMF701-ProcessManagement-v5.0.0-subset.oas.yaml)) reads
   them at `/{component}/tmf-api/process/v5/process` and `/task` (filter tasks with `processId=` or `documentId=`).
+
+## Proposals
+
+`/knowledge/{id}/proposal` ([`app/kb/proposals.py`](app/kb/proposals.py)) lists what the pipeline's knowledge fusion
+(KM-FX-04) proposes instead of writing: `dataConflict` (triples withheld by a SHACL violation or a functional-property
+clash, with an optional model suggestion), `ontologyTerm` (a term the ontology lacks) and `entityLink` (several
+possible matches). `PATCH` with `state: accepted | rejected` (knowledge-editor): accepting a data conflict writes its
+triples to the KB graph, accepting a link (with `choice`) writes `owl:sameAs`; ontology terms are decided on a module
+(409), and so are proposals already decided.
 
 ## Search
 

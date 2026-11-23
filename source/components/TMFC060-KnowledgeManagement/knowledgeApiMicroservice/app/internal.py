@@ -32,6 +32,7 @@ from .models import ModelError
 from .query import run_query
 from .db.models import Document, DocumentBlob, Task
 from .db.models import Knowledge as KnowledgeRow
+from .db.models import KnowledgeSpecification as SpecRow
 from .errors import ApiError
 from .events import Event
 from .graphstore import GOVERNANCE_GRAPH, kb_graph, source_graph
@@ -226,6 +227,37 @@ def build_app(main: FastAPI, token: InternalToken) -> FastAPI:
             return Response(result.body, media_type="text/turtle")
         return JSONResponse(result.body, media_type="application/sparql-results+json",
                             headers={"X-Result-Truncated": "true"} if result.truncated else {})
+
+    # ---- ontology and proposals (KM-FX-04) -----------------------------------------------------------------
+    @app.get("/internal/knowledge/{kb_id}/ontology", dependencies=[Depends(authorized)])
+    async def ontology(kb_id: str, request: Request):
+        from .dataset import ModuleInfo, visible_modules
+        from .graphstore import module_graph
+        part = request.query_params.get("part", "ontology")
+        if part not in ("ontology", "shapes"):
+            raise ApiError(400, "400", "Bad Request", "part must be ontology or shapes")
+        async with state.sessions() as session:
+            row = await session.get(KnowledgeRow, kb_id)
+            if row is None:
+                raise ApiError(404, "404", "Not Found", f"No knowledge '{kb_id}'")
+            specs = {m.id: m for m in (await session.scalars(select(SpecRow))).all()}
+        infos = {i: ModuleInfo(m.lifecycle_status, tuple(r["id"] for r in m.body.get("imports") or []))
+                 for i, m in specs.items()}
+        visible = visible_modules([r["id"] for r in row.body.get("conformsTo") or []], infos)
+        graphs = [module_graph(m) for m in visible if (specs[m].spec_kind == "shapes") == (part == "shapes")]
+        return Response(state.graphs.export_union(graphs, "text/turtle"), media_type="text/turtle")
+
+    @app.post("/internal/knowledge/{kb_id}/proposal", dependencies=[Depends(authorized)])
+    async def propose(kb_id: str, request: Request):
+        from .kb import proposals
+        payload = await json_of(request)
+        items = payload.get("proposals")
+        if not isinstance(items, list):
+            raise ApiError(400, "400", "Bad Request", "proposals must be a list")
+        async with state.sessions() as session:
+            await writable_kb(session, kb_id)
+            ids = await proposals.record(session, kb_id, payload.get("source"), payload.get("processId"), items)
+        return JSONResponse({"ids": ids}, status_code=201)
 
     # ---- documents (KM-FX-01) ------------------------------------------------------------------------------
     async def document_of(session, kb_id: str, doc_id: str) -> Document:

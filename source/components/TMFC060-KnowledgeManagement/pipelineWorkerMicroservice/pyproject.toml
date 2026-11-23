@@ -12,6 +12,8 @@ dependencies = [
     "httpx==0.28.1",
     "pypdf==5.4.0",
     "rdflib==7.6.0",
+    "pyshacl==0.40.2",
+    "owlrl==7.6.2",
 ]
 
 [dependency-groups]

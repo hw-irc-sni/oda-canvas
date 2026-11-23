@@ -1862,6 +1862,127 @@ paths:
           description: Notified
         default:
           $ref: '#/components/responses/Error'
+  '/knowledge/{id}/proposal':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: listKnowledgeProposal
+      summary: Lists the proposed changes of a knowledge-base
+      description: >-
+        The changes the ingestion pipeline (KM-FX-04 knowledge fusion) proposes instead of applying them: data in
+        conflict with the shapes or rules (`dataConflict`, its triples withheld), classes and properties the ontology
+        lacks (`ontologyTerm`), and entities with several possible matches (`entityLink`).
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KnowledgeProposal'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        '501':
+          $ref: '#/components/responses/501'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/proposal/{proposalId}':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - name: proposalId
+        in: path
+        required: true
+        description: Identifier of the proposal
+        schema:
+          type: string
+    get:
+      operationId: retrieveKnowledgeProposal
+      summary: Retrieves a proposed change
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeProposal'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: patchKnowledgeProposal
+      summary: Accepts or rejects a proposed change
+      description: >-
+        Set `state` to `accepted` or `rejected`. Accepting a `dataConflict` writes its withheld triples to the
+        knowledge-base graph; accepting an `entityLink` needs `choice` (one of the candidates) and writes
+        `owl:sameAs`. `ontologyTerm` proposals are decided on an ontology module (`409` here), as are proposals
+        already decided. A deprecated knowledge-base cannot be changed (`409`).
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeProposal_MVO'
+            example:
+              state: accepted
+              choice: https://example.org/cell/4711
+      responses:
+        '200':
+          description: The decided proposal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeProposal'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearerAuth:
@@ -1872,6 +1993,69 @@ components:
         An access token from the Canvas identity platform. The component client roles in
         `resource_access` are checked against the `x-required-roles` of each operation.
   schemas:
+    KnowledgeProposal:
+      type: object
+      description: A change the ingestion pipeline proposes for a knowledge-base; a person accepts or rejects it.
+      properties:
+        '@type':
+          type: string
+          enum:
+            - KnowledgeProposal
+        id:
+          type: string
+        href:
+          type: string
+        kind:
+          type: string
+          enum:
+            - dataConflict
+            - ontologyTerm
+            - entityLink
+        state:
+          type: string
+          enum:
+            - proposed
+            - accepted
+            - rejected
+        summary:
+          type: string
+        source:
+          type: string
+          description: The document or source batch the proposal came from.
+        processId:
+          type: string
+          description: The ingestion process (TMF701) that made it.
+        details:
+          type: object
+          additionalProperties: true
+          description: >-
+            `dataConflict`: `triples` (withheld), `violation` or `clash`; `ontologyTerm`: `term`, `role`, `count`,
+            `example`; `entityLink`: `iri`, `label`, `type`, `candidates`.
+        suggestion:
+          type: object
+          additionalProperties: true
+          description: A model's suggested resolution (`action`, `rationale`), never applied by itself.
+        decidedBy:
+          type: string
+        decidedAt:
+          type: string
+          format: date-time
+        creationDate:
+          type: string
+          format: date-time
+    KnowledgeProposal_MVO:
+      type: object
+      required:
+        - state
+      properties:
+        state:
+          type: string
+          enum:
+            - accepted
+            - rejected
+        choice:
+          type: string
+          description: For an `entityLink`, the candidate to link to.
     Addressable:
       type: object
       description: Base schema for addressable entities

@@ -97,6 +97,20 @@ class InternalClient:
         response.raise_for_status()
         return response.json()
 
+    async def ontology(self, kb_id: str, part: str = "ontology") -> str:
+        """The Turtle of the KB's conformsTo closure: its ontology modules, or its shapes modules (KM-FX-04)."""
+        response = await self.http.get(f"/internal/knowledge/{kb_id}/ontology", params={"part": part},
+                                       headers=self.headers())
+        response.raise_for_status()
+        return response.text
+
+    async def propose(self, kb_id: str, source: str | None, process_id: str | None, proposals: list[dict]) -> list:
+        """Record proposed changes, replacing this source's undecided ones (KM-FX-04)."""
+        response = await self.http.post(f"/internal/knowledge/{kb_id}/proposal", headers=self.headers(),
+                                        json={"source": source, "processId": process_id, "proposals": proposals})
+        response.raise_for_status()
+        return response.json()["ids"]
+
     async def ready(self) -> bool:
         """The internal API answers and accepts the token (a claim without a worker: 400 means authenticated)."""
         try:

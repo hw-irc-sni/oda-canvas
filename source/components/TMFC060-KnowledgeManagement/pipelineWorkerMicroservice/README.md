@@ -72,6 +72,21 @@ as `linkCandidates`. It adds PROV-O, which travels with the facts to the documen
 entity `prov:wasGeneratedBy` the ingestion process (a `prov:Activity`) and `prov:generatedAtTime`. Re-ingesting a
 document yields the same IRIs and replaces its source graph, so nothing is duplicated.
 
+## KM-FX-04 Knowledge Fusion
+
+[`worker/steps/km_fx_04.py`](worker/steps/km_fx_04.py) checks the delta before anything is stored:
+
+- **SHACL** (pyshacl) against the shapes modules of the KB's conformsTo closure: a violation's triple (or, without a
+  value, the focus node's new triples) is withheld.
+- **Functional properties**: a new value that differs from the KB's existing one (outside this document's source
+  graph), or several new values, are withheld.
+- Withheld triples become `dataConflict` **proposals** (`/knowledge/{id}/proposal`), with a model's suggested
+  resolution when a model route is up; nothing in conflict is written until a person accepts it. KM-FX-02's unknown
+  terms and KM-FX-03's ambiguous matches become `ontologyTerm` and `entityLink` proposals. A re-ingest replaces the
+  document's undecided proposals.
+- **OWL-RL** (owlrl) over the ontology and the kept delta adds the inferred triples about the delta's subjects
+  (no axiomatic noise); skipped above `REASONING_MAX_TRIPLES`.
+
 ## Settings
 
 | Variable | Default | Meaning |
@@ -87,3 +102,4 @@ document yields the same IRIs and replaces its source graph, so nothing is dupli
 | `LOG_LEVEL` | `INFO` | Log level |
 | `CHUNK_MAX_TOKENS` / `CHUNK_OVERLAP_TOKENS` | `400` / `60` | KM-FX-01 chunk size and overlap (tokens ≈ characters / 4) |
 | `EXTRACTION_MAX_TERMS` | `150` | KM-FX-02: ontology terms sent to the model with a chunk |
+| `REASONING_MAX_TRIPLES` | `200000` | KM-FX-04: no OWL-RL reasoning above this many triples (ontology + delta) |

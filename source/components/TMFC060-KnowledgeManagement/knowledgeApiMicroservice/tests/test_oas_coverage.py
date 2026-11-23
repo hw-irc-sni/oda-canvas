@@ -7,7 +7,7 @@ from app.config import Settings
 
 def test_every_operation_has_known_roles():
     operations = load_operations(Settings().oas_path)
-    assert len(operations) == 40  # 48 operations in the OAS minus the 8 listener callbacks
+    assert len(operations) == 43  # 51 operations in the OAS minus the 8 listener callbacks
     assert set(load_operations(Settings().process_oas_path)) == {"listProcess", "retrieveProcess", "listTask",
                                                                   "retrieveTask"}
     for op in operations.values():
@@ -53,6 +53,7 @@ def test_routes_match_the_oas():
     assert {"listKnowledgeSpecification", "createKnowledgeSpecification", "retrieveSchema", "retrieveKnowledgeTerm",
             "listKnowledge", "createKnowledge", "retrieveKnowledge", "patchKnowledge", "deleteKnowledge",
             "retrieveKnowledgeGraph", "replaceKnowledgeGraph", "mergeKnowledgeGraph", "clearKnowledgeGraph",
-            "queryKnowledge", "createKnowledgeIngestion", "listProcess", "retrieveProcess", "listTask",
+            "queryKnowledge", "createKnowledgeIngestion", "listKnowledgeProposal", "retrieveKnowledgeProposal",
+            "patchKnowledgeProposal", "listProcess", "retrieveProcess", "listTask",
             "retrieveTask"} <= found
     assert_routes_match_oas(app)

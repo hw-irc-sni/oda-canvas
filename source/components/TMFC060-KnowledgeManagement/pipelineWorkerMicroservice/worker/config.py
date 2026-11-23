@@ -24,3 +24,5 @@ class Settings(BaseSettings):
     chunk_overlap_tokens: int = 60
     # KM-FX-02: the most ontology terms sent to the model with a chunk (the best-matching ones, plus superclasses)
     extraction_max_terms: int = 150
+    # KM-FX-04: skip OWL-RL reasoning above this many triples (ontology + delta)
+    reasoning_max_triples: int = 200_000

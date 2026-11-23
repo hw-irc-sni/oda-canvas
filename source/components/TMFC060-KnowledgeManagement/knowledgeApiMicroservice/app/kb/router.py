@@ -23,6 +23,7 @@ from ..ontology import federation
 from ..query import effective_timeout, precheck, run_query
 from ..routers.deps import session
 from ..routers.specifications import json_body
+from . import proposals
 from .documents import Documents
 from .service import KnowledgeBases
 from .vectors import Vectors
@@ -154,6 +155,36 @@ async def delete_document(id: str, documentId: str, request: Request, s: AsyncSe
                           principal: Principal = Depends(require_operation("deleteKnowledgeDocument"))):
     await documents_for(request, s).delete(id, documentId, principal)
     return Response(status_code=204)
+
+
+# ---- proposals (KM-FX-04) --------------------------------------------------------------------------------------
+@router.get("/knowledge/{id}/proposal")
+async def list_proposals(id: str, request: Request, s: AsyncSession = Depends(session),
+                         _: Principal = Depends(require_operation("listKnowledgeProposal"))):
+    await kbs_for(request, s).get_row(id)
+    base = request.app.state.settings.base_path
+    return list_response(request, [proposals.present(base, p) for p in await proposals.listing(s, id)])
+
+
+@router.get("/knowledge/{id}/proposal/{proposalId}")
+async def retrieve_proposal(id: str, proposalId: str, request: Request, s: AsyncSession = Depends(session),
+                            _: Principal = Depends(require_operation("retrieveKnowledgeProposal"))):
+    await kbs_for(request, s).get_row(id)
+    return present(request, proposals.present(request.app.state.settings.base_path,
+                                              await proposals.get(s, id, proposalId)))
+
+
+@router.patch("/knowledge/{id}/proposal/{proposalId}")
+async def decide_proposal(id: str, proposalId: str, request: Request, s: AsyncSession = Depends(session),
+                          principal: Principal = Depends(require_operation("patchKnowledgeProposal"))):
+    kbs = kbs_for(request, s)
+    row = await kbs.get_row(id)
+    kbs.check_writer(row, principal)
+    kbs.check_writable(row)
+    p = await proposals.get(s, id, proposalId)
+    await proposals.decide(s, kbs.graphs, p, await json_body(request), principal.username)
+    await kbs.publish("AttributeValueChange", row.body)
+    return present(request, proposals.present(request.app.state.settings.base_path, p))
 
 
 # ---- ingest ----------------------------------------------------------------------------------------------------
