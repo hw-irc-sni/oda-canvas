@@ -73,7 +73,12 @@ class Worker:
                     pass
                 continue
             self.last_claim = time.time()
-            await self.run_task(task)
+            try:
+                await self.run_task(task)
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001 - e.g. the API restarting: the slot goes on, the lease recovers the task
+                log.exception("task %s could not be reported; its lease will expire", task["id"])
 
     def start(self) -> None:
         self.slots = [asyncio.create_task(self.slot()) for _ in range(self.settings.worker_concurrency)]

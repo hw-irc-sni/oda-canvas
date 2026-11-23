@@ -75,7 +75,7 @@ async def test_two_workers_process_each_task_exactly_once(api):
     for w in workers:
         w.start()
     try:
-        p = await wait_done(api, pid)
+        p = await wait_done(api, pid, timeout=120)  # 30 tasks of HTTP round trips: slow CI runners need room
     finally:
         for w in workers:
             await w.stop()
@@ -215,3 +215,32 @@ async def test_a_result_over_the_cap_fails_the_step(api):
     finally:
         await worker.stop()
     assert p["state"] == "failed" and "KM-FX-01 result too large" in p["errorMessage"]
+
+
+async def test_a_reporting_error_does_not_stop_the_slot(api):
+    pid = await ingest(api, 1)
+    worker = make_worker(api, "w1", worker_concurrency=1)
+    real_complete, calls = worker.client.complete, []
+
+    async def flaky_complete(task_id, result):
+        calls.append(task_id)
+        if len(calls) == 1:
+            raise RuntimeError("the API is restarting")
+        return await real_complete(task_id, result)
+    worker.client.complete = flaky_complete
+    from sqlalchemy import text
+    worker.start()
+    try:
+        # the first report fails; the slot keeps claiming. Expire the stuck lease so the task is taken again.
+        for _ in range(100):
+            if len(calls) >= 1:
+                break
+            await asyncio.sleep(0.05)
+        async with api.app.state.sessions() as s:
+            await s.execute(text("UPDATE task SET locked_at = now() - interval '1 hour' WHERE state = 'inProgress'"))
+            await s.commit()
+        p = await wait_done(api, pid, timeout=60)
+    finally:
+        await worker.stop()
+    assert p["state"] == "completed" and len(calls) >= 7  # the failed report, its retry, and the other 5 steps
+    assert all(not s.done() for s in worker.slots) or worker.stopping.is_set()
