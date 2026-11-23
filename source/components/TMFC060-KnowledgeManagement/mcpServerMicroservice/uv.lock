@@ -1046,6 +1046,7 @@ dependencies = [
     { name = "alembic" },
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "jsonschema" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
     { name = "pyjwt", extra = ["crypto"] },
@@ -1064,6 +1065,7 @@ requires-dist = [
     { name = "alembic", specifier = "==1.20.1" },
     { name = "fastapi", specifier = "==0.165.0" },
     { name = "httpx", specifier = "==0.28.1" },
+    { name = "jsonschema", specifier = "==4.26.0" },
     { name = "psycopg", extras = ["binary"], specifier = "==3.3.9" },
     { name = "pydantic-settings", specifier = "==2.16.3" },
     { name = "pyjwt", extras = ["crypto"], specifier = "==2.15.1" },
@@ -1081,6 +1083,7 @@ requires-dist = [
 dev = [
     { name = "pytest", specifier = "==9.2.0" },
     { name = "pytest-asyncio", specifier = "==1.5.0" },
+    { name = "schemathesis", specifier = "==4.33.1" },
     { name = "testcontainers", extras = ["postgres"], specifier = "==4.15.0" },
 ]
 
