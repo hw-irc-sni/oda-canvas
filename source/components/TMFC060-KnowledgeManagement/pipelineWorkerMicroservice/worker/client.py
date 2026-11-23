@@ -16,6 +16,10 @@ class ModelRefused(Exception):
     """The model rejected the request (4xx): retrying the same request won't help."""
 
 
+class IndexRefused(Exception):
+    """The API refused to index the chunks (for example an embedding dimension mismatch): retrying won't help."""
+
+
 class ResultTooLarge(Exception):
     """The API refused a task result over TASK_RESULT_MAX_BYTES."""
 
@@ -110,6 +114,36 @@ class InternalClient:
                                         json={"source": source, "processId": process_id, "proposals": proposals})
         response.raise_for_status()
         return response.json()["ids"]
+
+    async def knowledge(self, kb_id: str) -> dict:
+        response = await self.http.get(f"/internal/knowledge/{kb_id}", headers=self.headers())
+        response.raise_for_status()
+        return response.json()
+
+    async def write_source_graph(self, kb_id: str, source: str, data: bytes, task_id: str | None = None) -> None:
+        """Replace what this source contributed to the KB graph (N-Triples, sent as Turtle)."""
+        params = {"source": source, **({"task": task_id} if task_id else {})}
+        response = await self.http.put(f"/internal/knowledge/{kb_id}/graph", params=params, content=data,
+                                       headers={**self.headers(), "Content-Type": "text/turtle"})
+        response.raise_for_status()
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        response = await self.http.post("/internal/models/embeddings", json={"input": texts}, headers=self.headers())
+        if response.status_code == 400:
+            raise ModelRefused(response.json().get("message", "refused"))
+        if response.status_code in (502, 503):
+            raise ModelUnavailable(response.json().get("message", "unavailable"))
+        response.raise_for_status()
+        return response.json()["embeddings"]
+
+    async def index_chunks(self, kb_id: str, source: str, chunks: list[dict], dense: list[list[float]]) -> int:
+        """Replace this source's chunks in the KB's vector store (the API adds the sparse vectors)."""
+        response = await self.http.put(f"/internal/knowledge/{kb_id}/chunks", params={"source": source},
+                                       json={"chunks": chunks, "dense": dense}, headers=self.headers())
+        if response.status_code == 409:
+            raise IndexRefused(response.json().get("message", "refused"))
+        response.raise_for_status()
+        return response.json()["indexed"]
 
     async def ready(self) -> bool:
         """The internal API answers and accepts the token (a claim without a worker: 400 means authenticated)."""

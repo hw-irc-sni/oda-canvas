@@ -117,6 +117,9 @@ not started. The workers reach the component only through this API.
 - `POST /internal/models/chat` and `/internal/models/embeddings`: calls through the model route (503 without a route,
   400 when the model refuses the request, 502 on other failures).
 - `POST /internal/knowledge/{id}/query`: a read-only SPARQL query over the KB's dataset (no SERVICE).
+- `GET /internal/knowledge/{id}` (its `storeKind`, state, conformsTo) and `PUT /internal/knowledge/{id}/chunks?source=…`
+  (`chunks`, `dense`): replaces that source's chunks in the vector store, adding the sparse vectors; point ids are a
+  hash of the document, offsets and text; 409 for a graph KB or an embedding dimension other than the collection's.
 - `GET /internal/knowledge/{id}/ontology?part=ontology|shapes`: the Turtle of the KB's conformsTo modules (KM-FX-04);
   `POST /internal/knowledge/{id}/proposal`: record proposed changes, replacing a source's undecided ones.
 - The public `/knowledge/{id}/graph` shows the KB graph and its source graphs together; its PUT and DELETE replace

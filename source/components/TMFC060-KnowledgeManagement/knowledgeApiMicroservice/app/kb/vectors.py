@@ -14,7 +14,7 @@ from ..errors import ApiError
 from . import sparse
 
 DENSE, SPARSE = "dense", "sparse"
-INDEXED = ("documentId", "entityIri", "classIri")
+INDEXED = ("documentId", "entityIri", "classIri", "source")
 RRF_TOP = 0.5  # Qdrant's RRF contribution of a list's first hit
 PREFETCH_FACTOR, PREFETCH_MIN = 4, 50
 CHUNK_NAMESPACE = uuid.UUID("6f1d2b1e-3c55-4d0a-9a43-6b1c7e0a2f60")
@@ -29,10 +29,13 @@ class Chunk:
     end: int | None = None
     entity_iri: list[str] = field(default_factory=list)
     class_iri: list[str] = field(default_factory=list)
+    source: str | None = None  # the document or batch it came from (replace-by-source)
 
 
-def point_id(chunk_id: str) -> str:
-    return str(uuid.uuid5(CHUNK_NAMESPACE, chunk_id))
+def point_id(chunk: Chunk) -> str:
+    """Content-addressed: the same chunk of the same document always gets the same point."""
+    return str(uuid.uuid5(CHUNK_NAMESPACE, f"{chunk.document_id or chunk.source}|{chunk.start}|{chunk.end}|"
+                                           f"{chunk.text}"))
 
 
 def collection_name(kb_id: str) -> str:
@@ -81,13 +84,35 @@ class Vectors:
             indices, values = sparse.encode_document(chunk.text)
             payload = {"kbId": kb_id, "chunkId": chunk.chunk_id, "text": chunk.text, "documentId": chunk.document_id,
                        "start": chunk.start, "end": chunk.end, "entityIri": chunk.entity_iri,
-                       "classIri": chunk.class_iri}
-            points.append(models.PointStruct(id=point_id(chunk.chunk_id), payload=payload, vector={
+                       "classIri": chunk.class_iri, "source": chunk.source}
+            points.append(models.PointStruct(id=point_id(chunk), payload=payload, vector={
                 DENSE: vector, SPARSE: models.SparseVector(indices=indices, values=values)}))
         try:
             await self.client.upsert(collection_name(kb_id), points=points, wait=True)
         except Exception as exc:  # noqa: BLE001
             raise unavailable(exc) from exc
+
+    async def replace_source(self, kb_id: str, source: str, chunks: list[Chunk], dense: list[list[float]]) -> None:
+        """Replace what one source (a document or batch) indexed: delete its points, then upsert the new chunks."""
+        for chunk in chunks:
+            chunk.source = source
+        bad = [len(v) for v in dense if len(v) != self.dimension]
+        if bad:
+            raise ApiError(409, "DIMENSION_MISMATCH", "Conflict",
+                           f"The embeddings have {bad[0]} dimensions; the collection has {self.dimension}")
+        try:
+            try:  # collections created before the source index existed
+                await self.client.create_payload_index(collection_name(kb_id), "source",
+                                                       field_schema=models.PayloadSchemaType.KEYWORD)
+            except Exception:  # noqa: BLE001 - already there
+                pass
+            await self.client.delete(collection_name(kb_id), points_selector=models.FilterSelector(
+                filter=models.Filter(must=[models.FieldCondition(key="source",
+                                                                 match=models.MatchValue(value=source))])), wait=True)
+        except Exception as exc:  # noqa: BLE001
+            raise unavailable(exc) from exc
+        if chunks:
+            await self.upsert_chunks(kb_id, chunks, dense)
 
     async def search(self, kb_id: str, text: str, dense: list[float] | None, *, top_k: int, threshold: float,
                      mode: str, iris: list[str] | None) -> list[dict]:

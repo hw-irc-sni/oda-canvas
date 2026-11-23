@@ -87,6 +87,14 @@ document yields the same IRIs and replaces its source graph, so nothing is dupli
 - **OWL-RL** (owlrl) over the ontology and the kept delta adds the inferred triples about the delta's subjects
   (no axiomatic noise); skipped above `REASONING_MAX_TRIPLES`.
 
+## KM-FX-05 Knowledge Storage
+
+[`worker/steps/km_fx_05.py`](worker/steps/km_fx_05.py) stores what KM-FX-04 kept, as the KB's `storeKind` says:
+`graph` gets the triples (in the document's source graph, replacing its previous ones), `vector` gets the chunks
+(with their entity and class IRIs as payload), `hybrid` both. Chunks are embedded through the API's model route in
+batches of `EMBEDDING_BATCH` and indexed by the API (which adds the sparse BM25 vector); a re-ingest replaces the
+document's chunks, so nothing stale stays searchable.
+
 ## Settings
 
 | Variable | Default | Meaning |
@@ -103,3 +111,4 @@ document yields the same IRIs and replaces its source graph, so nothing is dupli
 | `CHUNK_MAX_TOKENS` / `CHUNK_OVERLAP_TOKENS` | `400` / `60` | KM-FX-01 chunk size and overlap (tokens ≈ characters / 4) |
 | `EXTRACTION_MAX_TERMS` | `150` | KM-FX-02: ontology terms sent to the model with a chunk |
 | `REASONING_MAX_TRIPLES` | `200000` | KM-FX-04: no OWL-RL reasoning above this many triples (ontology + delta) |
+| `EMBEDDING_BATCH` | `32` | KM-FX-05: chunk texts per embedding call |

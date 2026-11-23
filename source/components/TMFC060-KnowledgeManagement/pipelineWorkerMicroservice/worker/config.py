@@ -26,3 +26,5 @@ class Settings(BaseSettings):
     extraction_max_terms: int = 150
     # KM-FX-04: skip OWL-RL reasoning above this many triples (ontology + delta)
     reasoning_max_triples: int = 200_000
+    # KM-FX-05: chunk texts per embedding call
+    embedding_batch: int = 32

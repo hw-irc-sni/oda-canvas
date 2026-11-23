@@ -228,6 +228,39 @@ def build_app(main: FastAPI, token: InternalToken) -> FastAPI:
         return JSONResponse(result.body, media_type="application/sparql-results+json",
                             headers={"X-Result-Truncated": "true"} if result.truncated else {})
 
+    # ---- the knowledge-base and its chunks (KM-FX-05) -------------------------------------------------------
+    @app.get("/internal/knowledge/{kb_id}", dependencies=[Depends(authorized)])
+    async def knowledge(kb_id: str):
+        async with state.sessions() as session:
+            row = await session.get(KnowledgeRow, kb_id)
+            if row is None:
+                raise ApiError(404, "404", "Not Found", f"No knowledge '{kb_id}'")
+            return {"id": row.id, "storeKind": row.store_kind, "lifecycleStatus": row.lifecycle_status,
+                    "conformsTo": [r["id"] for r in row.body.get("conformsTo") or []]}
+
+    @app.put("/internal/knowledge/{kb_id}/chunks", dependencies=[Depends(authorized)])
+    async def chunks(kb_id: str, request: Request):
+        from .kb.vectors import Chunk, Vectors
+        source = request.query_params.get("source")
+        if not source or not SOURCE.match(source):
+            raise ApiError(400, "400", "Bad Request", "give ?source= (1-128 letters, digits, '.', '_' or '-')")
+        payload = await json_of(request)
+        items, dense = payload.get("chunks"), payload.get("dense")
+        if not isinstance(items, list) or not isinstance(dense, list) or len(items) != len(dense):
+            raise ApiError(400, "400", "Bad Request", "chunks and dense must be lists of the same length")
+        async with state.sessions() as session:
+            row = await writable_kb(session, kb_id)
+            if row.store_kind == "graph":
+                raise ApiError(409, "409", "Conflict", f"'{kb_id}' is a graph knowledge-base and has no vectors")
+        try:
+            chunks = [Chunk(chunk_id=str(c["chunkId"]), text=str(c["text"]), document_id=c.get("documentId"),
+                            start=c.get("start"), end=c.get("end"), entity_iri=list(c.get("entityIri") or []),
+                            class_iri=list(c.get("classIri") or [])) for c in items]
+        except (KeyError, TypeError) as exc:
+            raise ApiError(400, "400", "Bad Request", f"chunk needs chunkId and text: {exc}") from None
+        await Vectors(state.qdrant, state.settings.embedding_dimension).replace_source(kb_id, source, chunks, dense)
+        return {"indexed": len(chunks)}
+
     # ---- ontology and proposals (KM-FX-04) -----------------------------------------------------------------
     @app.get("/internal/knowledge/{kb_id}/ontology", dependencies=[Depends(authorized)])
     async def ontology(kb_id: str, request: Request):

@@ -209,3 +209,44 @@ async def test_models_and_query(api):
                        headers=TOKEN)
     assert svc.status_code == 403
     assert (await i.post("/internal/knowledge/none/query", content=b"ASK {}", headers=TOKEN)).status_code == 404
+
+
+async def test_chunk_indexing_replaces_by_source(postgres_url, qdrant_url, tmp_path):
+    from qdrant_client import QdrantClient
+    qdrant = QdrantClient(url=qdrant_url)
+    if qdrant.collection_exists("tmfc060-kb-vec"):
+        qdrant.delete_collection("tmfc060-kb-vec")
+    token = tmp_path / "token"
+    token.write_text("s3cret-token")
+    async with running_api(postgres_url, str(tmp_path / "store"), qdrant_url=qdrant_url, embedding_dimension=2,
+                           internal_token_file=str(token)) as api:
+        i = httpx.AsyncClient(base_url=f"http://127.0.0.1:{api.app.state.internal.port}")
+        await api.post(f"{api.base}/knowledge", json={"id": "vec", "name": "V", "storeKind": "hybrid"},
+                       headers=auth(EDITOR))
+        await api.post(f"{api.base}/knowledge", json={"id": "g", "name": "G", "storeKind": "graph"},
+                       headers=auth(EDITOR))
+        info = await i.get("/internal/knowledge/vec", headers=TOKEN)
+        assert info.json()["storeKind"] == "hybrid"
+
+        def chunks(*texts):
+            return [{"chunkId": f"d:{n}", "text": t, "start": 0, "end": len(t), "documentId": "d",
+                     "entityIri": ["urn:e"], "classIri": ["urn:c"]} for n, t in enumerate(texts)]
+        r = await i.put("/internal/knowledge/vec/chunks", params={"source": "d"},
+                        json={"chunks": chunks("one", "two", "three"), "dense": [[1.0, 0.0]] * 3}, headers=TOKEN)
+        assert r.status_code == 200 and r.json() == {"indexed": 3}
+        await i.put("/internal/knowledge/vec/chunks", params={"source": "other"},
+                    json={"chunks": [{"chunkId": "o:0", "text": "other"}], "dense": [[0.0, 1.0]]}, headers=TOKEN)
+        await i.put("/internal/knowledge/vec/chunks", params={"source": "d"},
+                    json={"chunks": chunks("one"), "dense": [[1.0, 0.0]]}, headers=TOKEN)
+        texts = sorted(p.payload["text"] for p in qdrant.scroll("tmfc060-kb-vec", limit=10, with_payload=True)[0])
+        assert texts == ["one", "other"]  # d's stale chunks are gone; the other source is untouched
+        mismatch = await i.put("/internal/knowledge/vec/chunks", params={"source": "d"},
+                               json={"chunks": chunks("x"), "dense": [[1.0, 0.0, 0.0]]}, headers=TOKEN)
+        assert mismatch.status_code == 409 and mismatch.json()["code"] == "DIMENSION_MISMATCH"
+        assert (await i.put("/internal/knowledge/g/chunks", params={"source": "d"},
+                            json={"chunks": [], "dense": []}, headers=TOKEN)).status_code == 409
+        assert (await i.put("/internal/knowledge/vec/chunks", json={"chunks": [], "dense": []},
+                            headers=TOKEN)).status_code == 400
+        assert (await i.put("/internal/knowledge/vec/chunks", params={"source": "d"},
+                            json={"chunks": chunks("x"), "dense": []}, headers=TOKEN)).status_code == 400
+        await i.aclose()

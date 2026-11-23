@@ -16,8 +16,18 @@ def postgres_url():
         yield pg.get_connection_url(driver=None)
 
 
+@pytest.fixture(scope="session")
+def qdrant_url():
+    from testcontainers.core.container import DockerContainer
+    from testcontainers.core.wait_strategies import HttpWaitStrategy
+    container = (DockerContainer("qdrant/qdrant:v1.13.6").with_exposed_ports(6333)
+                 .waiting_for(HttpWaitStrategy(6333, "/readyz").for_status_code(200)))
+    with container:
+        yield f"http://{container.get_container_host_ip()}:{container.get_exposed_port(6333)}"
+
+
 @asynccontextmanager
-async def running_api(postgres_url: str, tmp_path):
+async def running_api(postgres_url: str, tmp_path, qdrant_url: str = "http://127.0.0.1:9", **overrides):
     from app.config import Settings
     from app.db.session import make_engine
     from app.main import create_app
@@ -30,7 +40,7 @@ async def running_api(postgres_url: str, tmp_path):
     settings = Settings(component_name="km", store_path=str(tmp_path / "store"), database_url=postgres_url,
                         auth_enabled=False, keycloak_jwks_url="http://jwks.invalid/certs", internal_port=0,
                         internal_host="127.0.0.1", internal_token_file=str(token), federation_relay_port=0,
-                        qdrant_url="http://127.0.0.1:9")
+                        qdrant_url=qdrant_url, **overrides)
     app = create_app(settings)
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://api") as client:
