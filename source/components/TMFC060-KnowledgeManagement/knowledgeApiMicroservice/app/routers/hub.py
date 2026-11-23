@@ -34,6 +34,16 @@ async def own(s: AsyncSession, hub_id: str, principal: Principal) -> HubSubscrip
     return sub
 
 
+@router.post("/eventSource/{kind}/{token}", status_code=204)
+@router.post("/eventSource/{kind}/{token}/listener/{event_name}", status_code=204)
+async def receive_event(kind: str, token: str, request: Request, s: AsyncSession = Depends(session),
+                        event_name: str | None = None):
+    """A provider's notification (#46): guarded by the secret token of its registration, not by roles."""
+    from ..event_sources import receive
+    await receive(s, request.app.state.settings, kind, token, await json_body(request), request.app.state.batcher)
+    return Response(status_code=204)
+
+
 @router.post("/hub", status_code=201)
 async def create_hub(request: Request, s: AsyncSession = Depends(session),
                      principal: Principal = Depends(require_operation("createHub"))):

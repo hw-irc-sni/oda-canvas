@@ -89,7 +89,7 @@ def load_operations(oas_path: str, base: str = "") -> dict[str, Operation]:
     oas = yaml.safe_load(Path(oas_path).read_text())
     operations = {}
     for path, item in oas.get("paths", {}).items():
-        if path.startswith("/listener/"):
+        if path.startswith(("/listener/", "/eventSource/")):  # callbacks: guarded by their own token
             continue
         for method in HTTP_METHODS:
             op = item.get(method)

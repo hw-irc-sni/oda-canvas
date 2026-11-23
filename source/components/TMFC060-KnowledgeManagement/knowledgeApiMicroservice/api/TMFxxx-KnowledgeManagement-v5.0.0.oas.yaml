@@ -1983,6 +1983,52 @@ paths:
           $ref: '#/components/responses/500'
         default:
           $ref: '#/components/responses/Error'
+  '/eventSource/{kind}/{token}':
+    parameters:
+      - name: kind
+        in: path
+        required: true
+        description: The TMF API the events come from.
+        schema:
+          type: string
+          enum:
+            - tmf639
+            - tmf638
+            - tmf642
+            - tmf628
+            - tmf921
+      - name: token
+        in: path
+        required: true
+        description: The secret of this hub registration (the callback URL is a capability).
+        schema:
+          type: string
+    post:
+      operationId: receiveSourceEvent
+      summary: Receives a notification from a TMF provider (event-driven ingestion)
+      description: >-
+        The callback this component registers on the hub of each provider (TMF639, TMF638, TMF642, TMF628,
+        TMF921) whose events a knowledge-base ingests (`source[].kind`). It needs no bearer token: the secret in
+        the URL identifies the registration (`404` for an unknown one). The event goes to every knowledge-base
+        whose `source[]` wants it (`eventTypes`, `query`), and is ingested in batches; anything else is ignored.
+        The TMF v5 form `…/listener/{eventName}` is accepted too.
+      tags:
+        - knowledge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Event'
+      responses:
+        '204':
+          description: Received (taken or ignored)
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearerAuth:

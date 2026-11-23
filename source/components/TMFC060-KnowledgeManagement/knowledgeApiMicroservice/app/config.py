@@ -99,6 +99,16 @@ class Settings(BaseSettings):
     internal_port: int = 8081
     internal_token_file: str | None = None
 
+    # Event-driven ingestion from TMF providers (#46): canvas-info (TMFOP005's record of resolved dependentAPIs), an
+    # override map (kind or dependency name -> provider API URL, JSON), the externally reachable base of this API for
+    # callbacks (the ExposedAPI URL; no registration without it), the re-check interval and the coalescing window
+    canvas_info_url: str = "http://info.canvas.svc.cluster.local"
+    event_source_urls: str = "{}"
+    event_callback_base: str = ""
+    event_source_interval: float = 300.0
+    event_batch_seconds: float = 5.0
+    event_batch_max: int = 100
+
     # Ingestion tasks: the lease a worker holds (renewed by heartbeats), attempts, and the retry delay per attempt
     task_lease_seconds: int = 300
     task_max_attempts: int = 3

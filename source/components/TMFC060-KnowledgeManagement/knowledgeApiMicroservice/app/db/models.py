@@ -208,6 +208,31 @@ class KnowledgeProposal(Base):
     created: Mapped[datetime] = created_at()
 
 
+class EventSource(Base):
+    """A hub registration on a provider (TMF639/638/642/628/921) for the KBs that ingest its events."""
+    __tablename__ = "event_source"
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    dependency: Mapped[str] = mapped_column(Text, nullable=False)
+    provider_url: Mapped[str] = mapped_column(Text, nullable=False)
+    hub_id: Mapped[str | None] = mapped_column(Text)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    query: Mapped[str | None] = mapped_column(Text)
+    created: Mapped[datetime] = created_at()
+
+
+class EventBuffer(Base):
+    """Events waiting to be ingested, coalesced per knowledge-base and source kind."""
+    __tablename__ = "event_buffer"
+    __table_args__ = (Index("ix_event_buffer_kb_kind", "knowledge_id", "kind", "received"),)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    knowledge_id: Mapped[str] = mapped_column(Text, ForeignKey("knowledge.id", ondelete="CASCADE"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    event_type: Mapped[str] = mapped_column(Text, nullable=False)
+    resource: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    received: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class Recommendation(Base):
     """A recommendation made (its items), so feedback can be checked against it; purged after 30 days."""
     __tablename__ = "recommendation"

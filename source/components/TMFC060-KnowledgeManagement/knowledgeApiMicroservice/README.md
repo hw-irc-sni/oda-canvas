@@ -50,6 +50,9 @@ The API is mounted under `/{COMPONENT_NAME}/tmf-api/knowledgeManagement/v5`.
 | `EVENT_HREF_BASE` | | Base URL that makes the hrefs in events absolute |
 | `INTERNAL_PORT` / `INTERNAL_HOST` | `8081` / `0.0.0.0` | Listener of the internal API for the pipeline workers |
 | `INTERNAL_TOKEN_FILE` | | File (a Secret key) with the workers' service token; no token, no internal listener |
+| `CANVAS_INFO_URL` / `EVENT_SOURCE_URLS` | `http://info.canvas.svc.cluster.local` / `{}` | Where provider URLs come from, and overrides |
+| `EVENT_CALLBACK_BASE` | | This API's externally reachable base URL, for provider callbacks |
+| `EVENT_SOURCE_INTERVAL` / `EVENT_BATCH_SECONDS` / `EVENT_BATCH_MAX` | `300` / `5` / `100` | Registration re-check, coalescing window and size |
 | `TASK_LEASE_SECONDS` / `TASK_MAX_ATTEMPTS` / `TASK_RETRY_DELAY` | `300` / `3` / `30` | Ingestion task lease, attempts, and retry delay per attempt |
 | `DOCUMENT_MAX_BYTES` | `52428800` | Largest document a knowledge-base accepts (50 MiB) |
 | `MODEL_GATEWAY_SERVICE`, `MGS_CHAT_MODEL`, `MGS_EMBEDDING_MODEL` | | Route 1: the ModelGatewayService CR and its model names |
@@ -141,6 +144,22 @@ creator only (404 for anyone else); deleting it stops delivery.
 - Callbacks must be http(s), and a host resolving to a loopback, link-local (cloud metadata), private or other
   non-public address is refused, at registration (400) and before each delivery, unless it matches
   `EVENT_CALLBACK_ALLOWED_HOSTS` (for example `*.svc.cluster.local`).
+
+## Event-driven ingestion
+
+[`app/event_sources.py`](app/event_sources.py) ingests TMF639/638/642/628/921 events for the KBs whose `source[]` has
+that kind, by registering directly on each provider's hub (spike S5):
+
+- Every `EVENT_SOURCE_INTERVAL` (300 s), the sources in use (`kind`, `dependentApiName`) are resolved to provider
+  URLs from canvas-info (`CANVAS_INFO_URL`, where TMFOP005 records the resolved dependentAPIs) or
+  `EVENT_SOURCE_URLS` (a JSON map of kind or dependency name to URL), and registered with `POST {url}/hub`,
+  asking for the union of the KBs' `eventTypes`. A changed URL or event-type set re-registers; an unused source is
+  deleted from the provider. Nothing is registered without `EVENT_CALLBACK_BASE` (this API's external URL).
+- The callback is `{EVENT_CALLBACK_BASE}/eventSource/{kind}/{token}` (or `…/listener/{eventName}`): a secret token
+  per registration, stored hashed, is the only guard (404 otherwise). Each KB takes the event if its `eventTypes`
+  and `query` (`field=value`) match; anything else is acknowledged and ignored.
+- Events wait in `event_buffer`; one ingest process per KB and kind starts at most every `EVENT_BATCH_SECONDS` (5 s),
+  or at once at `EVENT_BATCH_MAX` (100) events, with the resources for KM-FX-01.
 
 ## Ingestion processes
 

@@ -18,6 +18,7 @@ from .ontology.registry import Registry
 from qdrant_client import AsyncQdrantClient
 
 from .kb import router as kb_router
+from .event_sources import Batcher, Registrar
 from .internal import InternalServer
 from .models import ModelResolver
 from .ontology.federation import Relay
@@ -45,6 +46,10 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
         app.state.events.sessions = app.state.sessions
         app.state.dispatcher = Dispatcher(settings, app.state.sessions)
         dispatch_task = asyncio.create_task(app.state.dispatcher.run_forever())
+        app.state.batcher = Batcher(settings, app.state.sessions)
+        app.state.registrar = Registrar(settings, app.state.sessions)
+        source_tasks = [asyncio.create_task(app.state.batcher.run_periodically()),
+                        asyncio.create_task(app.state.registrar.run_periodically())]
         app.state.internal = InternalServer(app)
         await app.state.internal.start()
         app.state.relay = Relay(settings, app.state.sessions)
@@ -62,6 +67,9 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
             if sync_task:
                 sync_task.cancel()
             models_task.cancel()
+            for task in source_tasks:
+                task.cancel()
+            await app.state.registrar.aclose()
             dispatch_task.cancel()
             await app.state.dispatcher.aclose()
             await app.state.models.aclose()
