@@ -7,7 +7,7 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
-from . import tools
+from . import kb_tools, tools
 from .api import KnowledgeApi
 from .config import Settings
 
@@ -40,6 +40,7 @@ def create_app(settings: Settings | None = None, api: KnowledgeApi | None = None
     mcp = FastMCP("tmfc060-knowledge", instructions=INSTRUCTIONS, stateless_http=True, json_response=True,
                   transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False))
     tools.register(mcp, api)
+    kb_tools.register(mcp, api)
     mcp_app = mcp.streamable_http_app()
 
     @contextlib.asynccontextmanager

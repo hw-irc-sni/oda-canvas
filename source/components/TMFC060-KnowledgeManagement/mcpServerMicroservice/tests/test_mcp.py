@@ -67,8 +67,10 @@ async def rest_get(rest, base, path, **params):
 async def test_tools_listed(env):
     _, _, mcp_url = env
     tools = await call(mcp_url, None, None)
-    assert sorted(t.name for t in tools.tools) == ["describe", "layer_of", "modules", "resolve_intent", "search",
-                                                   "sparql", "validate"]
+    assert sorted(t.name for t in tools.tools) == [  # the FTO set (#47) and the knowledge-base tools (#48)
+        "describe", "get_entity", "get_knowledge", "get_path", "get_subgraph", "hybrid_search", "layer_of",
+        "list_knowledge", "modules", "propose_mapping", "recommend", "recommend_feedback", "resolve_intent", "search",
+        "sparql", "validate"]
 
 
 async def test_each_tool_returns_the_rest_data(env):

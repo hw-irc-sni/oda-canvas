@@ -40,6 +40,16 @@ def postgres_url():
         yield pg.get_connection_url(driver=None)
 
 
+@pytest.fixture(scope="session")
+def qdrant_url():
+    from testcontainers.core.container import DockerContainer
+    from testcontainers.core.wait_strategies import HttpWaitStrategy
+    container = (DockerContainer("qdrant/qdrant:v1.13.6").with_exposed_ports(6333)
+                 .waiting_for(HttpWaitStrategy(6333, "/readyz").for_status_code(200)))
+    with container:
+        yield f"http://{container.get_container_host_ip()}:{container.get_exposed_port(6333)}"
+
+
 async def serve(app):
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
@@ -52,7 +62,7 @@ async def serve(app):
 
 
 @asynccontextmanager
-async def running(postgres_url, tmp_path):
+async def running(postgres_url, tmp_path, qdrant_url="http://127.0.0.1:9", **overrides):
     from app.auth import TokenValidator
     from app.config import Settings
     from app.db.session import make_engine
@@ -67,7 +77,7 @@ async def running(postgres_url, tmp_path):
     await engine.dispose()
     settings = Settings(component_name=CLIENT, store_path=str(tmp_path / "store"), database_url=postgres_url,
                         keycloak_jwks_url="http://jwks.invalid", keycloak_issuers=[ISSUER], federation_relay_port=0,
-                        internal_port=0, qdrant_url="http://127.0.0.1:9", governance_require_validation=False)
+                        internal_port=0, qdrant_url=qdrant_url, governance_require_validation=False, **overrides)
     api_app = create_api(settings, TokenValidator(settings, StaticJWKS()))
     async with api_app.router.lifespan_context(api_app):
         rest = httpx.AsyncClient(transport=httpx.ASGITransport(app=api_app), base_url="http://api")
@@ -75,6 +85,7 @@ async def running(postgres_url, tmp_path):
         mcp_api = KnowledgeApi(f"http://api{base}", transport=httpx.ASGITransport(app=api_app))
         server, task, url = await serve(create_mcp(McpSettings(), mcp_api))
         try:
+            rest.app = api_app
             yield rest, base, f"{url}/mcp"
         finally:
             server.should_exit = True

@@ -1,7 +1,7 @@
 # TMFC060 MCP server
 
-The MCP server of the TMFC060 Knowledge Management component: the federated TM Forum ontology (FTO) tool set, and
-from #48 the knowledge-base tools, for AI agents. It uses the official `mcp` SDK (FastMCP, 1.30.0) over **streamable
+The MCP server of the TMFC060 Knowledge Management component: the federated TM Forum ontology (FTO) tool set and the
+knowledge-base tools, for AI agents. It uses the official `mcp` SDK (FastMCP, 1.30.0) over **streamable
 HTTP at `/mcp`**, like the reference ProductCatalog MCP server, and wraps the knowledge API: every call forwards the
 caller's bearer token, so the API's roles apply. A request without `Authorization: Bearer …` gets 401.
 
@@ -16,6 +16,22 @@ caller's bearer token, so the API's roles apply. A request without `Authorizatio
 | `layer_of(term)` | `GET /knowledgeTerm?iri=&layerChain=true` | the term's layer and its chain of parents |
 | `resolve_intent(intent)` | `/knowledgeTerm` per term | the terms an intent (Turtle, JSON-LD or TMF921 JSON) uses, where each is defined, and questions for the undefined ones |
 | `validate(document, shapes)` | `POST /knowledgeSpecification/{id}/validation/document` | SHACL validation against a shapes module |
+
+Knowledge-base tools ([`mcp_server/kb_tools.py`](mcp_server/kb_tools.py); the graph tools follow c-kg's designs, run
+as SPARQL through the KB's `/query`, and are bounded):
+
+| Tool | Wraps | What it does |
+|---|---|---|
+| `list_knowledge`, `get_knowledge(knowledge)` | `GET /knowledge[/{id}]` | the knowledge-bases, their ontology and statistics |
+| `hybrid_search(knowledge, query, …)` | `POST /knowledge/{id}/search` | chunks with the IRIs of the entities they mention |
+| `recommend(knowledge, context?, iri?, topK?)` | `POST /knowledge/{id}/recommend` | ranked entities and chunks for a situation |
+| `recommend_feedback(knowledge, recommendationId, itemId, …)` | `POST …/recommend/feedback` | report what was used and how it went |
+| `get_entity(knowledge, entity)` | `/query` | every triple with the IRI as subject or object |
+| `get_subgraph(knowledge, root, hops)` | `/query` | outgoing IRI edges for `hops` (≤ 4) steps, ≤ 500 triples |
+| `get_path(knowledge, start, end, maxHops)` | `/query` | the shortest outgoing path (≤ 6 hops), or `[]` |
+| `propose_mapping(module, subject, predicate, object, …)` | `POST …/mapping` + `POST …/review` | a bridge mapping submitted for review: proposed, never agreed (ontology-editor) |
+
+Provenance nodes and `rdf:type` edges are not followed; IRIs are checked before they reach SPARQL.
 
 ## Run
 
