@@ -265,6 +265,12 @@ request with:
   `FEDERATION_TIMEOUT`, a failing one 502 `FEDERATION_ERROR` (`SERVICE SILENT` continues without it);
 - an answer cache of `FEDERATION_CACHE_TTL` seconds (60; 0 turns it off).
 
+## Request validation
+
+Every JSON request body is validated against its operation's request schema in the OAS before the handler runs
+([`app/validation.py`](app/validation.py), `jsonschema`): a mismatch answers 400 with the JSON path. In requests
+`@type` is optional everywhere (the API sets it), but when given it must be a documented value.
+
 ## Validating documents
 
 `POST /knowledgeSpecification/{id}/validation/document` SHACL-validates submitted RDF (Turtle or JSON-LD) against a

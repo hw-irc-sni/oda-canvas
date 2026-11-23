@@ -2195,6 +2195,21 @@ components:
           description: A URI to a JSON-Schema file that defines additional attributes and relationships
       required:
         - '@type'
+    Extensible_FVO:
+      type: object
+      description: >-
+        The Extensible properties of a request body. In requests `@type` is optional everywhere, references
+        included: the API sets it when it is missing. Responses use `Extensible`, where it is always present.
+      properties:
+        '@type':
+          type: string
+          description: When sub-classing, this defines the sub-class Extensible name
+        '@baseType':
+          type: string
+          description: When sub-classing, this defines the super-class
+        '@schemaLocation':
+          type: string
+          description: A URI to a JSON-Schema file that defines additional attributes and relationships
     Entity:
       type: object
       description: Base entity schema for use in TMForum Open-APIs. Property.
@@ -2377,8 +2392,13 @@ components:
       required:
         - callback
       allOf:
-        - $ref: '#/components/schemas/Extensible'
+        - $ref: '#/components/schemas/Extensible_FVO'
         - properties:
+            '@type':
+              type: string
+              description: Optional in requests; the API sets it when missing.
+              enum:
+                - Hub
             callback:
               type: string
               description: The callback being registered.
@@ -2624,12 +2644,17 @@ components:
         readableIn: [draft, proposed, inReview, agreed, rejected, published, deprecated]
     Knowledge_FVO:
       allOf:
-        - $ref: '#/components/schemas/Extensible'
+        - $ref: '#/components/schemas/Extensible_FVO'
         - type: object
           description: A knowledge-base, as given to create it.
           required:
             - name
           properties:
+            '@type':
+              type: string
+              description: Optional in requests; the API sets it when missing.
+              enum:
+                - Knowledge
             name:
               type: string
             description:
@@ -2666,13 +2691,18 @@ components:
           Knowledge: '#/components/schemas/Knowledge_FVO'
     Knowledge_MVO:
       allOf:
-        - $ref: '#/components/schemas/Extensible'
+        - $ref: '#/components/schemas/Extensible_FVO'
         - type: object
           description: >-
             The fields of a knowledge-base that can be changed. `storeKind` cannot change once the
             knowledge-base exists. A change of `lifecycleStatus` is a governance transition (see
             `x-lifecycle` on `Knowledge`).
           properties:
+            '@type':
+              type: string
+              description: Optional in requests; the API sets it when missing.
+              enum:
+                - Knowledge
             name:
               type: string
             description:
@@ -2714,15 +2744,37 @@ components:
         mapping:
           KnowledgeRef: '#/components/schemas/KnowledgeRef'
     KnowledgeSpecificationRef:
-      allOf:
-        - $ref: '#/components/schemas/EntityRef'
-        - type: object
-          properties:
-            iri:
-              type: string
-              format: uri
-              description: The IRI of the ontology module, as an alternative way to identify it.
-      description: Reference to an ontology module.
+      type: object
+      description: >-
+        Reference to an ontology module, by `id` or by `iri` (at least one; responses carry both). The EntityRef
+        properties, with `iri` as an alternative identifier.
+      anyOf:
+        - required:
+            - id
+        - required:
+            - iri
+      properties:
+        id:
+          type: string
+          description: Identifier of the module.
+        iri:
+          type: string
+          format: uri
+          description: The IRI of the ontology module, as an alternative way to identify it.
+        href:
+          type: string
+          description: Hyperlink reference.
+        name:
+          type: string
+          description: Name of the module.
+        '@referredType':
+          type: string
+        '@type':
+          type: string
+        '@baseType':
+          type: string
+        '@schemaLocation':
+          type: string
       discriminator:
         propertyName: '@type'
         mapping:
@@ -3273,7 +3325,7 @@ components:
               example: provisional
     KnowledgeSpecification_FVO:
       allOf:
-        - $ref: '#/components/schemas/Extensible'
+        - $ref: '#/components/schemas/Extensible_FVO'
         - type: object
           description: An ontology module, as given to register it. It starts as draft.
           required:
@@ -3282,6 +3334,12 @@ components:
             - specKind
             - source
           properties:
+            '@type':
+              type: string
+              description: Optional in requests; the API sets it when missing.
+              enum:
+                - KnowledgeSpecification
+                - FederatedKnowledgeSpecification
             name:
               type: string
               description: Name of the module (FTO label).
@@ -3326,12 +3384,18 @@ components:
           KnowledgeSpecification: '#/components/schemas/KnowledgeSpecification_FVO'
     KnowledgeSpecification_MVO:
       allOf:
-        - $ref: '#/components/schemas/Extensible'
+        - $ref: '#/components/schemas/Extensible_FVO'
         - type: object
           description: >-
             The fields of an ontology module that can be changed. A change of lifecycleStatus is a
             governance transition (see x-lifecycle). The iri cannot change.
           properties:
+            '@type':
+              type: string
+              description: Optional in requests; the API sets it when missing.
+              enum:
+                - KnowledgeSpecification
+                - FederatedKnowledgeSpecification
             name:
               type: string
               description: Name of the module (FTO label).

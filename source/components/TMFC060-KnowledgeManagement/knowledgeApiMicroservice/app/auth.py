@@ -169,11 +169,15 @@ def get_principal(request: Request) -> Principal:
 def require_operation(operation_id: str):
     """FastAPI dependency for a route implementing an OAS operation: it allows the roles in x-required-roles."""
 
-    def dependency(request: Request, principal: Principal = Depends(get_principal)) -> Principal:
+    async def dependency(request: Request, principal: Principal = Depends(get_principal)) -> Principal:
         operation: Operation = request.app.state.operations[operation_id]
         if not principal.has_any(operation.roles):
             raise ApiError(403, "403", "Forbidden",
                            f"This operation needs one of the roles {', '.join(operation.roles)}")
+        validator = getattr(request.app.state, "body_validators", {}).get(operation_id)
+        if validator is not None:  # the body must match the OAS request schema (app/validation.py)
+            from .validation import check_body
+            await check_body(request, validator)
         return principal
 
     dependency.operation_id = operation_id

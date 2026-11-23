@@ -20,6 +20,7 @@ from qdrant_client import AsyncQdrantClient
 from .kb import router as kb_router
 from .event_sources import Batcher, Registrar
 from .internal import InternalServer
+from .validation import load_body_validators
 from .models import ModelResolver
 from .ontology.federation import Relay
 from .routers import hub, processes, specifications, terms
@@ -85,6 +86,8 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
     app.state.token_validator = token_validator or (TokenValidator(settings) if settings.auth_enabled else None)
     app.state.events = HubEvents(settings)
     app.state.lifecycles = load_lifecycles(settings.oas_path)
+    app.state.body_validators = {**load_body_validators(settings.oas_path),
+                                 **load_body_validators(settings.process_oas_path)}
 
     @app.exception_handler(ApiError)
     async def api_error(request: Request, exc: ApiError) -> JSONResponse:
