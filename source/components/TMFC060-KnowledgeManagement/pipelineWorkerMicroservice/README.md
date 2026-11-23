@@ -101,6 +101,26 @@ document's chunks, so nothing stale stays searchable.
 produced (its neighbours, types and superclasses) for `/knowledge/{id}/recommend`; the success and usage signals are
 aggregated live from the feedback by the API.
 
+## End-to-end test
+
+[`tests/test_end_to_end.py`](tests/test_end_to_end.py) (`uv run pytest tests/test_end_to_end.py`, about a minute)
+runs the whole pipeline. The real API and this worker run with the default handlers, Postgres and Qdrant run in
+containers, and three OpenAI-compatible stub model servers run on sockets, one per model route.
+
+- **Pipeline:** a runbook and a TMF921 intent are ingested
+  ([`tests/fixtures/`](tests/fixtures/), written for the test). The test checks:
+  - both TMF701 processes complete, with the six KM-FX tasks each
+  - the extracted entities and relations, the intent's Intent Common Model triples, provenance and the OWL-RL
+    inference are in the KB graph
+  - a value the shapes module refuses is withheld, and becomes a `dataConflict` proposal with the model's suggestion
+  - the chunks are in Qdrant with their entity IRIs; hybrid search and the IRI filter return IRI-tagged hits
+  - recommend returns the related entity
+- **Model routes:**
+  - with every stub up, the ModelGatewayService route serves every model call; it is found through a fake
+    Kubernetes API serving the CRD and a CR that names the stub
+  - with that stub down, agentgateway serves them; with both down, the OpenAI-compatible route does
+  - a gateway that starts failing during an ingest fails over to the next route, and the ingest completes
+
 ## Settings
 
 | Variable | Default | Meaning |

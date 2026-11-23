@@ -1,0 +1,12 @@
+{
+  "id": "INT-HARB-7",
+  "@type": "Intent",
+  "href": "https://intent.example.org/tmf-api/intentManagement/v5/intent/INT-HARB-7",
+  "name": "Low radio latency for the harbour district",
+  "description": "Keep the radio latency of the harbour district under 20 ms for crane remote control",
+  "lifecycleStatus": "active",
+  "expression": {
+    "@type": "TurtleExpression",
+    "expressionValue": "@prefix icm: <http://tio.models.tmforum.org/tio/v3.6.0/IntentCommonModel/> .\n@prefix hb: <https://example.org/e2e/intent/> .\nhb:INT-HARB-7 a icm:Intent ; icm:hasExpectation hb:INT-HARB-7-latency .\nhb:INT-HARB-7-latency a icm:DeliveryExpectation ; icm:target hb:HarbourDistrict .\n"
+  }
+}

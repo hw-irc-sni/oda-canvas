@@ -1,0 +1,10 @@
+# Alarm severities are a closed list: the runbook's "unknown" severity is a conflict for KM-FX-04.
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix as: <https://example.org/e2e/assurance#> .
+
+<https://example.org/e2e/assurance-shapes> a owl:Ontology ; owl:imports <https://example.org/e2e/assurance> .
+
+as:AlarmShape a sh:NodeShape ;
+    sh:targetClass as:Alarm ;
+    sh:property [ sh:path as:severity ; sh:in ( "critical" "major" "minor" ) ] .
