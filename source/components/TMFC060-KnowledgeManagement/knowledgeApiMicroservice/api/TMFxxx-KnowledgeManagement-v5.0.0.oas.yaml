@@ -15,6 +15,9 @@ info:
     - `knowledgeSpecification`: an ontology module of a federated, governed ontology.
 
 
+    Strings in JSON bodies must not hold the NUL character (U+0000): a body with one gets `400`.
+
+
     ### Operations
 
     - Retrieve an entity or a collection of entities depending on filter criteria
@@ -483,6 +486,7 @@ paths:
           application/sparql-query:
             schema:
               type: string
+              format: sparql-query
             example: |
               PREFIX as: <https://example.org/ontology/telecom/assurance#>
               SELECT ?incident ?cell WHERE { ?incident a as:Incident ; as:affects ?cell } LIMIT 10
@@ -494,6 +498,7 @@ paths:
               properties:
                 query:
                   type: string
+                  format: sparql-query
                   description: The SPARQL query.
       responses:
         '200':
@@ -798,12 +803,12 @@ paths:
                 description:
                   type: string
             example:
-              file: (the PDF file content)
-              name: site-power-runbook.pdf
+              file: "# Site power runbook\n\nWhen the mains power alarm is raised, check the rectifier first."
+              name: site-power-runbook.md
               description: Runbook for site power failures
             encoding:
               file:
-                contentType: application/pdf, text/markdown, text/html, text/turtle, application/ld+json, application/json
+                contentType: text/markdown, application/pdf, text/html, text/turtle, application/ld+json, application/json
       responses:
         '201':
           description: Created
@@ -910,9 +915,29 @@ paths:
         - canvasSystemRole
       responses:
         '200':
-          description: The document content
+          description: The document content, in the media type it was uploaded as
           content:
-            application/octet-stream:
+            text/markdown:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            text/html:
+              schema:
+                type: string
+                format: binary
+            text/turtle:
+              schema:
+                type: string
+                format: binary
+            application/ld+json:
+              schema:
+                type: string
+                format: binary
+            application/json:
               schema:
                 type: string
                 format: binary
@@ -1301,6 +1326,7 @@ paths:
           text/turtle:
             schema:
               type: string
+              format: turtle
             example: |
               @prefix as: <https://example.org/ontology/telecom/assurance#> .
               @prefix owl: <http://www.w3.org/2002/07/owl#> .
@@ -2085,6 +2111,7 @@ paths:
           text/turtle:
             schema:
               type: string
+              format: turtle
           application/ld+json:
             schema:
               $ref: '#/components/schemas/JsonLdDocument'
@@ -2287,6 +2314,11 @@ components:
       description: A Party reference
       allOf:
         - $ref: '#/components/schemas/EntityRef'
+        - properties:
+            '@type':
+              type: string
+              enum:
+                - PartyRef
       discriminator:
         propertyName: '@type'
         mapping:
@@ -2297,6 +2329,10 @@ components:
         - type: object
           description: Party role reference. A party role represents the part played by a party in a given context.
           properties:
+            '@type':
+              type: string
+              enum:
+                - PartyRoleRef
             partyId:
               type: string
               description: The identifier of the engaged party that is linked to the PartyRole object.
@@ -2409,7 +2445,10 @@ components:
               description: Id of the listener
             callback:
               type: string
-              description: The callback being registered.
+              format: callback-url
+              description: >-
+                The callback being registered: an http(s) URL whose host resolves to a public address, or matches the
+                deployment's allowed callback hosts.
             query:
               type: string
               description: >-
@@ -2432,10 +2471,14 @@ components:
                 - Hub
             callback:
               type: string
-              description: The callback being registered.
+              format: callback-url
+              description: >-
+                The callback being registered: an http(s) URL whose host resolves to a public address, or matches the
+                deployment's allowed callback hosts.
             query:
               type: string
-              description: Additional data to be passed
+              pattern: '^eventType=[A-Za-z]+(,[A-Za-z]+)*$'
+              description: The events to deliver, for example `eventType=KnowledgeCreateEvent,KnowledgeDeleteEvent`.
     JsonPatch:
       type: object
       description: A JSONPatch document as defined by RFC 6902
@@ -2689,6 +2732,8 @@ components:
                 - Knowledge
             name:
               type: string
+              minLength: 1
+              pattern: '\S'
             description:
               type: string
             version:
@@ -2763,6 +2808,19 @@ components:
                 $ref: '#/components/schemas/RelatedPartyRefOrPartyRoleRef'
             validFor:
               $ref: '#/components/schemas/TimePeriod'
+        - anyOf:
+            - description: A lifecycle transition, on its own.
+              required:
+                - lifecycleStatus
+              properties:
+                'lifecycleStatus': {}
+                '@type':
+                  type: string
+              additionalProperties: false
+            - description: A change of fields, without lifecycleStatus.
+              not:
+                required:
+                  - lifecycleStatus
       discriminator:
         propertyName: '@type'
         mapping:
@@ -2926,7 +2984,9 @@ components:
       properties:
         query:
           type: string
-          description: The search text.
+          minLength: 1
+          pattern: '\S'
+          description: The search text (not blank).
         topK:
           type: integer
           minimum: 1
@@ -2976,13 +3036,21 @@ components:
             $ref: '#/components/schemas/SearchHit'
     RecommendationRequest:
       type: object
-      description: The context to recommend knowledge for.
+      description: The context to recommend knowledge for; give a text `context`, context `iri`s, or both.
+      anyOf:
+        - required:
+            - context
+        - required:
+            - iri
       properties:
         context:
           type: string
-          description: A description of the situation, in text.
+          minLength: 1
+          pattern: '\S'
+          description: A description of the situation, in text (not blank).
         iri:
           type: array
+          minItems: 1
           description: Entities of the situation, by IRI.
           items:
             type: string
@@ -3205,6 +3273,7 @@ components:
             - git
         url:
           type: string
+          minLength: 1
           description: The repository URL.
         ref:
           type: string
@@ -3212,6 +3281,7 @@ components:
           description: Branch, tag or commit.
         path:
           type: string
+          minLength: 1
           description: Path of the module file in the repository.
         secretRef:
           type: string
@@ -3229,6 +3299,7 @@ components:
             - mount
         path:
           type: string
+          minLength: 1
           description: Path of the module file in the container.
     ComponentContributionSource:
       type: object
@@ -3261,6 +3332,7 @@ components:
             - remoteEndpoint
         url:
           type: string
+          minLength: 1
           format: uri
           description: The SPARQL endpoint, or the query URL of the peer knowledge-base.
         endpointKind:
@@ -3376,6 +3448,8 @@ components:
                 - FederatedKnowledgeSpecification
             name:
               type: string
+              minLength: 1
+              pattern: '\S'
               description: Name of the module (FTO label).
             description:
               type: string
@@ -3384,6 +3458,7 @@ components:
               type: string
             iri:
               type: string
+              minLength: 1
               format: uri
               description: The ontology IRI of the module. Unique; used to resolve owl:imports.
             prefix:
@@ -3412,6 +3487,21 @@ components:
                 $ref: '#/components/schemas/KnowledgeSpecificationRef'
             source:
               $ref: '#/components/schemas/KnowledgeSpecificationSource'
+        - description: A remote module takes its content from a federation peer.
+          anyOf:
+            - not:
+                required:
+                  - specKind
+                properties:
+                  specKind:
+                    enum:
+                      - remote
+            - properties:
+                source:
+                  properties:
+                    kind:
+                      enum:
+                        - remoteEndpoint
       discriminator:
         propertyName: '@type'
         mapping:
@@ -3466,8 +3556,34 @@ components:
               $ref: '#/components/schemas/KnowledgeSpecificationSource'
             lifecycleStatus:
               $ref: '#/components/schemas/GovernedLifecycleStatusType'
-            linkStatus:
-              $ref: '#/components/schemas/LinkStatusType'
+        - anyOf:
+            - description: A lifecycle transition, on its own.
+              required:
+                - lifecycleStatus
+              properties:
+                'lifecycleStatus': {}
+                '@type':
+                  type: string
+              additionalProperties: false
+            - description: A change of fields, without lifecycleStatus.
+              not:
+                required:
+                  - lifecycleStatus
+        - description: A remote module takes its content from a federation peer.
+          anyOf:
+            - not:
+                required:
+                  - specKind
+                properties:
+                  specKind:
+                    enum:
+                      - remote
+            - properties:
+                source:
+                  properties:
+                    kind:
+                      enum:
+                        - remoteEndpoint
       discriminator:
         propertyName: '@type'
         mapping:
@@ -3585,10 +3701,16 @@ components:
       properties:
         subject:
           type: string
+          format: iri-or-curie
+          description: An IRI, or a CURIE of a prefix a registered module declares.
         predicate:
           type: string
+          format: iri-or-curie
+          description: An IRI, or a CURIE of a prefix a registered module declares.
         object:
           type: string
+          format: iri-or-curie
+          description: An IRI, or a CURIE of a prefix a registered module declares.
         confidence:
           $ref: '#/components/schemas/MappingConfidenceType'
         rationale:
@@ -3596,13 +3718,30 @@ components:
     Mapping_MVO:
       type: object
       description: The fields of a mapping that can be changed. A change of lifecycleStatus is a governance transition.
+      anyOf:
+        - description: A lifecycle transition, on its own.
+          required:
+            - lifecycleStatus
+          properties:
+            'lifecycleStatus': {}
+          additionalProperties: false
+        - description: A change of fields, without lifecycleStatus.
+          not:
+            required:
+              - lifecycleStatus
       properties:
         subject:
           type: string
+          format: iri-or-curie
+          description: An IRI, or a CURIE of a prefix a registered module declares.
         predicate:
           type: string
+          format: iri-or-curie
+          description: An IRI, or a CURIE of a prefix a registered module declares.
         object:
           type: string
+          format: iri-or-curie
+          description: An IRI, or a CURIE of a prefix a registered module declares.
         confidence:
           $ref: '#/components/schemas/MappingConfidenceType'
         rationale:
@@ -3672,6 +3811,16 @@ components:
       required:
         - kind
         - target
+      anyOf:
+        - description: A proposal or a comment.
+          properties:
+            kind:
+              enum:
+                - proposal
+                - comment
+        - description: A ruling, which says agreed or rejected.
+          required:
+            - ruling
       properties:
         kind:
           type: string
@@ -3991,6 +4140,7 @@ components:
         text/turtle:
           schema:
             type: string
+            format: turtle
           example: |
             @prefix ex: <https://example.org/incident/> .
             @prefix as: <https://example.org/ontology/telecom/assurance#> .

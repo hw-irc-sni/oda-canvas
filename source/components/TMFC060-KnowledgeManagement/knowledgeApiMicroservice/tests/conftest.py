@@ -1,5 +1,6 @@
 """Fixtures: real Postgres and Qdrant in containers (testcontainers), and a temporary pyoxigraph store."""
 import pytest
+from docker.types import Ulimit
 from testcontainers.core.container import DockerContainer
 from testcontainers.community.postgres import PostgresContainer
 from testcontainers.core.wait_strategies import HttpWaitStrategy
@@ -19,6 +20,8 @@ def postgres_url():
 @pytest.fixture(scope="session")
 def qdrant_container():
     container = (DockerContainer(QDRANT_IMAGE).with_exposed_ports(6333)
+                 # Qdrant keeps files open per collection segment: the default limit runs out after a few collections
+                 .with_kwargs(ulimits=[Ulimit(name="nofile", soft=65535, hard=65535)])
                  .waiting_for(HttpWaitStrategy(6333, "/readyz").for_status_code(200)))
     with container:
         yield container

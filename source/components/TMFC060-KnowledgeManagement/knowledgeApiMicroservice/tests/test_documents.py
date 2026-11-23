@@ -118,6 +118,16 @@ async def test_media_types(api, content, filename, declared, expected):
         assert r.status_code == 201 and r.json()["mediaType"] == expected, r.text
 
 
+async def test_malformed_multipart_is_400_and_utf8_file_names_are_kept(api):
+    boundary = "0d37f771f3609e9baf6be26654101f5f"
+    r = await api.post(docs(api), content=f"--{boundary}\r\nTrue--{boundary}--\r\n".encode(),
+                       headers={**auth(EDITOR), "Content-Type": f"multipart/form-data; boundary={boundary}"})
+    assert r.status_code == 400 and "malformed" in r.json()["message"]
+    r = await upload(api, "# Réseau\n\nサイト".encode(), filename="réseau-サイト.md")
+    assert r.status_code == 201, r.text
+    assert r.json()["name"] == "réseau-サイト.md"
+
+
 async def test_bad_uploads(api):
     r = await api.post(docs(api), data={"name": "no file"}, files={"other": ("x", b"x", "text/plain")},
                        headers=auth(EDITOR))

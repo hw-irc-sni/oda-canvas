@@ -85,6 +85,8 @@ async def every_event(api):
 async def test_each_event_type_is_received_once(api, listener):
     r = await hub(api, listener.callback)
     assert r.status_code == 201 and r.json()["callback"] == listener.callback and r.json()["id"].startswith("hub-")
+    assert r.json()["@type"] == "Hub"
+    assert (await api.get(f"{api.base}/hub/{r.json()['id']}", headers=auth())).json()["@type"] == "Hub"
     await every_event(api)
     await drain(api)
     names = [name for name, _ in listener.received]

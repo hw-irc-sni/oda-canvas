@@ -174,10 +174,10 @@ def require_operation(operation_id: str):
         if not principal.has_any(operation.roles):
             raise ApiError(403, "403", "Forbidden",
                            f"This operation needs one of the roles {', '.join(operation.roles)}")
-        validator = getattr(request.app.state, "body_validators", {}).get(operation_id)
-        if validator is not None:  # the body must match the OAS request schema (app/validation.py)
+        rule = getattr(request.app.state, "body_validators", {}).get(operation_id)
+        if rule is not None:  # the body must match the OAS request schema (app/validation.py)
             from .validation import check_body
-            await check_body(request, validator)
+            await check_body(request, rule)
         return principal
 
     dependency.operation_id = operation_id

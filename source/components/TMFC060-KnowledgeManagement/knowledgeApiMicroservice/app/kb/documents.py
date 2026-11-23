@@ -15,6 +15,7 @@ import secrets
 from pathlib import PurePosixPath
 
 from python_multipart import MultipartParser
+from python_multipart.exceptions import ParseError
 from python_multipart.multipart import parse_options_header
 from qdrant_client import models
 from sqlalchemy import select
@@ -105,19 +106,20 @@ class Upload:
         self.part_headers, self.current = {}, None
 
     def header_end(self) -> None:
-        self.part_headers[self.header_field.decode("latin-1").lower()] = self.header_value.decode("utf-8", "replace")
+        # latin-1 keeps the raw bytes: a UTF-8 file name is decoded from them below
+        self.part_headers[self.header_field.decode("latin-1").lower()] = self.header_value.decode("latin-1")
         self.header_field = self.header_value = b""
 
     def headers_finished(self) -> None:
         _, params = parse_options_header(self.part_headers.get("content-disposition", ""))
-        name = params.get(b"name", b"").decode()
+        name = params.get(b"name", b"").decode("utf-8", "replace")
         self.current = name
         if name == "file":
             if self.file_seen:
                 raise bad_request("Send one file per upload")
             self.file_seen = True
             self.filename = params.get(b"filename", b"").decode("utf-8", "replace")
-            self.declared = parse_options_header(self.part_headers.get("content-type", ""))[0].decode().lower()
+            self.declared = parse_options_header(self.part_headers.get("content-type", ""))[0].decode("latin-1").lower()
         else:
             self.fields[name] = bytearray()
 
@@ -221,6 +223,9 @@ class Documents:
             doc.name = upload.field("name") or upload.filename or doc.id
             doc.description = upload.field("description") or None
             await self.session.commit()
+        except ParseError as exc:
+            await self.session.rollback()
+            raise bad_request(f"The multipart body is malformed: {exc}") from exc
         except BaseException:
             await self.session.rollback()
             raise

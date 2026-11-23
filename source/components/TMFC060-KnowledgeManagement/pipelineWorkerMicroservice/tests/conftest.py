@@ -18,9 +18,12 @@ def postgres_url():
 
 @pytest.fixture(scope="session")
 def qdrant_url():
+    from docker.types import Ulimit
     from testcontainers.core.container import DockerContainer
     from testcontainers.core.wait_strategies import HttpWaitStrategy
     container = (DockerContainer("qdrant/qdrant:v1.13.6").with_exposed_ports(6333)
+                 # Qdrant keeps files open per collection segment: the default limit runs out after a few collections
+                 .with_kwargs(ulimits=[Ulimit(name="nofile", soft=65535, hard=65535)])
                  .waiting_for(HttpWaitStrategy(6333, "/readyz").for_status_code(200)))
     with container:
         yield f"http://{container.get_container_host_ip()}:{container.get_exposed_port(6333)}"

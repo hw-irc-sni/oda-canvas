@@ -5,6 +5,7 @@ Each point is a chunk, with the payload ``kbId``, ``documentId``, ``chunkId``, `
 ``classIri`` are indexed. Hybrid search fuses a dense and a sparse prefetch with Qdrant's RRF; Qdrant 1.13 scores
 each list 1/(2 + rank) with rank from 0, so the fused score is normalised by 0.5 per list (first in every list: 1.0).
 """
+import logging
 import uuid
 from dataclasses import dataclass, field
 
@@ -12,6 +13,8 @@ from qdrant_client import AsyncQdrantClient, models
 
 from ..errors import ApiError
 from . import sparse
+
+log = logging.getLogger(__name__)
 
 DENSE, SPARSE = "dense", "sparse"
 INDEXED = ("documentId", "entityIri", "classIri", "source")
@@ -47,6 +50,7 @@ def unavailable(exc: Exception) -> ApiError:
     status = getattr(exc, "status_code", None)
     if isinstance(status, int) and 400 <= status < 500 and status != 404:
         return ApiError(400, "400", "Bad Request", f"The vector store refused the request ({status})")
+    log.warning("vector store failure: %r %s %s", exc, status, getattr(exc, "content", b"")[:300])
     return ApiError(503, "503", "Service Unavailable", f"The vector store is not available: {type(exc).__name__}")
 
 

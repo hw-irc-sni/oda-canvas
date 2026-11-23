@@ -21,7 +21,7 @@ def owner_of(principal: Principal) -> str:
 
 
 def present(sub: HubSubscription) -> dict:
-    out = {"id": sub.id, "callback": sub.callback}
+    out = {"@type": "Hub", "id": sub.id, "callback": sub.callback}
     if sub.query:
         out["query"] = sub.query
     return out
