@@ -268,8 +268,12 @@ request with:
 ## Request validation
 
 Every JSON request body is validated against its operation's request schema in the OAS before the handler runs
-([`app/validation.py`](app/validation.py), `jsonschema`): a mismatch answers 400 with the JSON path. In requests
-`@type` is optional everywhere (the API sets it), but when given it must be a documented value.
+([`app/validation.py`](app/validation.py), `jsonschema`): a mismatch answers 400 with the JSON path. `date-time` and
+`uri` formats are checked. In requests `@type` is optional everywhere, but when given it must be a documented value;
+the API sets it on nested objects from the OAS (between `PartyRef` and `PartyRoleRef`, `PartyRoleRef` when the
+object has `partyId` or `partyName`). A `oneOf` with a discriminator picks its variant by `@type`. Strings must not
+hold NUL (U+0000). Rules the handlers enforce (non-blank names and queries, a lifecycle change on its own, a remote
+module's `remoteEndpoint` source, a ruling's `ruling` …) are in the OAS too, so a schema-valid request isn't refused.
 
 ## Validating documents
 
@@ -393,5 +397,30 @@ accepted issuer and contain `COMPONENT_NAME` in `aud`. The caller's roles are
 
 ```bash
 uv run pytest -q          # starts Postgres and Qdrant with testcontainers (needs Docker)
+uv run pytest -q -m contract       # only the contract tests (about 3 minutes)
+uv run pytest -q -m "not contract" # everything else
 docker build -t tmforumodacanvas/tmfc060-knowledge-api:dev .
 ```
+
+The Qdrant test container runs with a `nofile` limit of 65535: Qdrant keeps files open for every collection (one
+per knowledge-base), and the default limit runs out after a handful (`Too many open files`, then 503 from the API).
+Deployments need the same.
+
+### Contract tests
+
+[`tests/test_contract.py`](tests/test_contract.py) runs [schemathesis](https://schemathesis.readthedocs.io) against
+every operation of the TMFxxx OAS and of the TMF701 subset, over HTTP, on the real app with Postgres, Qdrant and a
+fake OpenAI-compatible model route (`/v1/models`, `/v1/embeddings`, `/v1/chat/completions`):
+
+- **Positive pass**: generated and example requests that match the OAS; every check (no 5xx, documented status
+  codes, content types and headers, response schemas, `Allow` on 405, schema-valid requests not refused …), except
+  the stateful ones.
+- **Negative pass**: requests that don't match the OAS; none may cause a 5xx.
+- **Viewer pass**: a `knowledge-viewer` token; the answers (403s included) must still match the OAS.
+
+Seeded modules, mappings, knowledge-bases, documents, a process, a recommendation, a hub and a proposal give the
+path parameters and the references in bodies real targets; DELETE gets throwaway copies. Strategies for the OAS
+custom formats (`turtle`, `sparql-query`, `callback-url`, `iri-or-curie`) and for the upload media types generate
+content that parses. Deployment settings (allowed callback hosts, mount roots) are the test's own: the security
+checks stay on. Generation is derandomized (`max_examples` 12), so runs repeat. The callbacks (`/eventSource/…`,
+`/listener/…`) are not generated: a secret URL guards them, not a bearer token.
