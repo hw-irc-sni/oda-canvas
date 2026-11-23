@@ -54,7 +54,8 @@ async def api(postgres_url, tmp_path):
 
 
 async def term(api, role="knowledge-viewer", **params):
-    return await api.get(f"{api.base}/knowledgeTerm", params=params, headers=auth(role))
+    path = "/knowledgeTerm/describe" if "iri" in params else "/knowledgeTerm"
+    return await api.get(f"{api.base}{path}", params=params, headers=auth(role))
 
 
 async def test_describe(api):
@@ -74,11 +75,12 @@ async def test_describe(api):
 
 
 async def test_describe_errors(api):
-    assert (await term(api, iri="Alarm")).status_code == 400  # plain word: use q=
-    assert (await term(api, iri="nope:Alarm")).status_code == 400
+    assert (await term(api, iri="Alarm")).status_code == 400  # plain word: search with q=
+    assert (await term(api, iri="nope:Alarm")).status_code == 404  # no module declares the prefix (#49)
     assert (await term(api, iri="tel:Nothing")).status_code == 404
-    assert (await term(api, iri="tel:Alarm", q="alarm")).status_code == 400
-    assert (await term(api)).status_code == 400
+    assert (await api.get(f"{api.base}/knowledgeTerm/describe", headers=auth())).status_code == 400  # iri needed
+    assert (await term(api)).status_code == 400  # q needed
+    assert (await term(api, q="   ")).status_code == 400
     assert (await term(api, q="alarm", limit="x")).status_code == 400
     assert (await term(api, q="alarm", limit="0")).status_code == 400
     assert (await term(api, iri="tel:Alarm", layerChain="maybe")).status_code == 400
@@ -122,7 +124,7 @@ async def test_listed_prefixes_bind_to_the_declared_namespaces(api):
     d = (await term(api, iri="mx:Thing")).json()["description"]
     assert d["iri"] == "https://example.org/multi/X/Thing" and d["curie"] == "mx:Thing"
     assert d["parents"] == ["my:Root"]
-    assert (await term(api, iri="zz:Thing")).status_code == 400  # declared but not listed
+    assert (await term(api, iri="zz:Thing")).status_code == 404  # declared but not listed: an unknown prefix
 
 
 async def test_rbac(api):

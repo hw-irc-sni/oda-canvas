@@ -75,8 +75,10 @@ class Terms:
         prefix, sep, local = term.partition(":")
         if sep and prefix in self.prefixes:
             return self.prefixes[prefix] + local
+        if sep:  # a CURIE whose prefix no module declares: no such term
+            raise ApiError(404, "404", "Not Found", f"No module declares the prefix of '{term}'")
         raise ApiError(400, "400", "Bad Request",
-                       f"'{term}' is neither an IRI nor a CURIE with a known prefix; use q= to search by text")
+                       f"'{term}' is neither an IRI nor a CURIE; search text with /knowledgeTerm?q=")
 
     def quads(self, subject=None, predicate=None):
         for module in self.modules:
@@ -185,17 +187,20 @@ class Terms:
         layers = {m.id: m.layer for m in self.modules}
         return {"chain": chain, "endsAtFoundational": layers.get(last_module) == "Foundational"}
 
-    async def lookup(self, iri: str | None, q: str | None, layer_chain: bool, limit: int,
-                     include_unpublished: bool) -> dict:
-        if (iri is None) == (q is None):
-            raise ApiError(400, "400", "Bad Request", "Give exactly one of iri and q")
-        if limit < 1:
-            raise ApiError(400, "400", "Bad Request", "limit must be at least 1")
+    async def find(self, q: str | None, limit: int, include_unpublished: bool) -> dict:
+        """GET /knowledgeTerm?q=: ranked search."""
+        if q is None or not q.strip():
+            raise ApiError(400, "400", "Bad Request", "q is required and must not be blank")
+        if not 1 <= limit <= 1000:
+            raise ApiError(400, "400", "Bad Request", "limit must be between 1 and 1000")
         await self.load(include_unpublished)
-        if q is not None:
-            if not q.strip():
-                raise ApiError(400, "400", "Bad Request", "q must not be empty")
-            return {"hits": self.search(q, limit)}
+        return {"hits": self.search(q, limit)}
+
+    async def lookup(self, iri: str | None, layer_chain: bool, include_unpublished: bool) -> dict:
+        """GET /knowledgeTerm/describe?iri=: one term, and its layer chain when asked."""
+        if not iri:
+            raise ApiError(400, "400", "Bad Request", "iri is required")
+        await self.load(include_unpublished)
         full = self.expand(iri)
         description = self.describe(full)
         if description is None:

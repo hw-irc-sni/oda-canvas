@@ -49,8 +49,8 @@ def _sort_key(field):
 
 def list_response(request: Request, bodies: list[dict]) -> JSONResponse:
     params = request.query_params
-    if params.get("filter"):
-        raise ApiError(501, "501", "Not Implemented", "JSONPath filter is not supported; use attribute=value")
+    if "filter" in params:  # no JSONPath (#26, #49): equality filters attribute=value only
+        raise ApiError(400, "400", "Bad Request", "The JSONPath filter is not supported; use attribute=value")
     try:
         offset = int(params.get("offset", 0))
         limit = int(params["limit"]) if "limit" in params else None

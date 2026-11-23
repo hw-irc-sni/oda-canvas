@@ -11,10 +11,10 @@ caller's bearer token, so the API's roles apply. A request without `Authorizatio
 |---|---|---|
 | `modules` | `GET /knowledgeSpecification` | the modules with layer, IRI, state |
 | `sparql(query, knowledge)` | `POST /knowledge/{id}/query` | read-only SPARQL over a knowledge-base and its ontology |
-| `describe(term)` | `GET /knowledgeTerm?iri=` | labels, definitions, layer, defining modules, parents, matches |
+| `describe(term)` | `GET /knowledgeTerm/describe?iri=` | labels, definitions, layer, defining modules, parents, matches |
 | `search(text, limit)` | `GET /knowledgeTerm?q=` | terms by label, local name or definition |
-| `layer_of(term)` | `GET /knowledgeTerm?iri=&layerChain=true` | the term's layer and its chain of parents |
-| `resolve_intent(intent)` | `/knowledgeTerm` per term | the terms an intent (Turtle, JSON-LD or TMF921 JSON) uses, where each is defined, and questions for the undefined ones |
+| `layer_of(term)` | `GET /knowledgeTerm/describe?iri=&layerChain=true` | the term's layer and its chain of parents |
+| `resolve_intent(intent)` | `/knowledgeTerm/describe` per term | the terms an intent (Turtle, JSON-LD or TMF921 JSON) uses, where each is defined, and questions for the undefined ones |
 | `validate(document, shapes)` | `POST /knowledgeSpecification/{id}/validation/document` | SHACL validation against a shapes module |
 
 Knowledge-base tools ([`mcp_server/kb_tools.py`](mcp_server/kb_tools.py); the graph tools follow c-kg's designs, run

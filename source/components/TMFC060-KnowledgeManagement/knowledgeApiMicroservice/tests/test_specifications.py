@@ -34,7 +34,7 @@ async def test_create_get_and_list(api):
                            headers=auth("ontology-reviewer"))
     assert listed.headers["x-total-count"] == "1"
     assert listed.json() == [{"@type": "KnowledgeSpecification", "id": "core", "href": body["href"], "name": "Core"}]
-    assert (await api.get(path(api), params={"filter": "$[?(@.x)]"}, headers=auth())).status_code == 501
+    assert (await api.get(path(api), params={"filter": "$[?(@.x)]"}, headers=auth())).status_code == 400  # no JSONPath (#49: removed from the OAS)
 
 
 async def test_ids_are_validated_derived_and_unique(api):

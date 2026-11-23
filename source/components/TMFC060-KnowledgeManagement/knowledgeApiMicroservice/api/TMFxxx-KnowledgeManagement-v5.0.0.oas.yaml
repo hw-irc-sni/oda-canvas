@@ -164,7 +164,6 @@ paths:
         - $ref: '#/components/parameters/Offset'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Sort'
-        - $ref: '#/components/parameters/Filter'
       responses:
         '200':
           $ref: '#/components/responses/200KnowledgeArray'
@@ -176,8 +175,6 @@ paths:
           $ref: '#/components/responses/403'
         '500':
           $ref: '#/components/responses/500'
-        '501':
-          $ref: '#/components/responses/501'
         default:
           $ref: '#/components/responses/Error'
     post:
@@ -737,7 +734,6 @@ paths:
         - $ref: '#/components/parameters/Offset'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Sort'
-        - $ref: '#/components/parameters/Filter'
       responses:
         '200':
           description: Success
@@ -769,8 +765,6 @@ paths:
           $ref: '#/components/responses/404'
         '500':
           $ref: '#/components/responses/500'
-        '501':
-          $ref: '#/components/responses/501'
         default:
           $ref: '#/components/responses/Error'
     post:
@@ -1003,7 +997,6 @@ paths:
         - $ref: '#/components/parameters/Offset'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Sort'
-        - $ref: '#/components/parameters/Filter'
       responses:
         '200':
           description: Success
@@ -1029,8 +1022,6 @@ paths:
           $ref: '#/components/responses/403'
         '500':
           $ref: '#/components/responses/500'
-        '501':
-          $ref: '#/components/responses/501'
         default:
           $ref: '#/components/responses/Error'
     post:
@@ -1355,7 +1346,6 @@ paths:
         - $ref: '#/components/parameters/Fields'
         - $ref: '#/components/parameters/Offset'
         - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Filter'
       responses:
         '200':
           description: Success
@@ -1377,8 +1367,6 @@ paths:
           $ref: '#/components/responses/409'
         '500':
           $ref: '#/components/responses/500'
-        '501':
-          $ref: '#/components/responses/501'
         default:
           $ref: '#/components/responses/Error'
     post:
@@ -1550,7 +1538,6 @@ paths:
         - $ref: '#/components/parameters/Fields'
         - $ref: '#/components/parameters/Offset'
         - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Filter'
       responses:
         '200':
           description: Success
@@ -1570,8 +1557,6 @@ paths:
           $ref: '#/components/responses/404'
         '500':
           $ref: '#/components/responses/500'
-        '501':
-          $ref: '#/components/responses/501'
         default:
           $ref: '#/components/responses/Error'
     post:
@@ -1729,14 +1714,74 @@ paths:
   /knowledgeTerm:
     get:
       operationId: retrieveKnowledgeTerm
-      summary: Looks up ontology terms
+      summary: Searches ontology terms
       description: >-
-        Looks up terms across the ontology modules: with `iri`, describes one term (labels,
-        definitions, defining module, FTO layer, parents and SKOS matches); with `q`, searches
-        labels and definitions. With `layerChain=true`, also returns the term's subclass chain
-        down to the Foundational layer. Exactly one of `iri` and `q` must be given (`400`
-        otherwise). These are the lookups of the FTO MCP tools fto_describe, fto_search and
-        fto_layer_of.
+        Searches the terms of the ontology modules by label, local name and definition, ranked (exact label, label
+        prefix, label substring, IRI local name, then definition or comment). The FTO MCP tool fto_search. Describe a
+        term with `/knowledgeTerm/describe`.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Text to search for in labels, local names and definitions.
+          schema:
+            type: string
+            minLength: 1
+            pattern: '\S'
+        - name: limit
+          in: query
+          description: The maximum number of hits.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 25
+        - name: includeUnpublished
+          in: query
+          description: >-
+            Also look in modules that are not published (draft, proposed, inReview, agreed, rejected). By default only
+            published and deprecated modules are searched.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: The hits, best first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TermLookupResult'
+              examples:
+                search:
+                  $ref: '#/components/examples/Term_search'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  /knowledgeTerm/describe:
+    get:
+      operationId: describeKnowledgeTerm
+      summary: Describes an ontology term
+      description: >-
+        Describes one term (labels, definitions, defining modules, FTO layer, parents and SKOS matches), given as an
+        IRI or a CURIE of a registered prefix; with `layerChain=true`, also its subclass chain with the layer of each
+        term. A term no module mentions, or a CURIE with an unknown prefix, gives `404`. The FTO MCP tools
+        fto_describe and fto_layer_of.
       tags:
         - knowledgeSpecification
       x-required-roles:
@@ -1749,17 +1794,14 @@ paths:
       parameters:
         - name: iri
           in: query
-          description: The term to describe, as an IRI or a CURIE.
+          required: true
+          description: The term, as an IRI or a CURIE.
           schema:
             type: string
-        - name: q
-          in: query
-          description: Text to search for in labels and definitions.
-          schema:
-            type: string
+            pattern: '^[A-Za-z][A-Za-z0-9+.-]*:[^\s<>"{}|^`\\]+$'
         - name: layerChain
           in: query
-          description: With `iri`, also return the subclass chain with the layer of each term.
+          description: Also return the subclass chain with the layer of each term.
           schema:
             type: boolean
             default: false
@@ -1771,16 +1813,9 @@ paths:
           schema:
             type: boolean
             default: false
-        - name: limit
-          in: query
-          description: With `q`, the maximum number of hits.
-          schema:
-            type: integer
-            minimum: 1
-            default: 25
       responses:
         '200':
-          description: OK
+          description: The description (and the layer chain when asked)
           content:
             application/json:
               schema:
@@ -1788,16 +1823,14 @@ paths:
               examples:
                 describe:
                   $ref: '#/components/examples/Term_describe'
-                search:
-                  $ref: '#/components/examples/Term_search'
+        '404':
+          $ref: '#/components/responses/404'
         '400':
           $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
         '403':
           $ref: '#/components/responses/403'
-        '404':
-          $ref: '#/components/responses/404'
         '500':
           $ref: '#/components/responses/500'
         default:
@@ -1901,8 +1934,6 @@ paths:
           $ref: '#/components/responses/404'
         '500':
           $ref: '#/components/responses/500'
-        '501':
-          $ref: '#/components/responses/501'
         default:
           $ref: '#/components/responses/Error'
   '/knowledge/{id}/proposal/{proposalId}':
@@ -3865,14 +3896,6 @@ components:
         '-' changes the direction of that field.
       schema:
         type: string
-    Filter:
-      name: filter
-      in: query
-      description: Filter a collection using JSONPath
-      allowReserved: true
-      schema:
-        type: string
-        example: knowledge[?(@.storeKind=='hybrid')]
     DocumentId:
       name: documentId
       required: true

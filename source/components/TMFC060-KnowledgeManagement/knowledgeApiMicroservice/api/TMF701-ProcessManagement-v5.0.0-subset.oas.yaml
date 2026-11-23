@@ -43,7 +43,6 @@ paths:
         '400': {$ref: '#/components/responses/Error'}
         '401': {$ref: '#/components/responses/Error'}
         '403': {$ref: '#/components/responses/Error'}
-        '501': {$ref: '#/components/responses/Error'}
   /process/{id}:
     get:
       operationId: retrieveProcess
@@ -90,7 +89,6 @@ paths:
         '400': {$ref: '#/components/responses/Error'}
         '401': {$ref: '#/components/responses/Error'}
         '403': {$ref: '#/components/responses/Error'}
-        '501': {$ref: '#/components/responses/Error'}
   /task/{id}:
     get:
       operationId: retrieveTask

@@ -7,7 +7,7 @@ from app.config import Settings
 
 def test_every_operation_has_known_roles():
     operations = load_operations(Settings().oas_path)
-    assert len(operations) == 44  # 53 operations in the OAS minus 8 listener callbacks and the event-source callback
+    assert len(operations) == 45  # 54 operations in the OAS minus 8 listener callbacks and the event-source callback
     assert set(load_operations(Settings().process_oas_path)) == {"listProcess", "retrieveProcess", "listTask",
                                                                   "retrieveTask"}
     for op in operations.values():
@@ -50,7 +50,7 @@ def test_routes_match_the_oas():
     settings = Settings(component_name=CLIENT, keycloak_jwks_url="http://jwks.invalid/certs", keycloak_issuers=[ISSUER])
     app = create_app(settings, TokenValidator(settings, StaticJWKClient(KeyPair("k"))))
     found = {operation_id for _, operation_id in routes_with_operations(app)}
-    assert {"listKnowledgeSpecification", "createKnowledgeSpecification", "retrieveSchema", "retrieveKnowledgeTerm",
+    assert {"listKnowledgeSpecification", "createKnowledgeSpecification", "retrieveSchema", "retrieveKnowledgeTerm", "describeKnowledgeTerm",
             "listKnowledge", "createKnowledge", "retrieveKnowledge", "patchKnowledge", "deleteKnowledge",
             "retrieveKnowledgeGraph", "replaceKnowledgeGraph", "mergeKnowledgeGraph", "clearKnowledgeGraph",
             "queryKnowledge", "createKnowledgeIngestion", "listKnowledgeProposal", "retrieveKnowledgeProposal",

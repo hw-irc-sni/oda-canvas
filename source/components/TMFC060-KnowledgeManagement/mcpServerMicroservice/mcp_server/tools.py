@@ -1,7 +1,8 @@
 """The FTO tool set (semantics of tfo's mcp/server.py), each wrapping a knowledge API operation:
 
-modules -> GET /knowledgeSpecification; sparql -> POST /knowledge/{id}/query; describe, search, layer_of ->
-GET /knowledgeTerm; resolve_intent -> the terms an intent uses, each looked up with /knowledgeTerm; validate ->
+modules -> GET /knowledgeSpecification; sparql -> POST /knowledge/{id}/query; describe, layer_of ->
+GET /knowledgeTerm/describe; search -> GET /knowledgeTerm; resolve_intent -> the terms an intent uses, each looked
+up with /knowledgeTerm/describe; validate ->
 POST /knowledgeSpecification/{id}/validation/document. The caller's bearer token is forwarded on every call.
 """
 import json
@@ -66,7 +67,7 @@ def register(mcp: FastMCP, api: KnowledgeApi) -> None:
     async def describe(term: str, ctx: Context) -> dict[str, Any]:
         """Describe an ontology term (an IRI or a CURIE): labels, definitions, FTO layer, defining modules, parents
         and SKOS matches."""
-        return (await api.call(token_of(ctx), "GET", "/knowledgeTerm", params={"iri": term}))["description"]
+        return (await api.call(token_of(ctx), "GET", "/knowledgeTerm/describe", params={"iri": term}))["description"]
 
     @mcp.tool()
     async def search(text: str, ctx: Context, limit: int = 25) -> list[dict[str, Any]]:
@@ -76,7 +77,7 @@ def register(mcp: FastMCP, api: KnowledgeApi) -> None:
     @mcp.tool()
     async def layer_of(term: str, ctx: Context) -> dict[str, Any]:
         """Which FTO layer owns a term, and its chain of parents down to the Foundational layer."""
-        result = await api.call(token_of(ctx), "GET", "/knowledgeTerm", params={"iri": term, "layerChain": "true"})
+        result = await api.call(token_of(ctx), "GET", "/knowledgeTerm/describe", params={"iri": term, "layerChain": "true"})
         return {"term": result["description"].get("curie", term), "layer": result["description"].get("layer"),
                 **result["layerChain"]}
 
@@ -92,7 +93,7 @@ def register(mcp: FastMCP, api: KnowledgeApi) -> None:
         resolved, unresolved = [], []
         for term in intent_terms(graph):
             try:
-                d = (await api.call(token, "GET", "/knowledgeTerm", params={"iri": term}))["description"]
+                d = (await api.call(token, "GET", "/knowledgeTerm/describe", params={"iri": term}))["description"]
                 resolved.append({"term": term, "curie": d.get("curie"), "definedIn": d.get("definedIn"),
                                  "layer": d.get("layer"), "label": (d.get("labels") or [None])[0]})
             except ToolError as exc:

@@ -309,15 +309,16 @@ the module's own namespace. `status` is `agreed` for agreed and published mappin
 
 ## Term lookups
 
-`GET /knowledgeTerm` ([`app/ontology/terms.py`](app/ontology/terms.py)) ports the FTO MCP tools `fto_describe`,
-`fto_search` and `fto_layer_of` to the module graphs of the registry: published and deprecated modules, or every
-module with `includeUnpublished=true`. Give exactly one of `iri` and `q`.
+[`app/ontology/terms.py`](app/ontology/terms.py) ports the FTO MCP tools `fto_describe`, `fto_search` and
+`fto_layer_of` to the module graphs of the registry: published and deprecated modules, or every module with
+`includeUnpublished=true`.
 
-- `iri=` (an IRI or a CURIE): labels, definitions, types, parents, SKOS matches, the defining modules, and the
-  term's own `fto:layer` and `fto:linkStatus`; with `layerChain=true` also the chain of first parents (up to 12)
-  with `endsAtFoundational`. A plain word or unknown prefix gives 400 (use `q=`); a term no module mentions, 404.
-- `q=`: ranked hits (exact label, label prefix, label substring, IRI local name, then definition or comment), each
-  with its module and that module's layer, up to `limit` (25).
+- `GET /knowledgeTerm/describe?iri=` (an IRI or a CURIE): labels, definitions, types, parents, SKOS matches, the
+  defining modules, and the term's own `fto:layer` and `fto:linkStatus`; with `layerChain=true` also the chain of
+  first parents (up to 12) with `endsAtFoundational`. A term no module mentions, or a CURIE whose prefix no module
+  declares, gives 404.
+- `GET /knowledgeTerm?q=`: ranked hits (exact label, label prefix, label substring, IRI local name, then definition
+  or comment), each with its module and that module's layer, up to `limit` (25, at most 1000).
 - CURIEs use the prefixes the modules list (`prefix`), bound to the namespaces their content declares, so TIO's
   `icm`, `imo`, `met`, … each mean their own sub-namespace; a module listing a single prefix its content doesn't
   declare binds it to the module IRI.

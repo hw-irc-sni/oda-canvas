@@ -1,4 +1,4 @@
-"""/knowledgeTerm: describe, search and layer chain over the ontology modules."""
+"""/knowledgeTerm (search) and /knowledgeTerm/describe (describe, layer chain) over the ontology modules."""
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,13 +18,19 @@ def flag(request: Request, name: str) -> bool:
 
 
 @router.get("/knowledgeTerm")
-async def retrieve_term(request: Request, s: AsyncSession = Depends(session),
-                        _: Principal = Depends(require_operation("retrieveKnowledgeTerm"))):
+async def search_terms(request: Request, s: AsyncSession = Depends(session),
+                       _: Principal = Depends(require_operation("retrieveKnowledgeTerm"))):
     params = request.query_params
     try:
         limit = int(params.get("limit", "25"))
     except ValueError:
         raise ApiError(400, "400", "Bad Request", "limit must be an integer") from None
-    terms = Terms(s, request.app.state.graphs.store)
-    return await terms.lookup(params.get("iri"), params.get("q"), flag(request, "layerChain"), limit,
-                              flag(request, "includeUnpublished"))
+    return await Terms(s, request.app.state.graphs.store).find(params.get("q"), limit,
+                                                               flag(request, "includeUnpublished"))
+
+
+@router.get("/knowledgeTerm/describe")
+async def describe_term(request: Request, s: AsyncSession = Depends(session),
+                        _: Principal = Depends(require_operation("describeKnowledgeTerm"))):
+    return await Terms(s, request.app.state.graphs.store).lookup(
+        request.query_params.get("iri"), flag(request, "layerChain"), flag(request, "includeUnpublished"))

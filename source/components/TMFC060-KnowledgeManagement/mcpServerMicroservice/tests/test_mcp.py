@@ -78,11 +78,11 @@ async def test_each_tool_returns_the_rest_data(env):
     assert data(await call(mcp_url, "modules", {})) == await rest_get(
         rest, base, "/knowledgeSpecification", fields="id,name,layer,iri,specKind,lifecycleStatus,prefix,linkStatus")
     assert data(await call(mcp_url, "describe", {"term": "as:Cell"})) == (
-        await rest_get(rest, base, "/knowledgeTerm", iri="as:Cell"))["description"]
+        await rest_get(rest, base, "/knowledgeTerm/describe", iri="as:Cell"))["description"]
     assert data(await call(mcp_url, "search", {"text": "cell", "limit": 5})) == (
         await rest_get(rest, base, "/knowledgeTerm", q="cell", limit=5))["hits"]
     chain = data(await call(mcp_url, "layer_of", {"term": "as:Cell"}))
-    rest_chain = await rest_get(rest, base, "/knowledgeTerm", iri="as:Cell", layerChain="true")
+    rest_chain = await rest_get(rest, base, "/knowledgeTerm/describe", iri="as:Cell", layerChain="true")
     assert chain["chain"] == rest_chain["layerChain"]["chain"] and chain["layer"] == "Telecom"
     assert chain["endsAtFoundational"] == rest_chain["layerChain"]["endsAtFoundational"]
     query = f"SELECT ?c WHERE {{ <urn:a1> <{AS}affects> ?c }}"
