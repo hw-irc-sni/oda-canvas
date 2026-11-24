@@ -816,6 +816,54 @@
           "minLength": 1
         }
       }
+    },
+    "modelResolver": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modelGatewayService": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string",
+              "pattern": "^$|^([a-z0-9]([-a-z0-9]*[a-z0-9])?/)?[a-z0-9]([-.a-z0-9]*[a-z0-9])?$"
+            },
+            "chatModel": {
+              "type": "string"
+            },
+            "embeddingModel": {
+              "type": "string"
+            }
+          },
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "name": {
+                "minLength": 1
+              },
+              "chatModel": {
+                "minLength": 1
+              },
+              "embeddingModel": {
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
     }
   },
   "additionalProperties": false

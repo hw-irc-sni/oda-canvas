@@ -38,7 +38,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      serviceAccountName: {{ include "km.serviceAccount" . }}
+      serviceAccountName: {{ include "km.apiServiceAccount" . }}
       securityContext:
         {{- include "km.podSecurity" . | nindent 8 }}
       {{- include "km.scheduling" $v | nindent 6 }}
@@ -68,6 +68,13 @@ spec:
         - {name: INTERNAL_TOKEN_FILE, value: /etc/tmfc060/internal/token}
         - {name: METRICS_PORT, value: {{ .Values.ports.metrics | quote }}}
         - {name: EMBEDDING_DIMENSION, value: {{ .Values.models.embeddingDimension | quote }}}
+        {{- with .Values.modelResolver.modelGatewayService }}
+        {{- if .enabled }}
+        - {name: MODEL_GATEWAY_SERVICE, value: {{ .name | quote }}}
+        - {name: MGS_CHAT_MODEL, value: {{ .chatModel | quote }}}
+        - {name: MGS_EMBEDDING_MODEL, value: {{ .embeddingModel | quote }}}
+        {{- end }}
+        {{- end }}
         {{- with .Values.models.agentgateway }}
         {{- if .url }}
         - {name: AGENTGATEWAY_URL, value: {{ .url | quote }}}

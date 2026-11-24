@@ -144,5 +144,22 @@ refuse "subchart and external Qdrant together" "not both" --set externalQdrant.u
 refuse "no Qdrant at all" "set externalQdrant.url" --set qdrant.enabled=false
 refuse "a fixed Qdrant API key string" "qdrant.apiKey" --set qdrant.apiKey=secret
 
+# ModelGatewayService RBAC (#55)
+RBAC_KINDS='[d for d in docs if d["kind"] in ("Role", "RoleBinding", "ClusterRole", "ClusterRoleBinding")]'
+MGS_ON=(--set modelResolver.modelGatewayService.enabled=true --set modelResolver.modelGatewayService.name=llm
+  --set modelResolver.modelGatewayService.chatModel=chat --set modelResolver.modelGatewayService.embeddingModel=embed)
+expect "no RBAC, no MGS env and no API token by default" \
+  "not $RBAC_KINDS"' and "MODEL_GATEWAY_SERVICE" not in env("StatefulSet", "km-kmapi") and one("ServiceAccount", "km-kmapi")["automountServiceAccountToken"] is False and one("ServiceAccount", "km-km")["automountServiceAccountToken"] is False and pod("StatefulSet", "km-kmapi")["serviceAccountName"] == "km-kmapi" and all(pod(k, n)["serviceAccountName"] == "km-km" for k, n in (("Deployment", "km-kmworker"), ("Deployment", "km-kmmcp"), ("StatefulSet", "km-kmpg")))'
+expect "MGS on: CRD read limited to its name, Role verbs, bindings to the API ServiceAccount, env" \
+  'one("ClusterRole", "components-km-kmapi-mgs-crd")["rules"] == [{"apiGroups": ["apiextensions.k8s.io"], "resources": ["customresourcedefinitions"], "resourceNames": ["modelgatewayservices.oda.tmforum.org"], "verbs": ["get"]}] and one("Role", "km-kmapi-mgs")["rules"] == [{"apiGroups": ["oda.tmforum.org"], "resources": ["modelgatewayservices"], "verbs": ["get", "list"]}, {"apiGroups": [""], "resources": ["services"], "verbs": ["get"]}] and all(b["subjects"] == [{"kind": "ServiceAccount", "name": "km-kmapi", "namespace": "components"}] for b in kind("RoleBinding") + kind("ClusterRoleBinding")) and one("Role", "km-kmapi-mgs")["metadata"]["namespace"] == "components" and env("StatefulSet", "km-kmapi")["MODEL_GATEWAY_SERVICE"] == "llm" and env("StatefulSet", "km-kmapi")["MGS_EMBEDDING_MODEL"] == "embed" and one("ServiceAccount", "km-kmapi")["automountServiceAccountToken"] is True' \
+  "${MGS_ON[@]}"
+expect "MGS in another namespace: the Role and its binding are there" \
+  'one("Role", "km-kmapi-mgs")["metadata"]["namespace"] == "ai" and one("RoleBinding", "km-kmapi-mgs")["metadata"]["namespace"] == "ai" and env("StatefulSet", "km-kmapi")["MODEL_GATEWAY_SERVICE"] == "ai/llm"' \
+  "${MGS_ON[@]}" --set modelResolver.modelGatewayService.name=ai/llm
+refuse "MGS on without a name" "modelResolver.modelGatewayService.name" \
+  --set modelResolver.modelGatewayService.enabled=true --set modelResolver.modelGatewayService.chatModel=c --set modelResolver.modelGatewayService.embeddingModel=e
+refuse "MGS on without models" "modelResolver.modelGatewayService.chatModel" \
+  --set modelResolver.modelGatewayService.enabled=true --set modelResolver.modelGatewayService.name=llm
+
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all chart checks passed"

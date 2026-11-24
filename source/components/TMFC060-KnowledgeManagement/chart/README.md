@@ -24,7 +24,7 @@ The specification URLs of `knowledgemanagement` and `processflow` default to the
 | `<release>-kmworker` | Deployment (`pipelineWorker.replicas`, `concurrency`) | Pipeline workers. They claim tasks through the internal API, with the token of the `<release>-km-internal-token` Secret, which is generated once and kept across upgrades |
 | `<release>-kmmcp` | Deployment (`mcpServer.replicas`) | MCP server at `/<component>/mcp`. It forwards the caller's token to the API |
 | `<release>-kmapi`, `<release>-kminternal`, `<release>-kmapi-hl`, `<release>-kmmcp` | Services | Public API and metrics (the ExposedAPIs' targets), the internal API, the StatefulSet's governing Service, and MCP |
-| `<release>-km` | ServiceAccount | Used by all three workloads |
+| `<release>-kmapi`, `<release>-km` | ServiceAccounts | The API's own, which gets a token only with `modelResolver.modelGatewayService.enabled`; and one for the worker, MCP and PostgreSQL, which never gets a token |
 | `<release>-kmapi-internal` | NetworkPolicy, `networkPolicy.enabled` (off by default) | Only the workers may reach the internal port; it needs a CNI that enforces policies |
 
 Every container runs as uid 10001 with a read-only root filesystem, no privilege escalation and no capabilities. `/tmp` is an emptyDir.
@@ -47,8 +47,20 @@ done
 | `qdrant.*` | The Qdrant subchart (default): the official chart 1.20.2, Qdrant v1.20.2 (unprivileged image, uid 1000), `<release>-qdrant` with a 10Gi PVC. Everything under `qdrant:` except `enabled` goes to that chart. `apiKey: true` generates the key into `<release>-qdrant-apikey`, and the API reads it as a file (`QDRANT_API_KEY_FILE`) |
 | `externalQdrant.url`, `.apiKeySecret`/`.apiKeySecretKey` | An external Qdrant instead, with `qdrant.enabled=false`, and its optional API key Secret. Setting both is refused |
 | `keycloak.baseUrl`, `realm`, `extraIssuers` | Token validation: keys from the in-cluster JWKS. A token's issuer must be the in-cluster realm URL or one of `extraIssuers`, such as the public URL the portal uses. The audience must contain the Component name |
-| `models.agentgateway.*`, `models.openaiCompatible.*` (API key from a Secret, mounted as a file), `models.embeddingDimension` | Model routes of the API. The workers call models through the API |
+| `modelResolver.modelGatewayService.*` (`enabled`, `name` as `name` or `namespace/name`, `chatModel`, `embeddingModel`) | Model route 1: a ModelGatewayService custom resource, read through the Kubernetes API. **Opt-in** (see below) |
+| `models.agentgateway.*`, `models.openaiCompatible.*` (API key from a Secret, mounted as a file), `models.embeddingDimension` | Model routes 2 and 3. The workers call models through the API |
 | `events.callbackBase`, `callbackAllowedHosts`, `canvasInfoUrl`, `hrefBase` | Event delivery and event-driven ingestion. With no `callbackBase`, nothing registers on TMF providers |
+
+### ModelGatewayService access (opt-in)
+
+ODA components don't normally call the Kubernetes API. With `modelResolver.modelGatewayService.enabled=true`, and only then, the chart:
+
+- mounts a token for the API's ServiceAccount `<release>-kmapi`
+- creates a ClusterRole and ClusterRoleBinding `<namespace>-<release>-kmapi-mgs-crd`: `get` on the single CRD `modelgatewayservices.oda.tmforum.org`, the existence check
+- creates a Role and RoleBinding `<release>-kmapi-mgs` in the ModelGatewayService's namespace: `get` and `list` on `modelgatewayservices`, and `get` on `services`, for the endpoint when the resource names none
+- sets `MODEL_GATEWAY_SERVICE`, `MGS_CHAT_MODEL` and `MGS_EMBEDDING_MODEL` on the API
+
+With the flag off (the default), none of this is rendered, and no pod of the component has a Kubernetes API token.
 
 ### Removing the data
 

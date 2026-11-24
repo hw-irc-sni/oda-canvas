@@ -263,6 +263,17 @@ models:
   # Dimension of the dense vectors (the embedding model's)
   embeddingDimension: 1024
 
+# Model route 1: a ModelGatewayService custom resource (oda.tmforum.org/v1alpha1), read through the Kubernetes API.
+# ODA components don't normally call the Kubernetes API, so this is opt-in: with enabled, the API gets its own
+# ServiceAccount token and RBAC to read the CRD (existence check), the ModelGatewayService and Services in its namespace.
+modelResolver:
+  modelGatewayService:
+    enabled: false
+    # "name" (in the release namespace) or "namespace/name"
+    name: ""
+    chatModel: ""
+    embeddingModel: ""
+
 # Event delivery and event-driven ingestion (#46)
 events:
   # Externally reachable base URL of the knowledge API, for the callbacks of provider hubs; empty means no

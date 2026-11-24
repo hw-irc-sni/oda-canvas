@@ -158,3 +158,11 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- define "km.qdrantKeySecretKey" -}}
 {{- if .Values.qdrant.enabled -}}api-key{{- else -}}{{ .Values.externalQdrant.apiKeySecretKey }}{{- end -}}
 {{- end -}}
+
+{{/* The API's own ServiceAccount (it alone may get a Kubernetes API token, for the ModelGatewayService route) */}}
+{{- define "km.apiServiceAccount" -}}{{ include "km.name" (dict "root" . "suffix" "kmapi") }}{{- end -}}
+{{/* The namespace of the ModelGatewayService: the part before "/", or the release namespace */}}
+{{- define "km.mgsNamespace" -}}
+{{- $name := .Values.modelResolver.modelGatewayService.name -}}
+{{- if contains "/" $name -}}{{ first (splitList "/" $name) }}{{- else -}}{{ .Release.Namespace }}{{- end -}}
+{{- end -}}
