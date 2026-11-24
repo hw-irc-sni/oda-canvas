@@ -107,3 +107,37 @@ affinity:
 
 {{/* The Keycloak realm URL inside the cluster */}}
 {{- define "km.realmUrl" -}}{{ trimSuffix "/" .Values.keycloak.baseUrl }}/realms/{{ .Values.keycloak.realm }}{{- end -}}
+
+{{/* PostgreSQL objects */}}
+{{- define "km.pgName" -}}{{ include "km.name" (dict "root" . "suffix" "kmpg") }}{{- end -}}
+{{- define "km.pgSecret" -}}{{ include "km.name" (dict "root" . "suffix" "kmpg-credentials") }}{{- end -}}
+
+{{/* Labels without the Component name: objects the Component operator must not adopt (it deletes its children with the
+Component), such as kept data PVCs and the credentials Secret that goes with them */}}
+{{- define "km.unownedLabels" -}}
+oda.tmforum.org/componentId: {{ .Values.component.id }}
+app.kubernetes.io/name: {{ .Chart.Name }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end -}}
+
+{{/* The DATABASE_URL env entry of the API */}}
+{{- define "km.databaseUrlEnv" -}}
+{{- if .Values.postgresql.enabled }}
+{{- $pg := .Values.postgresql }}
+# The password of the generated Secret or of postgresql.existingSecret (which must be URL-safe)
+- name: PG_PASSWORD
+  valueFrom:
+    secretKeyRef: {name: {{ $pg.existingSecret | default (include "km.pgSecret" .) }}, key: password}
+- name: DATABASE_URL
+  value: {{ printf "postgresql://%s:$(PG_PASSWORD)@%s:5432/%s" $pg.username (include "km.pgName" .) $pg.database | quote }}
+{{- else }}
+- name: DATABASE_URL
+{{- if .Values.database.external.existingSecret }}
+  valueFrom:
+    secretKeyRef: {name: {{ .Values.database.external.existingSecret }}, key: {{ .Values.database.external.key }}}
+{{- else }}
+  value: {{ .Values.database.external.url | quote }}
+{{- end }}
+{{- end }}
+{{- end -}}

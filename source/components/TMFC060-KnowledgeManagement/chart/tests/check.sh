@@ -7,8 +7,8 @@ failures=0
 pass() { echo "ok   $1"; }
 fail() { echo "FAIL $1"; failures=$((failures + 1)); }
 
-# Until the chart has its own stores (#53, #54) every render needs external ones; NO_STORES=1 leaves them out
-STORES=(--set database.external.url=postgresql://u:p@pg:5432/km --set qdrant.external.url=http://qdrant:6333)
+# Until the chart has its own Qdrant (#54) every render needs an external one; NO_STORES=1 leaves it out
+STORES=(--set qdrant.external.url=http://qdrant:6333)
 render() {
   if [ "${NO_STORES:-}" = 1 ]; then helm template km "$CHART" -n components "$@"
   else helm template km "$CHART" -n components "${STORES[@]}" "$@"; fi
@@ -93,9 +93,12 @@ expect "workloads carry the component labels" \
 expect "image tag <version>-<prereleaseSuffix>, or an override" \
   'pod("StatefulSet", "km-kmapi")["containers"][0]["image"] == "tmforumodacanvas/tmfc060-knowledge-api:0.1.0-ai-knowledge" and pod("Deployment", "km-kmmcp")["containers"][0]["image"] == "tmforumodacanvas/tmfc060-mcp-server:dev"' \
   --set mcpServer.tag=dev
-expect "database URL from a Secret" \
-  'env("StatefulSet", "km-kmapi")["DATABASE_URL"] == {"secretKeyRef": {"name": "pg", "key": "url"}}' \
-  --set database.external.existingSecret=pg
+expect "external database URL from a Secret" \
+  'env("StatefulSet", "km-kmapi")["DATABASE_URL"] == {"secretKeyRef": {"name": "pg", "key": "url"}} and not [d for d in docs if d["metadata"]["name"].startswith("km-kmpg")]' \
+  --set postgresql.enabled=false --set database.external.existingSecret=pg
+expect "external database URL" \
+  'env("StatefulSet", "km-kmapi")["DATABASE_URL"] == "postgresql://u:p@pg:5432/km"' \
+  --set postgresql.enabled=false --set database.external.url=postgresql://u:p@pg:5432/km
 expect "OpenAI-compatible key mounted as a file" \
   'env("StatefulSet", "km-kmapi")["OPENAI_API_KEY_FILE"] == "/etc/tmfc060/openai/api-key" and any(v.get("secret", {}).get("secretName") == "llm-key" for v in pod("StatefulSet", "km-kmapi")["volumes"])' \
   --set models.openaiCompatible.baseUrl=http://llm:8000/v1 --set models.openaiCompatible.apiKeySecret=llm-key
@@ -104,8 +107,24 @@ expect "NetworkPolicy: internal port from the workers only" \
   'kind("NetworkPolicy")[0]["spec"]["ingress"][0]["ports"] == [{"port": 8081, "protocol": "TCP"}] and kind("NetworkPolicy")[0]["spec"]["ingress"][0]["from"][0]["podSelector"]["matchLabels"]["app.kubernetes.io/component"] == "worker"' \
   --set networkPolicy.enabled=true
 refuse "the API has no replicas value" "Additional property replicas" --set knowledgeApi.replicas=2
-refuse "no database" "database.external.url" --set database.external.url= 
-NO_STORES=1 refuse "no stores at all" "set database.external.url"
+NO_STORES=1 refuse "no Qdrant" "set qdrant.external.url"
+
+# PostgreSQL (#53)
+expect "in-chart PostgreSQL by default, official image, one replica" \
+  'one("StatefulSet", "km-kmpg")["spec"]["replicas"] == 1 and pod("StatefulSet", "km-kmpg")["containers"][0]["image"] == "postgres:17.12-alpine" and svcports("km-kmpg") == {5432} and one("Service", "km-kmpg")["spec"]["ports"][0]["name"].startswith("tcp-")'
+expect "API DATABASE_URL built from the credentials Secret" \
+  'env("StatefulSet", "km-kmapi")["PG_PASSWORD"] == {"secretKeyRef": {"name": "km-kmpg-credentials", "key": "password"}} and env("StatefulSet", "km-kmapi")["DATABASE_URL"] == "postgresql://tmfc060:$(PG_PASSWORD)@km-kmpg:5432/tmfc060"'
+expect "credentials Secret: keys, kept on uninstall, not owned by the Component" \
+  'sorted(one("Secret", "km-kmpg-credentials")["data"]) == ["database", "password", "url", "username"] and one("Secret", "km-kmpg-credentials")["metadata"]["annotations"]["helm.sh/resource-policy"] == "keep" and "oda.tmforum.org/componentName" not in one("Secret", "km-kmpg-credentials")["metadata"]["labels"]'
+expect "data PVC template without the Component name label" \
+  '"oda.tmforum.org/componentName" not in one("StatefulSet", "km-kmpg")["spec"]["volumeClaimTemplates"][0]["metadata"]["labels"] and "oda.tmforum.org/componentName" not in one("StatefulSet", "km-kmapi")["spec"]["volumeClaimTemplates"][0]["metadata"].get("labels", {})'
+expect "PostgreSQL non-root with a read-only root filesystem, probes by pg_isready" \
+  'pod("StatefulSet", "km-kmpg")["securityContext"]["runAsUser"] == 70 and pod("StatefulSet", "km-kmpg")["containers"][0]["securityContext"]["readOnlyRootFilesystem"] and pod("StatefulSet", "km-kmpg")["containers"][0]["readinessProbe"]["exec"]["command"][0] == "pg_isready"'
+expect "postgresql.existingSecret: no generated Secret" \
+  'not kind("Secret") or "km-kmpg-credentials" not in [d["metadata"]["name"] for d in kind("Secret")] and env("StatefulSet", "km-kmapi")["PG_PASSWORD"]["secretKeyRef"]["name"] == "mypg" and env("StatefulSet", "km-kmpg")["POSTGRES_PASSWORD"]["secretKeyRef"]["name"] == "mypg"' \
+  --set postgresql.existingSecret=mypg
+refuse "in-chart and external database together" "not both" --set database.external.url=postgresql://u:p@pg:5432/km
+refuse "no database at all" "with postgresql.enabled=false" --set postgresql.enabled=false
 
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all chart checks passed"

@@ -4,7 +4,7 @@
 name: tmfc060-dev
 services:
   postgres:
-    image: postgres:17.9-alpine
+    image: postgres:17.12-alpine
     environment:
       POSTGRES_USER: tmfc060
       POSTGRES_PASSWORD: tmfc060

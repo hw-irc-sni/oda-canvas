@@ -11,7 +11,7 @@ from testcontainers.core.wait_strategies import HttpWaitStrategy
 
 from app.config import Settings
 
-POSTGRES_IMAGE = "postgres:17.9-alpine"
+POSTGRES_IMAGE = "postgres:17.12-alpine"
 QDRANT_IMAGE = "qdrant/qdrant:v1.13.6"
 
 

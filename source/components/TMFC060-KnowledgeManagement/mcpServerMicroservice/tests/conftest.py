@@ -40,7 +40,7 @@ class StaticJWKS(jwt.PyJWKClient):
 
 @pytest.fixture(scope="session")
 def postgres_url():
-    with PostgresContainer("postgres:17.9-alpine", username="t", password="t", dbname="t") as pg:
+    with PostgresContainer("postgres:17.12-alpine", username="t", password="t", dbname="t") as pg:
         yield pg.get_connection_url(driver=None)
 
 

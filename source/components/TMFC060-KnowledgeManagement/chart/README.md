@@ -42,11 +42,27 @@ done
 
 | Values | Meaning |
 |---|---|
-| `database.external.url` or `.existingSecret`/`.key` | PostgreSQL URL (the in-chart PostgreSQL comes with #53) |
+| `postgresql.*` | The in-chart PostgreSQL (default): `<release>-kmpg`, a StatefulSet on `postgres:17.12-alpine` with a `data` PVC (`persistence.size` 8Gi, `storageClass`). Credentials are generated into `<release>-kmpg-credentials` (`username`, `password`, `database`, `url`), or the password comes from `existingSecret` (key `password`, URL-safe) |
+| `database.external.url` or `.existingSecret`/`.key` | An external PostgreSQL instead, with `postgresql.enabled=false`. Setting both is refused |
 | `qdrant.external.url` | Qdrant URL (the in-chart Qdrant comes with #54) |
 | `keycloak.baseUrl`, `realm`, `extraIssuers` | Token validation: keys from the in-cluster JWKS. A token's issuer must be the in-cluster realm URL or one of `extraIssuers`, such as the public URL the portal uses. The audience must contain the Component name |
 | `models.agentgateway.*`, `models.openaiCompatible.*` (API key from a Secret, mounted as a file), `models.embeddingDimension` | Model routes of the API. The workers call models through the API |
 | `events.callbackBase`, `callbackAllowedHosts`, `canvasInfoUrl`, `hrefBase` | Event delivery and event-driven ingestion. With no `callbackBase`, nothing registers on TMF providers |
+
+### Removing the data
+
+`helm uninstall` keeps the data:
+
+- the PostgreSQL `data-<release>-kmpg-0` PVC
+- the API's `store-<release>-kmapi-0` PVC (the Kubernetes default for StatefulSet PVCs)
+- the credentials Secret `<release>-kmpg-credentials` (`helm.sh/resource-policy: keep`), so the kept database can still be opened
+
+None of them carries the `oda.tmforum.org/componentName` label, so the Component operator doesn't adopt them and delete them with the Component. A reinstall with the same release name finds the data and the migrations again. To wipe everything after an uninstall:
+
+```bash
+kubectl delete pvc -n components data-<release>-kmpg-0 store-<release>-kmapi-0
+kubectl delete secret -n components <release>-kmpg-credentials
+```
 
 ## Dependent APIs
 

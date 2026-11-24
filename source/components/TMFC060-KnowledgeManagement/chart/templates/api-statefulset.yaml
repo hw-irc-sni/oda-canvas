@@ -1,7 +1,11 @@
 {{- $v := .Values.knowledgeApi -}}
 {{- $comp := include "km.componentName" . -}}
-{{- if not (or .Values.database.external.url .Values.database.external.existingSecret) -}}
-{{- fail "database: set database.external.url or database.external.existingSecret (the in-chart PostgreSQL comes with #53)" -}}
+{{- $external := or .Values.database.external.url .Values.database.external.existingSecret -}}
+{{- if and .Values.postgresql.enabled $external -}}
+{{- fail "database: set either postgresql.enabled (the in-chart PostgreSQL) or database.external, not both" -}}
+{{- end -}}
+{{- if not (or .Values.postgresql.enabled $external) -}}
+{{- fail "database: with postgresql.enabled=false, set database.external.url or database.external.existingSecret" -}}
 {{- end -}}
 {{- if not .Values.qdrant.external.url -}}
 {{- fail "qdrant: set qdrant.external.url (the in-chart Qdrant comes with #54)" -}}
@@ -48,13 +52,7 @@ spec:
         env:
         - {name: COMPONENT_NAME, value: {{ $comp | quote }}}
         - {name: STORE_PATH, value: /data/store}
-        - name: DATABASE_URL
-          {{- if .Values.database.external.existingSecret }}
-          valueFrom:
-            secretKeyRef: {name: {{ .Values.database.external.existingSecret }}, key: {{ .Values.database.external.key }}}
-          {{- else }}
-          value: {{ .Values.database.external.url | quote }}
-          {{- end }}
+        {{- include "km.databaseUrlEnv" . | nindent 8 }}
         - {name: QDRANT_URL, value: {{ .Values.qdrant.external.url | quote }}}
         - {name: KEYCLOAK_JWKS_URL, value: {{ printf "%s/protocol/openid-connect/certs" (include "km.realmUrl" .) | quote }}}
         - {name: KEYCLOAK_ISSUERS, value: {{ prepend .Values.keycloak.extraIssuers (include "km.realmUrl" .) | join "," | quote }}}

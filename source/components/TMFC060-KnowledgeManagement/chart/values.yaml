@@ -168,13 +168,36 @@ ports:
   mcp: 8080
   workerHealth: 8082
 
-# The stores. Until the chart deploys its own (PostgreSQL #53, Qdrant #54), they are external.
+# PostgreSQL: by default a StatefulSet on the official image, in the chart. Its data PVC and its generated
+# credentials Secret (<release>-kmpg-credentials) are kept on helm uninstall, so a reinstall with the same release
+# name finds its data again (see README, "Removing the data").
+postgresql:
+  enabled: true
+  image: postgres:17.12-alpine
+  pullPolicy: IfNotPresent
+  database: tmfc060
+  username: tmfc060
+  # A Secret with the key "password" to use instead of the generated one
+  existingSecret: ""
+  persistence:
+    size: 8Gi
+    storageClass: ""
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 1Gi}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# An external PostgreSQL instead (only with postgresql.enabled=false)
 database:
   external:
     # A postgresql:// URL, or a Secret holding one (the Secret wins)
     url: ""
     existingSecret: ""
     key: url
+
+# Qdrant: external until the chart deploys its own (#54)
 qdrant:
   external:
     url: ""

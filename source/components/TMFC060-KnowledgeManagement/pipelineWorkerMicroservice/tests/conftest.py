@@ -10,7 +10,7 @@ import pytest
 from sqlalchemy import text
 from testcontainers.community.postgres import PostgresContainer
 
-POSTGRES_IMAGE = "postgres:17.9-alpine"
+POSTGRES_IMAGE = "postgres:17.12-alpine"
 TOKEN = "worker-test-token"
 
 
