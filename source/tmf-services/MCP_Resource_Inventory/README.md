@@ -236,7 +236,18 @@ Retrieve resource information from the TMF639 Resource Inventory API.
 - `fields` (optional): Comma-separated list of fields to include in response
 - `offset` (optional): Starting position for paginated results
 - `limit` (optional): Maximum number of results to return
-- `filter` (optional): Filter criteria dictionary
+- `filter` (optional): Filter criteria dictionary (attribute=value; a comma separates alternatives)
+- `category` (optional): `ODAComponent`, `API` or `DataResource`, added to the filter
+
+**Data resources (ADR-011).** `category: "DataResource"` is the Canvas **Data Registry** view. It has two levels:
+- **stores**, id `<dataresourceconfig>.<item>`, characteristic `type` (`vectorStore`, `knowledgeGraph`,
+  `dataProduct`, `cache`) and `engine`, `providedBy` the ODAComponent that serves them and `contains` their content;
+- **content**, ids `<dataresourceconfig>.knowledge.<id>` (knowledge-bases) and
+  `<dataresourceconfig>.knowledgeSpecification.<id>` (ontology modules), characteristic `kind`, `storeKind`, `layer`,
+  `lifecycleStatus` and `href`, `providedBy` the component and `isPartOf` the store(s).
+
+ODAComponents carry the characteristic `componentId` (for example `TMFC060`) and the relationships `provides` and
+`dependsOn` (the knowledge-bases they are bound to). The category filter needs Resource Inventory 1.2.0 or later.
 
 **Example usage:**
 ```javascript
@@ -395,6 +406,8 @@ The MCP server provides several pre-built prompt templates:
 - `list_resources_prompt`: Template for listing resources with filters
 - `get_resource_details_prompt`: Template for getting detailed resource information
 - `search_resources_by_type_prompt`: Template for searching by resource type/category
+- `find_knowledge_base_prompt`: Find a knowledge-base about a topic in the Data Registry view and follow it to the
+  component that serves it (providedBy, componentId, its REST and MCP APIs)
 - `get_usage_help_prompt`: General help for using the TMF639 API
 
 ## Development
