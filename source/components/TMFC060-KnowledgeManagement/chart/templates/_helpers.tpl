@@ -141,3 +141,20 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 {{- end }}
 {{- end -}}
+
+{{/* The Qdrant subchart's fullname (its own rule: the release name when it contains "qdrant") */}}
+{{- define "km.qdrantName" -}}
+{{- if contains "qdrant" .Release.Name -}}{{ .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- else -}}{{ printf "%s-qdrant" .Release.Name | trunc 63 | trimSuffix "-" }}{{- end -}}
+{{- end -}}
+
+{{/* Where the API finds Qdrant, and the Secret and key of its API key ("" when there is none) */}}
+{{- define "km.qdrantUrl" -}}
+{{- if .Values.qdrant.enabled -}}http://{{ include "km.qdrantName" . }}:6333{{- else -}}{{ .Values.externalQdrant.url }}{{- end -}}
+{{- end -}}
+{{- define "km.qdrantKeySecret" -}}
+{{- if .Values.qdrant.enabled -}}{{ include "km.qdrantName" . }}-apikey{{- else -}}{{ .Values.externalQdrant.apiKeySecret }}{{- end -}}
+{{- end -}}
+{{- define "km.qdrantKeySecretKey" -}}
+{{- if .Values.qdrant.enabled -}}api-key{{- else -}}{{ .Values.externalQdrant.apiKeySecretKey }}{{- end -}}
+{{- end -}}

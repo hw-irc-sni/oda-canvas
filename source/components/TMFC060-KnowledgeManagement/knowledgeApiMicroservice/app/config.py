@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     store_path: str = "/data/store"
     database_url: str = "postgresql://tmfc060:tmfc060@localhost:5432/tmfc060"
     qdrant_url: str = "http://localhost:6333"
+    # A mounted Secret file with the Qdrant API key (the chart generates one); unset means no key
+    qdrant_api_key_file: str | None = None
 
     # Identity (spike S1, #70): tokens are validated against the in-cluster JWKS, their issuer must be one of
     # keycloak_issuers (comma-separated in the environment), and their audience must contain component_name.
@@ -135,6 +137,16 @@ class Settings(BaseSettings):
 
     # Timeout in seconds for each dependency check of /health and /ready
     health_check_timeout: float = 2.0
+
+    def qdrant_api_key(self) -> str | None:
+        """The key in QDRANT_API_KEY_FILE; a set but missing or empty file is a configuration error."""
+        if not self.qdrant_api_key_file:
+            return None
+        path = Path(self.qdrant_api_key_file)
+        key = path.read_text().strip() if path.is_file() else ""
+        if not key:
+            raise ValueError(f"QDRANT_API_KEY_FILE {self.qdrant_api_key_file} is missing or empty")
+        return key
 
     @property
     def base_path(self) -> str:

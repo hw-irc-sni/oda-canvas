@@ -43,7 +43,16 @@ async def check_postgres(settings: Settings) -> Check:
 async def check_qdrant(settings: Settings) -> Check:
     try:
         async with httpx.AsyncClient(timeout=settings.health_check_timeout) as client:
-            response = await client.get(f"{settings.qdrant_url.rstrip('/')}/readyz")
+            key = settings.qdrant_api_key()
+            headers = {"api-key": key} if key else None
+            base = settings.qdrant_url.rstrip("/")
+            response = await client.get(f"{base}/readyz", headers=headers)
+            if response.status_code != 200:
+                return Check("down", f"HTTP {response.status_code}")
+            # /readyz needs no key: a call that does tells whether the API key (or its absence) is accepted
+            response = await client.get(f"{base}/collections", headers=headers)
+        if response.status_code in (401, 403):
+            return Check("down", f"HTTP {response.status_code}: the Qdrant API key is missing or refused")
         return Check("up") if response.status_code == 200 else Check("down", f"HTTP {response.status_code}")
     except Exception as exc:  # noqa: BLE001
         return Check("down", f"{type(exc).__name__}: {exc}")

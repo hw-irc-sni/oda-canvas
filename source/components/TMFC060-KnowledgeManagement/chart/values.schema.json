@@ -566,24 +566,18 @@
       }
     },
     "qdrant": {
+      "description": "Values of the official Qdrant chart, plus enabled",
       "type": "object",
-      "additionalProperties": false,
+      "required": [
+        "enabled"
+      ],
       "properties": {
-        "external": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "url": {
-              "anyOf": [
-                {
-                  "const": ""
-                },
-                {
-                  "$ref": "#/definitions/url"
-                }
-              ]
-            }
-          }
+        "enabled": {
+          "type": "boolean"
+        },
+        "apiKey": {
+          "description": "true (generated) is what the API reads; a string or valueFrom is not supported by this chart",
+          "const": true
         }
       }
     },
@@ -797,6 +791,29 @@
         },
         "affinity": {
           "type": "object"
+        }
+      }
+    },
+    "externalQdrant": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "anyOf": [
+            {
+              "const": ""
+            },
+            {
+              "$ref": "#/definitions/url"
+            }
+          ]
+        },
+        "apiKeySecret": {
+          "type": "string"
+        },
+        "apiKeySecretKey": {
+          "type": "string",
+          "minLength": 1
         }
       }
     }

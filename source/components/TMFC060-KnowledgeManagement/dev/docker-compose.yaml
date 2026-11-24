@@ -19,7 +19,7 @@ services:
       timeout: 3s
       retries: 20
   qdrant:
-    image: qdrant/qdrant:v1.13.6
+    image: qdrant/qdrant:v1.20.2
     ulimits:  # one collection per knowledge-base; each keeps files open
       nofile:
         soft: 65535

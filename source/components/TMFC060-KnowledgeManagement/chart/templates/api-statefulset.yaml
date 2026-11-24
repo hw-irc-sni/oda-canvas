@@ -7,9 +7,13 @@
 {{- if not (or .Values.postgresql.enabled $external) -}}
 {{- fail "database: with postgresql.enabled=false, set database.external.url or database.external.existingSecret" -}}
 {{- end -}}
-{{- if not .Values.qdrant.external.url -}}
-{{- fail "qdrant: set qdrant.external.url (the in-chart Qdrant comes with #54)" -}}
+{{- if and .Values.qdrant.enabled .Values.externalQdrant.url -}}
+{{- fail "qdrant: set either qdrant.enabled (the Qdrant subchart) or externalQdrant.url, not both" -}}
 {{- end -}}
+{{- if not (or .Values.qdrant.enabled .Values.externalQdrant.url) -}}
+{{- fail "qdrant: with qdrant.enabled=false, set externalQdrant.url" -}}
+{{- end -}}
+{{- $qdrantKey := include "km.qdrantKeySecret" . -}}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -53,7 +57,10 @@ spec:
         - {name: COMPONENT_NAME, value: {{ $comp | quote }}}
         - {name: STORE_PATH, value: /data/store}
         {{- include "km.databaseUrlEnv" . | nindent 8 }}
-        - {name: QDRANT_URL, value: {{ .Values.qdrant.external.url | quote }}}
+        - {name: QDRANT_URL, value: {{ include "km.qdrantUrl" . | quote }}}
+        {{- if $qdrantKey }}
+        - {name: QDRANT_API_KEY_FILE, value: /etc/tmfc060/qdrant/api-key}
+        {{- end }}
         - {name: KEYCLOAK_JWKS_URL, value: {{ printf "%s/protocol/openid-connect/certs" (include "km.realmUrl" .) | quote }}}
         - {name: KEYCLOAK_ISSUERS, value: {{ prepend .Values.keycloak.extraIssuers (include "km.realmUrl" .) | join "," | quote }}}
         - {name: CANVAS_SYSTEM_ROLE, value: {{ .Values.security.canvasSystemRole | quote }}}
@@ -104,6 +111,9 @@ spec:
         - {name: store, mountPath: /data/store}
         - {name: tmp, mountPath: /tmp}
         - {name: internal-token, mountPath: /etc/tmfc060/internal, readOnly: true}
+        {{- if $qdrantKey }}
+        - {name: qdrant-key, mountPath: /etc/tmfc060/qdrant, readOnly: true}
+        {{- end }}
         {{- if and .Values.models.openaiCompatible.baseUrl .Values.models.openaiCompatible.apiKeySecret }}
         - {name: openai-key, mountPath: /etc/tmfc060/openai, readOnly: true}
         {{- end }}
@@ -114,6 +124,12 @@ spec:
         secret:
           secretName: {{ include "km.tokenSecret" . }}
           items: [{key: token, path: token}]
+      {{- if $qdrantKey }}
+      - name: qdrant-key
+        secret:
+          secretName: {{ $qdrantKey }}
+          items: [{key: {{ include "km.qdrantKeySecretKey" . }}, path: api-key}]
+      {{- end }}
       {{- if and .Values.models.openaiCompatible.baseUrl .Values.models.openaiCompatible.apiKeySecret }}
       - name: openai-key
         secret:

@@ -10,7 +10,7 @@ dependencies = [
     "uvicorn[standard]==0.54.0",
     "pydantic-settings==2.16.3",
     "psycopg[binary]==3.3.9",
-    "qdrant-client==1.13.3",
+    "qdrant-client==1.20.0",
     "pyoxigraph==0.5.13",
     "httpx==0.28.1",
     "PyJWT[crypto]==2.15.1",

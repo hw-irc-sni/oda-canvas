@@ -39,6 +39,7 @@ Route templates keep ids out of the labels.
 | `STORE_PATH` | `/data/store` | pyoxigraph RocksDB directory |
 | `DATABASE_URL` | `postgresql://tmfc060:tmfc060@localhost:5432/tmfc060` | PostgreSQL |
 | `QDRANT_URL` | `http://localhost:6333` | Qdrant |
+| `QDRANT_API_KEY_FILE` | | A file (a mounted Secret key) with the Qdrant API key. If it is set but missing or empty, startup fails. `/ready` reports Qdrant down when the key is missing or refused |
 | `KEYCLOAK_JWKS_URL` | empty | In-cluster JWKS of the realm, for example `http://canvas-keycloak.canvas:8083/auth/realms/odari/protocol/openid-connect/certs` |
 | `KEYCLOAK_ISSUERS` | empty | Comma-separated accepted `iss` values: the public and the in-cluster realm URL |
 | `CANVAS_SYSTEM_ROLE` | `canvasRole` | Name of the Canvas system role on this component's client (the chart's `security.canvasSystemRole`) |

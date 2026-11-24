@@ -70,7 +70,9 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
         app.state.engine = engine
         app.state.sessions = make_sessionmaker(engine)
         app.state.graphs = GraphStore(get_store(settings.store_path))
-        app.state.qdrant = AsyncQdrantClient(url=settings.qdrant_url, timeout=10)
+        # No version check: it is a blocking call at construction, and the chart pins client and server (1.20)
+        app.state.qdrant = AsyncQdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key(), timeout=10,
+                                             check_compatibility=False)
         app.state.events.sessions = app.state.sessions
         app.state.dispatcher = Dispatcher(settings, app.state.sessions)
         dispatch_task = asyncio.create_task(app.state.dispatcher.run_forever())

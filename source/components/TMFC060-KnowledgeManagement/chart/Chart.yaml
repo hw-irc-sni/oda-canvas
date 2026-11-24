@@ -5,3 +5,9 @@ type: application
 # version: 0.1.0 - first version: the Component CR (exposed APIs, metrics, static roles, optional dependent APIs)
 version: 0.1.0
 appVersion: "0.1.0"
+dependencies:
+  # The official Qdrant chart (condition qdrant.enabled; externalQdrant otherwise)
+  - name: qdrant
+    version: 1.20.2
+    repository: https://qdrant.github.io/qdrant-helm
+    condition: qdrant.enabled

@@ -12,7 +12,7 @@ from testcontainers.core.wait_strategies import HttpWaitStrategy
 from app.config import Settings
 
 POSTGRES_IMAGE = "postgres:17.12-alpine"
-QDRANT_IMAGE = "qdrant/qdrant:v1.13.6"
+QDRANT_IMAGE = "qdrant/qdrant:v1.20.2"
 
 
 @pytest.fixture(scope="session")

@@ -44,7 +44,8 @@ done
 |---|---|
 | `postgresql.*` | The in-chart PostgreSQL (default): `<release>-kmpg`, a StatefulSet on `postgres:17.12-alpine` with a `data` PVC (`persistence.size` 8Gi, `storageClass`). Credentials are generated into `<release>-kmpg-credentials` (`username`, `password`, `database`, `url`), or the password comes from `existingSecret` (key `password`, URL-safe) |
 | `database.external.url` or `.existingSecret`/`.key` | An external PostgreSQL instead, with `postgresql.enabled=false`. Setting both is refused |
-| `qdrant.external.url` | Qdrant URL (the in-chart Qdrant comes with #54) |
+| `qdrant.*` | The Qdrant subchart (default): the official chart 1.20.2, Qdrant v1.20.2 (unprivileged image, uid 1000), `<release>-qdrant` with a 10Gi PVC. Everything under `qdrant:` except `enabled` goes to that chart. `apiKey: true` generates the key into `<release>-qdrant-apikey`, and the API reads it as a file (`QDRANT_API_KEY_FILE`) |
+| `externalQdrant.url`, `.apiKeySecret`/`.apiKeySecretKey` | An external Qdrant instead, with `qdrant.enabled=false`, and its optional API key Secret. Setting both is refused |
 | `keycloak.baseUrl`, `realm`, `extraIssuers` | Token validation: keys from the in-cluster JWKS. A token's issuer must be the in-cluster realm URL or one of `extraIssuers`, such as the public URL the portal uses. The audience must contain the Component name |
 | `models.agentgateway.*`, `models.openaiCompatible.*` (API key from a Secret, mounted as a file), `models.embeddingDimension` | Model routes of the API. The workers call models through the API |
 | `events.callbackBase`, `callbackAllowedHosts`, `canvasInfoUrl`, `hrefBase` | Event delivery and event-driven ingestion. With no `callbackBase`, nothing registers on TMF providers |
@@ -55,14 +56,21 @@ done
 
 - the PostgreSQL `data-<release>-kmpg-0` PVC
 - the API's `store-<release>-kmapi-0` PVC (the Kubernetes default for StatefulSet PVCs)
+- the Qdrant `qdrant-storage-<release>-qdrant-0` PVC. Its API key Secret goes with the release, which is harmless: the key guards access, not the data, and a reinstall generates a new one that the API reads
 - the credentials Secret `<release>-kmpg-credentials` (`helm.sh/resource-policy: keep`), so the kept database can still be opened
 
 None of them carries the `oda.tmforum.org/componentName` label, so the Component operator doesn't adopt them and delete them with the Component. A reinstall with the same release name finds the data and the migrations again. To wipe everything after an uninstall:
 
 ```bash
-kubectl delete pvc -n components data-<release>-kmpg-0 store-<release>-kmapi-0
+kubectl delete pvc -n components data-<release>-kmpg-0 store-<release>-kmapi-0 qdrant-storage-<release>-qdrant-0
 kubectl delete secret -n components <release>-kmpg-credentials
 ```
+
+### Qdrant and open files
+
+Qdrant keeps files open for every collection segment, and the API creates one collection per knowledge-base. Below about 65535 open files (`nofile`) it fails with "Too many open files" once there are a handful of collections. Kubernetes has no per-pod setting for this: the limit comes from the container runtime. kind gives pods 1048576, and so do most containerd installs. Check with `kubectl exec <release>-qdrant-0 -- sh -c 'ulimit -n'` on other clusters.
+
+The subchart needs `helm dependency build` (the repository is `https://qdrant.github.io/qdrant-helm`) before `helm install` from a checkout; `tests/check.sh` runs it when `charts/` is empty.
 
 ## Dependent APIs
 

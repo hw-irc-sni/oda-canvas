@@ -7,12 +7,13 @@ failures=0
 pass() { echo "ok   $1"; }
 fail() { echo "FAIL $1"; failures=$((failures + 1)); }
 
-# Until the chart has its own Qdrant (#54) every render needs an external one; NO_STORES=1 leaves it out
-STORES=(--set qdrant.external.url=http://qdrant:6333)
-render() {
-  if [ "${NO_STORES:-}" = 1 ]; then helm template km "$CHART" -n components "$@"
-  else helm template km "$CHART" -n components "${STORES[@]}" "$@"; fi
-}
+# The Qdrant subchart (Chart.lock) must be in charts/
+if ! ls "$CHART"/charts/qdrant-*.tgz >/dev/null 2>&1; then
+  helm repo add qdrant https://qdrant.github.io/qdrant-helm >/dev/null 2>&1 || true
+  helm dependency build "$CHART" >/dev/null
+fi
+
+render() { helm template km "$CHART" -n components "$@"; }
 
 # expect NAME PYTHON-EXPR [helm args...]: the render succeeds and EXPR holds; docs = the rendered objects,
 # kind(k) = the objects of kind k, comp = the Component spec
@@ -45,7 +46,7 @@ for d in tmf639 tmf638 tmf642 tmf628 tmf921 aimanagement eventmanagement partyma
   ALL_DEPS+=(--set "dependentAPIs.$d.enabled=true")
 done
 
-if helm lint "$CHART" "${STORES[@]}" >/dev/null; then pass "helm lint"; else fail "helm lint"; helm lint "$CHART" "${STORES[@]}" || true; fi
+if helm lint "$CHART" >/dev/null; then pass "helm lint"; else fail "helm lint"; helm lint "$CHART" || true; fi
 
 # Component (#51)
 expect "component name, labels and id" \
@@ -87,9 +88,10 @@ expect "Keycloak JWKS and issuers" \
 expect "the internal token Secret is mounted by the API and the workers" \
   'one("Secret", "km-km-internal-token")["data"]["token"] and all(any(v.get("secret", {}).get("secretName") == "km-km-internal-token" for v in pod(k, n)["volumes"]) for k, n in (("StatefulSet", "km-kmapi"), ("Deployment", "km-kmworker")))'
 expect "non-root, read-only root filesystem, no capabilities" \
-  'all(c["securityContext"]["readOnlyRootFilesystem"] and c["securityContext"]["runAsNonRoot"] and c["securityContext"]["capabilities"]["drop"] == ["ALL"] for d in kind("StatefulSet") + kind("Deployment") for c in d["spec"]["template"]["spec"]["containers"])'
+  'all(c["securityContext"]["readOnlyRootFilesystem"] and c["securityContext"]["runAsNonRoot"] and c["securityContext"]["capabilities"]["drop"] == ["ALL"] for d in kind("StatefulSet") + kind("Deployment") for c in d["spec"]["template"]["spec"]["containers"] + (d["spec"]["template"]["spec"].get("initContainers") or []))'
+# The Qdrant subchart's labels can't be templated from values: it carries the componentId label only
 expect "workloads carry the component labels" \
-  'all(d["spec"]["template"]["metadata"]["labels"]["oda.tmforum.org/componentName"] == "km-knowledgemanagement" for d in kind("StatefulSet") + kind("Deployment"))'
+  'all(d["spec"]["template"]["metadata"]["labels"]["oda.tmforum.org/componentName"] == "km-knowledgemanagement" for d in kind("StatefulSet") + kind("Deployment") if d["metadata"]["name"] != "km-qdrant") and pod("StatefulSet", "km-qdrant") and one("StatefulSet", "km-qdrant")["spec"]["template"]["metadata"]["labels"]["oda.tmforum.org/componentId"] == "TMFC060"'
 expect "image tag <version>-<prereleaseSuffix>, or an override" \
   'pod("StatefulSet", "km-kmapi")["containers"][0]["image"] == "tmforumodacanvas/tmfc060-knowledge-api:0.1.0-ai-knowledge" and pod("Deployment", "km-kmmcp")["containers"][0]["image"] == "tmforumodacanvas/tmfc060-mcp-server:dev"' \
   --set mcpServer.tag=dev
@@ -107,7 +109,6 @@ expect "NetworkPolicy: internal port from the workers only" \
   'kind("NetworkPolicy")[0]["spec"]["ingress"][0]["ports"] == [{"port": 8081, "protocol": "TCP"}] and kind("NetworkPolicy")[0]["spec"]["ingress"][0]["from"][0]["podSelector"]["matchLabels"]["app.kubernetes.io/component"] == "worker"' \
   --set networkPolicy.enabled=true
 refuse "the API has no replicas value" "Additional property replicas" --set knowledgeApi.replicas=2
-NO_STORES=1 refuse "no Qdrant" "set qdrant.external.url"
 
 # PostgreSQL (#53)
 expect "in-chart PostgreSQL by default, official image, one replica" \
@@ -125,6 +126,23 @@ expect "postgresql.existingSecret: no generated Secret" \
   --set postgresql.existingSecret=mypg
 refuse "in-chart and external database together" "not both" --set database.external.url=postgresql://u:p@pg:5432/km
 refuse "no database at all" "with postgresql.enabled=false" --set postgresql.enabled=false
+
+# Qdrant (#54)
+expect "Qdrant subchart by default, v1.20.2, API key on" \
+  'pod("StatefulSet", "km-qdrant")["containers"][0]["image"] == "docker.io/qdrant/qdrant:v1.20.2-unprivileged" and "api-key" in one("Secret", "km-qdrant-apikey")["data"]'
+expect "API reaches the subchart Qdrant with its key file" \
+  'env("StatefulSet", "km-kmapi")["QDRANT_URL"] == "http://km-qdrant:6333" and env("StatefulSet", "km-kmapi")["QDRANT_API_KEY_FILE"] == "/etc/tmfc060/qdrant/api-key" and any(v.get("secret", {}).get("secretName") == "km-qdrant-apikey" and v["secret"]["items"] == [{"key": "api-key", "path": "api-key"}] for v in pod("StatefulSet", "km-kmapi")["volumes"])'
+expect "Qdrant PVC template without the Component name label" \
+  '"oda.tmforum.org/componentName" not in one("StatefulSet", "km-qdrant")["spec"]["volumeClaimTemplates"][0]["metadata"].get("labels", {})'
+expect "external Qdrant with its key Secret" \
+  'not [d for d in docs if d["metadata"]["name"].startswith("km-qdrant") and "helm.sh/hook" not in d["metadata"].get("annotations", {})] and env("StatefulSet", "km-kmapi")["QDRANT_URL"] == "https://qdrant.example.org" and any(v.get("secret", {}).get("secretName") == "qkey" for v in pod("StatefulSet", "km-kmapi")["volumes"])' \
+  --set qdrant.enabled=false --set externalQdrant.url=https://qdrant.example.org --set externalQdrant.apiKeySecret=qkey
+expect "external Qdrant without a key" \
+  '"QDRANT_API_KEY_FILE" not in env("StatefulSet", "km-kmapi")' \
+  --set qdrant.enabled=false --set externalQdrant.url=http://qdrant:6333
+refuse "subchart and external Qdrant together" "not both" --set externalQdrant.url=http://qdrant:6333
+refuse "no Qdrant at all" "set externalQdrant.url" --set qdrant.enabled=false
+refuse "a fixed Qdrant API key string" "qdrant.apiKey" --set qdrant.apiKey=secret
 
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all chart checks passed"
