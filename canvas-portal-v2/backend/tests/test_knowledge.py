@@ -448,3 +448,159 @@ def test_a_malformed_content_length_is_400(upstream):
 
     assert response.status_code in (400, 413)
     assert upstream.requests == []
+
+
+# --- Federated Ontology routes (#74) ----------------------------------------------------------------------------
+
+MODULE = {"id": "mod", "name": "mod", "iri": "https://example.org/mod", "layer": "Telecom", "specKind": "ontology",
+          "source": {"kind": "upload"}}
+TURTLE = b"@prefix owl: <http://www.w3.org/2002/07/owl#> .\n<https://example.org/mod> a owl:Ontology .\n"
+JSONLD = b'{"@id": "https://example.org/x", "@type": "https://example.org/T"}'
+MERGE = "application/merge-patch+json"
+SPEC = "/knowledgeSpecification"
+
+# operationId, role, method, portal path (after the instance), body, content type, upstream path (after the API base),
+# upstream status, upstream response body, upstream response content type
+ONTOLOGY_ROUTES = [
+    ("listKnowledgeSpecification", "knowledge-viewer", "GET", "knowledgeSpecification?limit=10&offset=0&sort=name&fields=id,name",
+     None, None, f"{SPEC}?limit=10&offset=0&sort=name&fields=id%2Cname", 200, b"[]", "application/json"),
+    ("createKnowledgeSpecification", "ontology-editor", "POST", "knowledgeSpecification", json.dumps(MODULE).encode(),
+     "application/json", SPEC, 201, json.dumps({**MODULE, "lifecycleStatus": "draft"}).encode(), "application/json"),
+    ("retrieveKnowledgeSpecification", "knowledge-viewer", "GET", "knowledgeSpecification/mod?fields=lifecycleStatus",
+     None, None, f"{SPEC}/mod?fields=lifecycleStatus", 200, b'{"id": "mod"}', "application/json"),
+    ("patchKnowledgeSpecification", "ontology-editor", "PATCH", "knowledgeSpecification/mod",
+     b'{"lifecycleStatus": "proposed"}', MERGE, f"{SPEC}/mod", 200, b'{"lifecycleStatus": "proposed"}', "application/json"),
+    ("deleteKnowledgeSpecification", "ontology-approver", "DELETE", "knowledgeSpecification/mod", None, None,
+     f"{SPEC}/mod", 204, b"", None),
+    ("retrieveKnowledgeSpecificationContent", "knowledge-viewer", "GET", "knowledgeSpecification/mod/content", None, None,
+     f"{SPEC}/mod/content", 200, TURTLE, "text/turtle; charset=utf-8"),
+    ("replaceKnowledgeSpecificationContent", "ontology-editor", "PUT", "knowledgeSpecification/mod/content", TURTLE,
+     "text/turtle", f"{SPEC}/mod/content", 204, b"", None),
+    ("listKnowledgeSpecificationMapping", "knowledge-viewer", "GET", "knowledgeSpecification/mod/mapping?limit=5", None, None,
+     f"{SPEC}/mod/mapping?limit=5", 200, b"[]", "application/json"),
+    ("createKnowledgeSpecificationMapping", "ontology-editor", "POST", "knowledgeSpecification/mod/mapping",
+     b'{"subject": "tio:Region", "predicate": "owl:equivalentClass", "object": "fto:Area"}', "application/json",
+     f"{SPEC}/mod/mapping", 201, b'{"id": "m1"}', "application/json"),
+    ("retrieveKnowledgeSpecificationMapping", "knowledge-viewer", "GET", "knowledgeSpecification/mod/mapping/m1", None, None,
+     f"{SPEC}/mod/mapping/m1", 200, b'{"id": "m1"}', "application/json"),
+    ("patchKnowledgeSpecificationMapping", "ontology-reviewer", "PATCH", "knowledgeSpecification/mod/mapping/m1",
+     b'{"confidence": 0.9}', MERGE, f"{SPEC}/mod/mapping/m1", 200, b'{"id": "m1"}', "application/json"),
+    ("deleteKnowledgeSpecificationMapping", "ontology-editor", "DELETE", "knowledgeSpecification/mod/mapping/m1", None, None,
+     f"{SPEC}/mod/mapping/m1", 204, b"", None),
+    ("listKnowledgeSpecificationReview", "knowledge-viewer", "GET", "knowledgeSpecification/mod/review", None, None,
+     f"{SPEC}/mod/review", 200, b"[]", "application/json"),
+    ("createKnowledgeSpecificationReview", "ontology-reviewer", "POST", "knowledgeSpecification/mod/review",
+     b'{"kind": "comment", "target": {"kind": "module", "id": "mod"}, "text": "ok"}', "application/json",
+     f"{SPEC}/mod/review", 201, b'{"id": "r1"}', "application/json"),
+    ("retrieveKnowledgeSpecificationValidation", "knowledge-viewer", "GET", "knowledgeSpecification/mod/validation", None,
+     None, f"{SPEC}/mod/validation", 200, b'{"conforms": true}', "application/json"),
+    ("runKnowledgeSpecificationValidation", "ontology-editor", "POST", "knowledgeSpecification/mod/validation", None, None,
+     f"{SPEC}/mod/validation", 200, b'{"conforms": true}', "application/json"),
+    ("validateDocument", "knowledge-viewer", "POST", "knowledgeSpecification/mod/validation/document", TURTLE,
+     "text/turtle", f"{SPEC}/mod/validation/document", 200, b'{"conforms": false}', "application/json"),
+    ("validateDocument", "knowledge-viewer", "POST", "knowledgeSpecification/mod/validation/document", JSONLD,
+     "application/ld+json", f"{SPEC}/mod/validation/document", 200, b'{"conforms": true}', "application/json"),
+    ("retrieveKnowledgeTerm", "knowledge-viewer", "GET", "knowledgeTerm?q=region&limit=20&includeUnpublished=true", None,
+     None, "/knowledgeTerm?q=region&limit=20&includeUnpublished=true", 200, b"[]", "application/json"),
+    ("describeKnowledgeTerm", "ontology-reviewer", "GET",
+     "knowledgeTerm/describe?iri=https%3A%2F%2Fexample.org%2Fmod%23Region&layerChain=true", None, None,
+     "/knowledgeTerm/describe?iri=https%3A%2F%2Fexample.org%2Fmod%23Region&layerChain=true", 200, b'{"iri": "x"}',
+     "application/json"),
+]
+ONTOLOGY_IDS = [f"{r[2]} {r[3].split('?')[0]} {r[5] or ''}".strip() for r in ONTOLOGY_ROUTES]
+
+
+def answer(status, body, content_type):
+    return httpx.Response(status, content=body, headers={"content-type": content_type} if content_type else {})
+
+
+@pytest.mark.parametrize("operation_id, role, method, path, body, content_type, upstream_path, status, response_body, "
+                         "response_type", ONTOLOGY_ROUTES, ids=ONTOLOGY_IDS)
+def test_ontology_route_is_forwarded(upstream, operation_id, role, method, path, body, content_type, upstream_path,
+                                     status, response_body, response_type):
+    act_as(claims(role))
+    upstream.default = answer(status, response_body, response_type)
+    headers = {"content-type": content_type} if content_type else {}
+
+    response = client.request(method, f"/api/knowledge/{NAME}/{path}", content=body, headers=headers)
+
+    assert response.status_code == status
+    assert response.content == response_body
+    if response_type:
+        assert response.headers["content-type"] == response_type
+    sent = upstream.requests[0]
+    assert sent.method == method
+    assert str(sent.url) == API + upstream_path
+    assert sent.headers["authorization"] == f"Bearer {TOKEN}"
+    assert sent.content == (body or b"")
+    if content_type:
+        assert sent.headers["content-type"] == content_type
+    if body is None:
+        assert "content-length" not in sent.headers or sent.headers["content-length"] == "0"
+        assert "transfer-encoding" not in sent.headers
+
+
+@pytest.mark.parametrize("operation_id, role, method, path, body, content_type", [r[:6] for r in ONTOLOGY_ROUTES],
+                         ids=ONTOLOGY_IDS)
+def test_ontology_route_capability_matches_the_oas_roles(operation_id, role, method, path, body, content_type):
+    act_as(claims(role))
+
+    ops = instance_view()["capabilities"]["operations"]
+
+    assert ops[operation_id] is True
+
+
+@pytest.mark.parametrize("answer_, expected", [
+    (httpx.Response(403, json={"message": "needs ontology-approver"}), 403),
+    (httpx.Response(409, json={"message": "not allowed in draft"}), 409),
+    (httpx.Response(401, json={"message": "bad token"}), 502),
+    (httpx.Response(500, json={"message": "boom"}), 502),
+], ids=["403", "409", "401", "500"])
+@pytest.mark.parametrize("operation_id, role, method, path, body, content_type", [r[:6] for r in ONTOLOGY_ROUTES],
+                         ids=ONTOLOGY_IDS)
+def test_ontology_route_error_mapping(upstream, operation_id, role, method, path, body, content_type, answer_, expected):
+    act_as(claims(role))
+    upstream.default = answer_
+    headers = {"content-type": content_type} if content_type else {}
+
+    response = client.request(method, f"/api/knowledge/{NAME}/{path}", content=body, headers=headers)
+
+    assert response.status_code == expected
+    if expected == 502:
+        assert "bad token" not in response.text and "boom" not in response.text
+    else:
+        assert response.json() == json.loads(answer_.content)
+
+
+def test_every_ontology_operation_of_the_oas_has_a_route_test():
+    tested = {r[0] for r in ONTOLOGY_ROUTES}
+    ops = instance_view()["capabilities"]["operations"]
+    ontology = {op for op in ops if "KnowledgeSpecification" in op or "KnowledgeTerm" in op or op == "validateDocument"}
+
+    assert ontology == tested
+
+
+def test_a_streamed_turtle_upload_is_forwarded_chunked(upstream):
+    act_as(claims("ontology-editor"))
+    upstream.default = httpx.Response(204)
+
+    def chunks():
+        yield TURTLE[:20]
+        yield TURTLE[20:]
+
+    response = client.put(f"/api/knowledge/{NAME}/knowledgeSpecification/mod/content", content=chunks(),
+                          headers={"content-type": "text/turtle"})
+
+    assert response.status_code == 204
+    assert upstream.requests[0].content == TURTLE
+    assert upstream.requests[0].headers["content-type"] == "text/turtle"
+
+
+def test_curie_ids_keep_their_colon_and_other_characters_are_encoded(upstream):
+    act_as(claims("knowledge-viewer"))
+
+    client.get(f"/api/knowledge/{NAME}/knowledgeSpecification/tio:core%2Fx/mapping/a%20b")
+
+    assert upstream.requests == []  # %2F decodes to a slash: not a single segment, so not an OAS route
+    client.get(f"/api/knowledge/{NAME}/knowledgeSpecification/tio:core/mapping/a%20b%3F")
+    assert upstream.requests[0].url.raw_path.decode().endswith("/knowledgeSpecification/tio:core/mapping/a%20b%3F")

@@ -138,7 +138,10 @@ async def proxy(instance_name: str, path: str, request: Request, caller: Caller 
     headers = {name: request.headers[name] for name in FORWARDED_REQUEST_HEADERS if name in request.headers}
     headers["authorization"] = f"Bearer {caller.token}"
     content = None
-    if request.method in BODY_METHODS:
+    # A request without Content-Length or Transfer-Encoding has no body (a validation run, for example); it is
+    # forwarded without one rather than as an empty chunked stream.
+    has_body = "content-length" in request.headers or "transfer-encoding" in request.headers
+    if request.method in BODY_METHODS and has_body:
         declared = request.headers.get("content-length")
         if declared is not None:
             if not declared.isdigit():
