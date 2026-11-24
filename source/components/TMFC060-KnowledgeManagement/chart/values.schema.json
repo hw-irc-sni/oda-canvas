@@ -622,6 +622,12 @@
           "type": "string",
           "minLength": 1
         },
+        "issuerBaseUrls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/url"
+          }
+        },
         "extraIssuers": {
           "type": "array",
           "items": {

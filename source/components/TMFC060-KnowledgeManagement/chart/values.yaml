@@ -277,11 +277,15 @@ externalQdrant:
   apiKeySecret: ""
   apiKeySecretKey: api-key
 
-# Token validation (spike S1): keys from the in-cluster JWKS of the Canvas Keycloak; a token's issuer must be the
-# in-cluster realm URL or one of extraIssuers (for example the public URL the portal uses).
+# Token validation (spike S1): keys from the in-cluster JWKS of the Canvas Keycloak. A token's issuer must be the
+# realm URL under baseUrl or under one of issuerBaseUrls, or one of extraIssuers (for example a public URL).
+# Keycloak names the issuer after the URL a token was requested from: the Canvas Portal logs users in through the
+# canvas-keycloak Service, so its tokens name that Service, not the headless one.
 keycloak:
   baseUrl: http://canvas-keycloak-headless.canvas.svc.cluster.local:8083/auth
   realm: odari
+  issuerBaseUrls:
+  - http://canvas-keycloak.canvas.svc.cluster.local:8083/auth
   extraIssuers: []
 
 # Model routes of the API (the workers call models through the API). The ModelGatewayService route is #55.

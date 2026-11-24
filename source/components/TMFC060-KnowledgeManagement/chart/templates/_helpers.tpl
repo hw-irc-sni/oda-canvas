@@ -107,6 +107,12 @@ affinity:
 
 {{/* The Keycloak realm URL inside the cluster */}}
 {{- define "km.realmUrl" -}}{{ trimSuffix "/" .Values.keycloak.baseUrl }}/realms/{{ .Values.keycloak.realm }}{{- end -}}
+{{/* Accepted token issuers: the realm under baseUrl and under each issuerBaseUrls entry, then extraIssuers */}}
+{{- define "km.issuers" -}}
+{{- $issuers := list (include "km.realmUrl" .) -}}
+{{- range .Values.keycloak.issuerBaseUrls }}{{ $issuers = append $issuers (printf "%s/realms/%s" (trimSuffix "/" .) $.Values.keycloak.realm) }}{{ end -}}
+{{- concat $issuers .Values.keycloak.extraIssuers | uniq | join "," -}}
+{{- end -}}
 
 {{/* PostgreSQL objects */}}
 {{- define "km.pgName" -}}{{ include "km.name" (dict "root" . "suffix" "kmpg") }}{{- end -}}

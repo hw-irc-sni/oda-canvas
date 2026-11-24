@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     KNOWLEDGE_CACHE_TTL_SECONDS: int = 30
     # How long the last good instance list is served, marked stale, while Resource Inventory fails.
     KNOWLEDGE_STALE_TTL_SECONDS: int = 600
+    # The instance client role that counts as the OAS's symbolic canvasSystemRole (the component's CANVAS_SYSTEM_ROLE).
+    KNOWLEDGE_CANVAS_SYSTEM_ROLE: str = "canvasRole"
+    # Proxy limits: the largest request body forwarded, and the upstream timeout (recommend may call an LLM).
+    KNOWLEDGE_MAX_BODY_BYTES: int = 10 * 1024 * 1024
+    KNOWLEDGE_TIMEOUT_SECONDS: float = 60.0
 
     @property
     def allowed_chart_sources(self) -> list[str]:

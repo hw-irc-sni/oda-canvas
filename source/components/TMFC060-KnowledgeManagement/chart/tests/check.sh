@@ -83,7 +83,7 @@ expect "the Services the ExposedAPIs name exist with their ports" \
 expect "workers call the internal Service; MCP serves the ExposedAPI path and calls the API" \
   'env("Deployment", "km-kmworker")["INTERNAL_API_URL"] == "http://km-kminternal:8081" and svcports("km-kminternal") == {8081} and env("Deployment", "km-kmmcp")["MCP_PATH"] == "/km-knowledgemanagement/mcp" and env("Deployment", "km-kmmcp")["KNOWLEDGE_API_URL"] == "http://km-kmapi:8080/km-knowledgemanagement/tmf-api/knowledgeManagement/v5"'
 expect "Keycloak JWKS and issuers" \
-  'env("StatefulSet", "km-kmapi")["KEYCLOAK_JWKS_URL"] == "http://canvas-keycloak-headless.canvas.svc.cluster.local:8083/auth/realms/odari/protocol/openid-connect/certs" and env("StatefulSet", "km-kmapi")["KEYCLOAK_ISSUERS"] == "http://canvas-keycloak-headless.canvas.svc.cluster.local:8083/auth/realms/odari,https://kc.example.org/auth/realms/odari"' \
+  'env("StatefulSet", "km-kmapi")["KEYCLOAK_JWKS_URL"] == "http://canvas-keycloak-headless.canvas.svc.cluster.local:8083/auth/realms/odari/protocol/openid-connect/certs" and env("StatefulSet", "km-kmapi")["KEYCLOAK_ISSUERS"] == "http://canvas-keycloak-headless.canvas.svc.cluster.local:8083/auth/realms/odari,http://canvas-keycloak.canvas.svc.cluster.local:8083/auth/realms/odari,https://kc.example.org/auth/realms/odari"' \
   --set keycloak.extraIssuers[0]=https://kc.example.org/auth/realms/odari
 expect "the internal token Secret is mounted by the API and the workers" \
   'one("Secret", "km-km-internal-token")["data"]["token"] and all(any(v.get("secret", {}).get("secretName") == "km-km-internal-token" for v in pod(k, n)["volumes"]) for k, n in (("StatefulSet", "km-kmapi"), ("Deployment", "km-kmworker")))'

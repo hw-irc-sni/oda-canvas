@@ -345,11 +345,17 @@ Every operation of the API lists the roles allowed to call it in an `x-required-
 Roles are enforced in two places:
 
 * **In the component.** `auth.py` validates the JWT against the Canvas Keycloak JWKS and reads the component client roles from `resource_access`. Any call without the required role gets a **403**, whatever its origin.
-* **In the portal.** The portal backend forwards the **user's own bearer token** to the component. It returns a `capabilities` object computed from the user's component roles, and the frontend hides actions those capabilities don't allow. The portal never echoes an upstream 401: it passes a 403 through and maps a 401, a 5xx or a timeout to a 502. Uploads stream through with a size cap (413 above it).
+* **In the portal** (`routers/knowledge.py`, [#73](https://github.com/hw-irc-sni/oda-canvas/issues/73)):
+  * **Token:** the backend forwards the **user's own bearer token** to the component.
+  * **Capabilities:** `GET /api/knowledge/instances` returns a `capabilities` object per instance: the user's roles, `operations` (operationId → allowed), the lifecycle `transitions` the user may make, and the `reviewKinds` they may post. It is computed from the roles in the token and from the `x-required-roles`, `x-lifecycle` and `x-review-kinds` extensions of the OAS **the instance itself serves**. The frontend hides actions those capabilities don't allow.
+  * **Allowlist:** the same table is the proxy allowlist. Only operations of the instance's OAS are forwarded, without listeners, hubs, event sources and schemas.
+  * **No role:** a user with no role on the instance gets a 403 from the portal, because their token doesn't name the instance in `aud`. Otherwise the component decides, and its 403 is passed through, like every 4xx except 401.
+  * **Failures:** the portal never echoes an upstream 401. A 401, a redirect, a 5xx, a timeout or an unreachable instance becomes a 502 without upstream detail.
+  * **Bodies:** they stream through with a size cap (413 above it).
 
 Spike S1 ([#70](https://github.com/hw-irc-sni/oda-canvas/issues/70)) confirmed on the kind Canvas that a portal token carries the instance's client roles. The `canvas-portal` client in realm `odari` has full scope and the default `roles` scope, so the token has `resource_access["<instance>"].roles`, and the instance's client id in `aud`. The component's token check therefore:
 * verifies the signature against the in-cluster JWKS;
-* accepts `iss` from a configured list (the public and the in-cluster Keycloak URL);
+* accepts `iss` from a configured list: the realm under the headless and the `canvas-keycloak` Service URLs (the portal logs users in through the latter), plus any public URL;
 * requires its own client id in `aud`;
 * reads the roles from `resource_access[<instance>]`. The OAS's symbolic `canvasSystemRole` maps to the configured system role name (by default `canvasRole`).
 

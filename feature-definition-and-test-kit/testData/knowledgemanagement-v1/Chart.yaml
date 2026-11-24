@@ -20,10 +20,10 @@ description: BDD test chart - the TMFC060 Knowledge Management component, from i
 # version: 0.1.0 - first version, with stand-in workloads
 
 type: application
-version: 0.2.0
-appVersion: "1.0.1"
+version: 0.2.1
+appVersion: "1.0.2"
 
 dependencies:
   - name: knowledgemanagement
-    version: "1.0.1"
+    version: "1.0.2"
     repository: "file://../../../source/components/TMFC060-KnowledgeManagement/chart"
