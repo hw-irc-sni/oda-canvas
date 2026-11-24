@@ -216,7 +216,7 @@ identityconfig-operator-keycloak:
 dependentapi-simple-operator:
   enabled: true
   image: tmforumodacanvas/dependentapi-simple-operator
-  version: 1.0.2
+  version: 1.0.3
   prereleaseSuffix:
 
   imagePullPolicy: IfNotPresent
@@ -254,7 +254,7 @@ dependency-management-keycloak-authz:
 dataresource-operator:
   enabled: false
   image: tmforumodacanvas/dataresource-operator
-  version: 0.2.0
+  version: 0.3.0
   prereleaseSuffix:
   imagePullPolicy: IfNotPresent
   loglevel: '20'

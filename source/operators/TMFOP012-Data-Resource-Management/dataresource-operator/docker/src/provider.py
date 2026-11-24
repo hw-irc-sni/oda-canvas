@@ -126,12 +126,12 @@ class ProviderClient:
     """The provider's TMFxxx API, called with the operator token; re-grants the canvasSystemRole on 401/403.
 
     Args:
-        api: Where to call the provider.
+        api: Where to call the provider (None for a client that only grants or revokes the canvasSystemRole).
         provider_client: The provider's Keycloak client id (the component name).
         system_role: The provider's canvasSystemRole (``securityFunction.canvasSystemRole``).
     """
 
-    def __init__(self, api: ProviderApi, provider_client: str, system_role: str, tokens: TokenManager,
+    def __init__(self, api: ProviderApi | None, provider_client: str, system_role: str, tokens: TokenManager,
                  admin: KeycloakAdmin, session_factory, oidc_dir: str):
         self.api = api
         self.provider_client = provider_client
@@ -221,6 +221,29 @@ class ProviderClient:
             if not data or len(items) >= total:
                 return items
             offset += len(data)
+
+    async def get_knowledge(self, kb_id: str) -> dict | None:
+        """The knowledge-base, or None if the provider has no such id."""
+        status, data, _ = await self._request("GET", f"/knowledge/{quote(kb_id, safe='')}")
+        if status == 404:
+            return None
+        if status != 200 or not isinstance(data, dict):
+            raise ProviderError("ProviderUnreachable", f"GET /knowledge/{kb_id} answered HTTP {status}")
+        return data
+
+    async def find_knowledge(self, name: str) -> dict | None:
+        """The first knowledge-base whose name is exactly ``name``, or None."""
+        status, data, _ = await self._request("GET", f"/knowledge?name={quote(name, safe='')}")
+        if status != 200 or not isinstance(data, list):
+            raise ProviderError("ProviderUnreachable", f"GET /knowledge?name= answered HTTP {status}")
+        return next((kb for kb in data if kb.get("name") == name), None)
+
+    async def create_knowledge(self, body: dict) -> dict:
+        status, data, _ = await self._request("POST", "/knowledge", body)
+        if status != 201 or not isinstance(data, dict) or not data.get("id"):
+            detail = (data.get("reason") or data.get("message") or "") if isinstance(data, dict) else ""
+            raise ProviderError("KnowledgeBaseRefused", f"POST /knowledge answered HTTP {status} {detail}".strip())
+        return data
 
     async def hub_get(self, hub_id: str) -> dict | None:
         status, data, _ = await self._request("GET", f"/hub/{quote(hub_id, safe='')}")

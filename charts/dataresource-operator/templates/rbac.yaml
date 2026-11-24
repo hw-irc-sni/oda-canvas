@@ -34,6 +34,9 @@ rules:
   - apiGroups: [oda.tmforum.org]
     resources: [dependentapis]
     verbs: [get, list, watch, create, patch, delete]
+  - apiGroups: [oda.tmforum.org]
+    resources: [dependentapis/status]
+    verbs: [get, patch]
   # Application: binding Secrets in consumer namespaces; written without reading any Secret
   - apiGroups: [""]
     resources: [secrets]

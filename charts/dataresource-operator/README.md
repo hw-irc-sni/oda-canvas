@@ -9,7 +9,7 @@ when `dataresource-operator.enabled` is true (off by default), or on its own in 
 - The operator Deployment (Canvas Portal labels `oda.tmforum.org/operator*`, operator id TMFOP012), non-root with a
   read-only root filesystem, and its ServiceAccount with a ClusterRole:
   - `dataresourceconfigs` (get, list, watch, patch) and their `status` (get, patch);
-  - `components`, `exposedapis` (read); `dependentapis` (read, create, patch, delete);
+  - `components`, `exposedapis` (read); `dependentapis` (read, create, patch, delete) and their `status` (patch);
   - `secrets` (create, patch, delete only: binding Secrets are written without reading any Secret);
   - CRDs and namespaces (list, watch) and events (create) for kopf.
 - With `events.enabled` (default): the Service of the hub event listener (`events.listenerPort`), registered on
@@ -26,11 +26,13 @@ when `dataresource-operator.enabled` is true (off by default), or on its own in 
 
 | Value | Default | Meaning |
 |---|---|---|
-| `image`, `version`, `prereleaseSuffix` | `tmforumodacanvas/dataresource-operator`, `0.2.0`, empty | Image `<image>:<version>[-<prereleaseSuffix>]`, with `global.image.registry` |
+| `image`, `version`, `prereleaseSuffix` | `tmforumodacanvas/dataresource-operator`, `0.3.0`, empty | Image `<image>:<version>[-<prereleaseSuffix>]`, with `global.image.registry` |
 | `imagePullPolicy` / `prereleasePullPolicy` | `IfNotPresent` / `Always` | Pull policy of a release / prerelease image |
 | `loglevel` | `'20'` | Python log level |
 | `pollIntervalSeconds` | `60` | Provider poll interval |
 | `componentNamespace` | `components` | Default provider namespace |
+| `retryIntervalSeconds` | `15` | Retry of a consumer that is not bound yet |
+| `accessRoles.read`, `accessRoles.readWrite` | `[knowledge-viewer]`, `[knowledge-viewer, knowledge-editor]` | Provider client roles granted to a consumer |
 | `events.enabled`, `listenerPort`, `callbackBase` | `true`, `8081`, empty (the Service URL) | Provider hub events; disabled: polling only |
 | `keycloak.url` | `http://canvas-keycloak-headless.canvas.svc.cluster.local:8083/auth` | Must match the issuer host providers expect |
 | `keycloak.realm` | `odari` | |

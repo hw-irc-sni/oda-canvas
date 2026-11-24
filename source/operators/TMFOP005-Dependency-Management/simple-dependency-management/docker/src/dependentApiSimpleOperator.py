@@ -66,6 +66,15 @@ if COMPONENT_REGISTRY_URL:
 INSTANCES = {}
 
 
+def is_api_dependency(spec, **_) -> bool:
+    """False for the DependentAPIs of data resource bindings (``spec.dependencyKind: data-resource``, ADR-010).
+
+    Those are created, owned and resolved by a data resource operator (for example TMFOP012) for a DataResourceConfig,
+    not by a Component, so this operator neither resolves them nor puts its finalizer on them.
+    """
+    return (spec or {}).get("dependencyKind") != "data-resource"
+
+
 @kopf.on.startup()
 def configure(settings: kopf.OperatorSettings, **_):
     settings.peering.priority = 110
@@ -234,9 +243,9 @@ def get_sman_name(body):
 
 
 # triggered when an oda.tmforum.org dependentapi resource is created or updated
-@kopf.on.resume(DEPAPI_GROUP, DEPAPI_VERSION, DEPAPI_PLURAL, retries=5)
-@kopf.on.create(DEPAPI_GROUP, DEPAPI_VERSION, DEPAPI_PLURAL, retries=5)
-@kopf.on.update(DEPAPI_GROUP, DEPAPI_VERSION, DEPAPI_PLURAL, retries=5)
+@kopf.on.resume(DEPAPI_GROUP, DEPAPI_VERSION, DEPAPI_PLURAL, when=is_api_dependency, retries=5)
+@kopf.on.create(DEPAPI_GROUP, DEPAPI_VERSION, DEPAPI_PLURAL, when=is_api_dependency, retries=5)
+@kopf.on.update(DEPAPI_GROUP, DEPAPI_VERSION, DEPAPI_PLURAL, when=is_api_dependency, retries=5)
 async def dependentApiCreate(
     meta, spec, status, body, namespace, labels, name, **kwargs
 ):
@@ -267,7 +276,7 @@ def removeServiceInventory(logw: LogWrapper, svc_id):
 
 
 # when an oda.tmforum.org api resource is deleted
-@kopf.on.delete(DEPAPI_GROUP, DEPAPI_VERSION, DEPAPI_PLURAL, retries=5)
+@kopf.on.delete(DEPAPI_GROUP, DEPAPI_VERSION, DEPAPI_PLURAL, when=is_api_dependency, retries=5)
 async def dependentApiDelete(
     meta, spec, status, body, namespace, labels, name, **kwargs
 ):
@@ -388,6 +397,7 @@ def setDependentAPIStatus(logw: LogWrapper, namespace, name, url):
     DEPAPI_VERSION,
     DEPAPI_PLURAL,
     field="status.implementation",
+    when=is_api_dependency,
     retries=5,
 )
 async def updateDepedentAPIReady(
@@ -421,7 +431,10 @@ async def updateDepedentAPIReady(
     if "ready" in status["implementation"].keys():
         if status["implementation"]["ready"] == True:
             depapi_url = safe_get(None, status, "depapiStatus", "url")
-            if "ownerReferences" in meta.keys():
+            owner = (meta.get("ownerReferences") or [{}])[0]
+            if owner and owner.get("kind", "Component") != "Component":
+                logw.info(f"owner {owner.get('kind')}/{owner.get('name')} is not a Component, no status to propagate")
+            elif "ownerReferences" in meta.keys():
                 parent_component_name = meta["ownerReferences"][0]["name"]
                 logw.info(f"reading component {parent_component_name}")
                 try:

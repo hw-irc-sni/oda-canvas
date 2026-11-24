@@ -4,7 +4,7 @@
 ``dataResourceOperator.provider_daemon``. Everything it needs is injected, so the tests run it against fakes.
 """
 
-from common import component_of, condition
+from common import changed, component_of, condition
 from keycloak import KeycloakAdmin, KeycloakError, TokenManager
 from kube import Kube, hub_of
 from log_wrapper import LogWrapper
@@ -25,18 +25,6 @@ def provider_status(previous: dict, generation, resources: list[dict] | None = N
     message = str(error)
     return {"phase": "Error", "message": message, "observedGeneration": generation,
             "conditions": [condition("Ready", "False", error.reason, message, generation, conditions)]}
-
-
-def changed(previous: dict, patch: dict) -> bool:
-    """True if writing ``patch`` would change ``previous`` (lastTransitionTime aside)."""
-    for key, value in patch.items():
-        if key == "conditions":
-            strip = lambda cs: [{k: v for k, v in c.items() if k != "lastTransitionTime"} for c in cs or []]  # noqa
-            if strip(value) != strip(previous.get("conditions")):
-                return True
-        elif previous.get(key) != value:
-            return True
-    return False
 
 
 class ProviderMirror:
@@ -144,8 +132,15 @@ class ProviderMirror:
             except (ProviderError, KeycloakError) as e:
                 problems.append(f"hub {hub['id']} not deleted: {e}")
         try:
-            if await clients[0].revoke():
+            from consumer import system_role_needed
+
+            drcs = await self.kube.list_drcs()
+            if system_role_needed(drcs, clients[0].provider_client, self.settings, exclude=(self.namespace, self.name)):
+                self.logw.info("canvasSystemRole kept", "consumer bindings to this provider remain")
+            elif await clients[0].revoke():
                 self.logw.info("revoked", f"{clients[0].system_role} on {clients[0].provider_client}")
         except (ProviderError, KeycloakError) as e:
             problems.append(f"grant not revoked: {e}")
+        except Exception as e:  # the Kubernetes API, for example
+            problems.append(f"grant not revoked: {e.__class__.__name__}: {e}")
         return problems

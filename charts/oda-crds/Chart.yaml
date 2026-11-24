@@ -15,7 +15,8 @@ type: application
 # This is the chart version. This version number should be incremented each time you make changes
 # to the chart and its templates, including the app version.
 # Versions are expected to follow Semantic Versioning (https://semver.org/)
-version: 1.4.0
+version: 1.5.0
+# version: 1.5.0 - DependentAPI apiType mcp and the optional dependencyKind (api, data-resource) for data resource bindings (ADR-010)
 # version: 1.4.0 - DataResourceConfig v1alpha1 CRD (ADR-010): the draft Databricks CRD extended with provider odaComponent, roles, data resource types and provisioning status
 # version: 1.3.4 - v1 component crd componentMetadata descriptions refer to component specifications instead of golden components
 # version: 1.3.3 - re-added a2a under apiType enum for component crd and exposedapi crd

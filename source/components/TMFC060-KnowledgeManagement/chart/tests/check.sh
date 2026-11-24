@@ -199,5 +199,9 @@ refuse "secretMount without a Secret" "ontologySources.0" --set-json 'ontologySo
 refuse "duplicate source names" "used twice" --set-json 'ontologySources=[{"name":"x","kind":"git","url":"https://a"},{"name":"x","kind":"git","url":"https://b"}]'
 refuse "sync more often than every minute" "intervalSeconds" --set ontologySync.intervalSeconds=5
 
+expect "global values (a parent chart's) are accepted" 'one("StatefulSet", "km-kmapi") is not None' \
+  --set global.image.registry=registry.example
+refuse "other unknown top-level values" "Additional property nosuchvalue" --set nosuchvalue=1
+
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all chart checks passed"

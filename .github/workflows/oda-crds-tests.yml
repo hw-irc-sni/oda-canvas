@@ -14,8 +14,8 @@ on:
       - '.github/workflows/oda-crds-tests.yml'
   workflow_dispatch:
 jobs:
-  dataresourceconfig:
-    # The DataResourceConfig CEL validation rules need a real API server: a throwaway kind cluster
+  crd-samples:
+    # The CRD samples (the DataResourceConfig CEL rules need a real API server): a throwaway kind cluster
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,3 +30,5 @@ jobs:
           cluster_name: oda-crds
       - name: DataResourceConfig samples
         run: charts/oda-crds/tests/dataresourceconfig/run.sh
+      - name: DependentAPI samples
+        run: charts/oda-crds/tests/dependentapi/run.sh

@@ -34,6 +34,8 @@ class Settings:
         componentname_label: Label linking a resource to its ODA Component.
         listener_port: Port of the HTTP listener for provider hub events.
         callback_base: The listener's in-cluster base URL, registered on provider hubs; empty: polling only.
+        read_roles, readwrite_roles: Provider client roles granted to a consumer for access read and readWrite.
+        retry_interval: Seconds before a consumer that is not bound yet is reconciled again.
     """
 
     keycloak_url: str = "http://canvas-keycloak-headless.canvas.svc.cluster.local:8083/auth"
@@ -47,6 +49,11 @@ class Settings:
     # no hub registration, polling only)
     listener_port: int = 8081
     callback_base: str = ""
+    # The provider client roles granted to a consumer per access (TMFC060: knowledge-viewer, knowledge-editor)
+    read_roles: tuple = ("knowledge-viewer",)
+    readwrite_roles: tuple = ("knowledge-viewer", "knowledge-editor")
+    # Seconds before a consumer that is not bound yet is tried again
+    retry_interval: float = 15.0
 
     @classmethod
     def from_env(cls, env=None) -> "Settings":
@@ -62,4 +69,15 @@ class Settings:
             http_timeout=float(env.get("HTTP_TIMEOUT_SECONDS", d.http_timeout)),
             listener_port=int(env.get("LISTENER_PORT", d.listener_port)),
             callback_base=env.get("CALLBACK_BASE", d.callback_base).rstrip("/"),
+            read_roles=_roles(env.get("ACCESS_ROLES_READ"), d.read_roles),
+            readwrite_roles=_roles(env.get("ACCESS_ROLES_READWRITE"), d.readwrite_roles),
+            retry_interval=float(env.get("RETRY_INTERVAL_SECONDS", d.retry_interval)),
         )
+
+    def roles_for(self, access: str | None) -> tuple:
+        return self.readwrite_roles if access == "readWrite" else self.read_roles
+
+
+def _roles(value: str | None, default: tuple) -> tuple:
+    roles = tuple(r.strip() for r in (value or "").split(",") if r.strip())
+    return roles or default

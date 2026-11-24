@@ -9,14 +9,16 @@ from settings import DRC_GROUP, DRC_PLURAL, DRC_VERSION
 ODA_GROUP = "oda.tmforum.org"
 ODA_VERSION = "v1"
 HUB_ANNOTATION = "dataresource.oda.tmforum.org/hub"
+FIELD_MANAGER = "dataresource-operator"
 
 
 class Kube:
     """Wraps ``kubernetes.client.CustomObjectsApi`` (injected, so tests can pass a fake)."""
 
-    def __init__(self, custom_api, componentname_label: str = "oda.tmforum.org/componentName"):
+    def __init__(self, custom_api, componentname_label: str = "oda.tmforum.org/componentName", core_api=None):
         self.api = custom_api
         self.label = componentname_label
+        self._core = core_api
 
     @classmethod
     def from_cluster(cls, componentname_label: str) -> "Kube":
@@ -43,6 +45,58 @@ class Kube:
         found = await asyncio.to_thread(self.api.list_namespaced_custom_object, ODA_GROUP, ODA_VERSION, namespace,
                                         "exposedapis", label_selector=f"{self.label}={component}")
         return found.get("items", [])
+
+    async def list_components(self, namespace: str) -> list[dict]:
+        found = await asyncio.to_thread(self.api.list_namespaced_custom_object, ODA_GROUP, ODA_VERSION, namespace,
+                                        "components")
+        return found.get("items", [])
+
+    async def list_drcs(self) -> list[dict]:
+        """Every DataResourceConfig in the cluster."""
+        found = await asyncio.to_thread(self.api.list_cluster_custom_object, DRC_GROUP, DRC_VERSION, DRC_PLURAL)
+        return found.get("items", [])
+
+    async def apply(self, body: dict) -> None:
+        """Server-side apply of a binding Secret or DependentAPI (create or update, without reading it first)."""
+        meta = body["metadata"]
+        if body["kind"] == "Secret":
+            await asyncio.to_thread(self.core().patch_namespaced_secret, meta["name"], meta["namespace"], body,
+                                    field_manager=FIELD_MANAGER, force=True,
+                                    _content_type="application/apply-patch+yaml")
+        else:
+            group, version = body["apiVersion"].split("/")
+            await asyncio.to_thread(self.api.patch_namespaced_custom_object, group, version, meta["namespace"],
+                                    "dependentapis", meta["name"], body, field_manager=FIELD_MANAGER, force=True,
+                                    _content_type="application/apply-patch+yaml")
+
+    async def patch_dependentapi_status(self, namespace: str, name: str, status: dict) -> None:
+        """Merge-patch the DependentAPI status. The DependentAPI CRD has no status subresource, so the status is
+        part of the object (as TMFOP005 writes it)."""
+        await asyncio.to_thread(self.api.patch_namespaced_custom_object, ODA_GROUP, ODA_VERSION, namespace,
+                                "dependentapis", name, {"status": status})
+
+    async def delete(self, kind: str, namespace: str, name: str) -> bool:
+        """Delete a binding Secret or DependentAPI; False if it was already gone."""
+        from kubernetes.client.exceptions import ApiException
+
+        try:
+            if kind == "Secret":
+                await asyncio.to_thread(self.core().delete_namespaced_secret, name, namespace)
+            else:
+                await asyncio.to_thread(self.api.delete_namespaced_custom_object, ODA_GROUP, ODA_VERSION, namespace,
+                                        "dependentapis", name)
+            return True
+        except ApiException as e:
+            if e.status == 404:
+                return False
+            raise
+
+    def core(self):
+        if self._core is None:
+            from kubernetes import client
+
+            self._core = client.CoreV1Api(self.api.api_client)
+        return self._core
 
     async def patch_status(self, namespace: str, name: str, status: dict) -> None:
         """Merge-patch ``status`` (lists such as providedResources are replaced as a whole)."""

@@ -23,6 +23,7 @@ class FakeProviderApi:
         self.kc, self.client_id, self.system_role = kc, client_id, system_role
         self.knowledge, self.modules, self.hubs = [], [], {}
         self.requests = []
+        self.created = []
         self.down = False
         self._hub_n = 0
 
@@ -50,10 +51,24 @@ class FakeProviderApi:
         async def handler(request):
             offset = int(request.query.get("offset", 0))
             limit = int(request.query["limit"]) if "limit" in request.query else None
-            page = items()[offset: offset + limit if limit else None]
-            return web.json_response(page, headers={"X-Total-Count": str(len(items())),
+            selected = [i for i in items() if "name" not in request.query or i.get("name") == request.query["name"]]
+            page = selected[offset: offset + limit if limit else None]
+            return web.json_response(page, headers={"X-Total-Count": str(len(selected)),
                                                     "X-Result-Count": str(len(page))})
         return handler
+
+    async def kb_get(self, request):
+        kb = next((k for k in self.knowledge if k["id"] == request.match_info["id"]), None)
+        return web.json_response(kb) if kb else web.json_response({"reason": "Not Found"}, status=404)
+
+    async def kb_post(self, request):
+        body = await request.json()
+        if not body.get("name"):
+            return web.json_response({"reason": "name is required"}, status=400)
+        kb = {"id": body["name"], "lifecycleStatus": "draft", **body}
+        self.knowledge.append(kb)
+        self.created.append(body)
+        return web.json_response(kb, status=201)
 
     async def hub_post(self, request):
         body = await request.json()
@@ -76,6 +91,8 @@ class FakeProviderApi:
     def app(self):
         app = web.Application(middlewares=[self.guard])
         app.router.add_get(BASE_PATH + "/knowledge", self._list(lambda: self.knowledge))
+        app.router.add_post(BASE_PATH + "/knowledge", self.kb_post)
+        app.router.add_get(BASE_PATH + "/knowledge/{id}", self.kb_get)
         app.router.add_get(BASE_PATH + "/knowledgeSpecification", self._list(lambda: self.modules))
         app.router.add_post(BASE_PATH + "/hub", self.hub_post)
         app.router.add_get(BASE_PATH + "/hub/{id}", self.hub_get)
@@ -98,20 +115,70 @@ def exposed_api(port: int, ready: bool = True, name: str = "knowledgemanagement"
     return {
         "metadata": {"name": f"{component}-{name}-v5", "namespace": "components",
                      "labels": {"oda.tmforum.org/componentName": component}},
-        "spec": {"name": name, "implementation": "kmk-kmapi", "port": port, "path": BASE_PATH, "apiType": "openapi"},
+        "spec": {"name": name, "implementation": "kmk-kmapi", "port": port, "path": BASE_PATH, "apiType": "openapi",
+                 "specification": {"url": f"http://kmk-kmapi.components.svc.cluster.local:{port}{BASE_PATH}/openapi.yaml"}},
         "status": {"implementation": {"ready": ready},
                    "apiStatus": {"url": f"https://gateway.example{BASE_PATH}"}},
     }
 
 
+def mcp_api(port: int, component: str = PROVIDER):
+    path = f"/{component}/mcp"
+    return {
+        "metadata": {"name": f"{component}-knowledgemcp", "namespace": "components",
+                     "labels": {"oda.tmforum.org/componentName": component}},
+        "spec": {"name": "knowledgemcp", "implementation": "kmk-kmmcp", "port": port, "path": path, "apiType": "mcp",
+                 "specification": {"url": "https://modelcontextprotocol.io/specification/2025-06-18"}},
+        "status": {"implementation": {"ready": True}, "apiStatus": {"url": f"https://gateway.example{path}"}},
+    }
+
+
+def component(name: str, component_id: str = "TMFC060", system_role: str = "canvasRole"):
+    return {"metadata": {"name": name, "namespace": "components"},
+            "spec": {"componentMetadata": {"id": component_id},
+                     "securityFunction": {"canvasSystemRole": system_role}}}
+
+
+def provider_drc(component_name: str = PROVIDER):
+    return {"metadata": {"name": component_name, "namespace": "components", "uid": "uid-provider",
+                         "labels": {"oda.tmforum.org/componentName": component_name}},
+            "spec": {"provider": "odaComponent", "role": "provider", "providedDataResources": [
+                {"name": "knowledge-vectors", "type": "vectorStore", "exposedAPI": "knowledgemanagement",
+                 "mcpAPI": "knowledgemcp"},
+                {"name": "knowledge-graph", "type": "knowledgeGraph", "exposedAPI": "knowledgemanagement",
+                 "mcpAPI": "knowledgemcp"}]}}
+
+
 class FakeKube:
-    """The Kube calls of the mirror, in memory."""
+    """The Kube calls of the mirror and the binder, in memory."""
 
     def __init__(self):
         self.components = {}
         self.exposed = []
         self.status_patches = []
         self.annotations = {}
+        self.drcs = []
+        self.objects = {}              # (kind, namespace, name) -> body
+        self.depapi_status = {}
+        self.fail_apply = False
+
+    async def list_components(self, namespace):
+        return [c for (ns, _), c in self.components.items() if ns == namespace]
+
+    async def list_drcs(self):
+        return list(self.drcs)
+
+    async def apply(self, body):
+        if self.fail_apply:
+            raise RuntimeError("apply refused")
+        meta = body["metadata"]
+        self.objects[(body["kind"], meta["namespace"], meta["name"])] = body
+
+    async def patch_dependentapi_status(self, namespace, name, status):
+        self.depapi_status[(namespace, name)] = status
+
+    async def delete(self, kind, namespace, name):
+        return self.objects.pop((kind, namespace, name), None) is not None
 
     async def get_component(self, namespace, name):
         return self.components.get((namespace, name))

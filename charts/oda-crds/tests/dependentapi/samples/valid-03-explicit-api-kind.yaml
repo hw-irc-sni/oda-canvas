@@ -1,0 +1,9 @@
+# expect: accept
+apiVersion: oda.tmforum.org/v1
+kind: DependentAPI
+metadata:
+  name: pc-productcatalogmanagement-party-2
+spec:
+  name: party
+  apiType: openapi
+  dependencyKind: api

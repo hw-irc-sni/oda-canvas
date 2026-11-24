@@ -176,6 +176,10 @@
     "security"
   ],
   "properties": {
+    "global": {
+      "description": "Values Helm passes to every chart of a release, for example when this chart is a dependency of another (the BDD test chart, an umbrella chart). Not used by this chart.",
+      "type": "object"
+    },
     "knowledgeApi": {
       "description": "The API is a StatefulSet with exactly one replica (one writer of the pyoxigraph store), so it has no replicas value",
       "type": "object",

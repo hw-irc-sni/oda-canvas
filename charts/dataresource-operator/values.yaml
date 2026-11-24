@@ -2,7 +2,7 @@
 # (ADR-010): mirrors what a provider component serves, and binds consumer components to it.
 
 image: tmforumodacanvas/dataresource-operator
-version: 0.2.0
+version: 0.3.0
 # A prerelease image (tag <version>-<prereleaseSuffix>) is pulled with prereleasePullPolicy. For an image built
 # locally and kind-loaded: --set prereleaseSuffix=ai-knowledge --set prereleasePullPolicy=IfNotPresent
 prereleaseSuffix:
@@ -15,6 +15,12 @@ loglevel: '20'
 pollIntervalSeconds: 60
 # Default namespace of provider components (providerRef.namespace overrides it)
 componentNamespace: components
+# Seconds before a consumer that is not bound yet is tried again
+retryIntervalSeconds: 15
+# The provider client roles granted to a consumer component per access (TMFC060's roles)
+accessRoles:
+  read: [knowledge-viewer]
+  readWrite: [knowledge-viewer, knowledge-editor]
 
 # Change events from provider hubs (for example TMFC060 /hub): the operator listens on listenerPort and registers
 # <callbackBase>/providers/<namespace>/<name> on each provider. An event only makes the operator poll that provider

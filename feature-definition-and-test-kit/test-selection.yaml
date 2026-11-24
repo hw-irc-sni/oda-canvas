@@ -74,9 +74,6 @@ noTests:
   - "charts/carbon-intensity-service/**"
   - "source/tmf-services/TMF628_Performance_Management/**"
   - "source/tmf-services/MCP_Resource_Inventory/**"
-  # TMFC060 Knowledge Management sources: no BDD feature installs their images yet (the
-  # knowledgemanagement-v1 test chart uses stand-ins). Map them to @UC018 when #58 swaps the chart.
-  - "source/components/TMFC060-KnowledgeManagement/**"
   - "charts/observability-stack/**"
   # Tools and UIs outside the canvas install
   - "canvas-portal/**"
@@ -125,6 +122,8 @@ noTests:
   - ".github/workflows/canvas-log-viewer-unit-tests.yml"
   - ".github/workflows/canvas-portal-v2-backend-unit-tests.yml"
   - ".github/workflows/tmfc060-unit-tests.yml"
+  - ".github/workflows/tmfop012-unit-tests.yml"
+  - ".github/workflows/oda-crds-tests.yml"
   - ".github/workflows/local-test.yml"
   - ".github/workflows/Chart-Releaser-ReleasedChartTester-TrivyScanner.yml"
 
@@ -238,6 +237,22 @@ rules:
       - component-registry
     # UC018-F001: the data resources a component provides (DataResource, ADR-011)
     tags: "@UC016 or @UC018-F001"
+
+  # TMFC060 Knowledge Management: the knowledgemanagement-v1 test chart wraps its chart, so the UC018 features
+  # run its images.
+  - name: TMFC060 Knowledge Management component
+    paths:
+      - "source/components/TMFC060-KnowledgeManagement/**"
+    tags: "@UC018"
+
+  # TMFOP012 mirrors a provider's knowledge-bases (UC018-F001 content entries) and binds consumers (UC018-F002).
+  - name: Data Resource Management operator (TMFOP012)
+    paths:
+      - "source/operators/TMFOP012-Data-Resource-Management/**"
+      - "charts/dataresource-operator/**"
+    canvasSections:
+      - dataresource-operator
+    tags: "@UC018-F001 or @UC018-F002"
 
   # The webhook converts components between CRD versions.
   - name: ODA webhook

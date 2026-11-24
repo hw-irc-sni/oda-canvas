@@ -19,6 +19,11 @@ def is_owned_provider(spec, **_) -> bool:
     return is_owned(spec) and role_of(spec) == "provider"
 
 
+def is_owned_consumer(spec, **_) -> bool:
+    """True for an owned DataResourceConfig with ``role: consumer`` (the default)."""
+    return is_owned(spec) and role_of(spec) == "consumer"
+
+
 def component_of(meta, settings: Settings) -> str | None:
     """The owning ODA Component: the componentName label, else a Component ownerReference."""
     labels = (meta or {}).get("labels") or {}
@@ -44,3 +49,17 @@ def condition(ctype: str, status: str, reason: str, message: str, generation, pr
         transition = now()
     return {"type": ctype, "status": status, "reason": reason, "message": message,
             "lastTransitionTime": transition, "observedGeneration": generation}
+
+
+def changed(previous: dict, patch: dict) -> bool:
+    """True if merge-patching ``patch`` would change ``previous`` (condition lastTransitionTime aside)."""
+    def strip(cs):
+        return [{k: v for k, v in c.items() if k != "lastTransitionTime"} for c in cs or []]
+
+    for key, value in patch.items():
+        if key == "conditions":
+            if strip(value) != strip(previous.get("conditions")):
+                return True
+        elif previous.get(key) != value:
+            return True
+    return False

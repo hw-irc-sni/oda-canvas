@@ -12,9 +12,11 @@
 # The consumer never receives the credentials of the provider's stores; it calls the provider
 # with its own credentials, so the role grant is what lets it query the knowledge-base.
 #
-# @SkipTest: these scenarios need the DataResourceConfig CRD, the Data Resource Management
-# operator and the TMFC060 API. Remove the tag when they are delivered
-# (hw-irc-sni/oda-canvas#60 and #64).
+# The scenarios need the Data Resource Management operator (TMFOP012), which canvas-oda installs only with
+# dataresource-operator.enabled=true, and the TMFC060 images, which the knowledgemanagement-v1 test chart (a wrapper of
+# the TMFC060 chart) runs. Both are built locally until they are published, so the scenarios keep @SkipTest in CI.
+# They pass on a kind canvas installed with the operator enabled and the images loaded (hw-irc-sni/oda-canvas#64):
+#   npm start -- --tags @UC018-F002
 
 @UC018 @UC018-F002
 Feature: UC018-F002 Bind a Consumer to a Knowledge Base

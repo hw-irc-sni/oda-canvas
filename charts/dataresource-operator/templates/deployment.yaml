@@ -41,6 +41,12 @@ spec:
           value: {{ .Values.pollIntervalSeconds | quote }}
         - name: COMPONENT_NAMESPACE
           value: {{ .Values.componentNamespace | quote }}
+        - name: RETRY_INTERVAL_SECONDS
+          value: {{ .Values.retryIntervalSeconds | quote }}
+        - name: ACCESS_ROLES_READ
+          value: {{ join "," .Values.accessRoles.read | quote }}
+        - name: ACCESS_ROLES_READWRITE
+          value: {{ join "," .Values.accessRoles.readWrite | quote }}
         - name: LISTENER_PORT
           value: {{ .Values.events.listenerPort | quote }}
         - name: CALLBACK_BASE

@@ -3,15 +3,14 @@
 A [kopf](https://kopf.readthedocs.io) operator for `DataResourceConfig` resources (`oda.tmforum.org/v1alpha1`) with
 `spec.provider: odaComponent` (ADR-010 §7). Chart: [`charts/dataresource-operator`](../../../../charts/dataresource-operator).
 
-> **Status:** the provider role is implemented (hw-irc-sni/oda-canvas#63). The consumer role is still a stub that
-> sets `status.phase: Pending` with a `Ready` condition `Unknown` (reason `NotImplemented`) until #64.
+> **Status:** the provider role (hw-irc-sni/oda-canvas#63) and the consumer role (#64) are implemented.
 
 ## What it handles
 
 | DataResourceConfig | Handling |
 |---|---|
 | `provider: odaComponent`, `role: provider` | Mirrors the knowledge-bases and ontology modules of the provider component into `status.providedResources[]`; polls every `POLL_INTERVAL_SECONDS` and is woken early by the provider's hub events (see below) |
-| `provider: odaComponent`, `role: consumer` (default) | Ensures the knowledge-base on the provider, grants the consumer component the provider's client roles, writes a binding Secret and a DependentAPI owned by the CR; on delete, revokes the roles and keeps the knowledge-base (#64) |
+| `provider: odaComponent`, `role: consumer` (default) | Ensures the knowledge-base on the provider, grants the consumer component the provider's client roles, writes a binding Secret and a DependentAPI owned by the CR; on delete, revokes the roles and keeps the knowledge-base (see below) |
 | any other provider (for example `databricks`) | Never touched: no status, finalizer or annotation (ADR-010 §8) |
 
 Every handler is filtered on `spec.provider`. kopf keeps its state in annotations prefixed
@@ -71,6 +70,41 @@ Decided in spike S4 (hw-irc-sni/oda-canvas#61, `source/components/TMFC060-Knowle
 - Keycloak checks a token's issuer against the request host: `KEYCLOAK_URL` must be the URL the providers expect as
   issuer (default: the in-cluster headless Service).
 
+## Consumer role
+
+A kopf daemon per consumer DataResourceConfig (`provider: odaComponent`, `role: consumer`, the default) binds each
+`dependentDataResources[]` item, and runs again on a spec change, every `POLL_INTERVAL_SECONDS`, and every
+`RETRY_INTERVAL_SECONDS` while a required item is not bound (so a reinstalled provider or a lost role is repaired):
+
+1. **ProviderResolved:** the provider is `providerRef.componentName`, or the one Component in `providerRef.namespace`
+   (default `COMPONENT_NAMESPACE`) whose `componentMetadata.id` is `providerRef.componentId` and that has a provider
+   DataResourceConfig; several give `ProviderAmbiguous`. The provided store whose `type` matches the item's (else the
+   first) names the REST (`exposedAPI`) and MCP (`mcpAPI`) ExposedAPIs.
+2. **KnowledgeBaseReady:** `knowledgeId` must exist (`GET /knowledge/{id}`); with `create{}`, the knowledge-base named
+   `create.name` is reused if it exists, else created (`POST /knowledge` with `name`, `description`, `storeKind`,
+   `conformsTo` as `{id}`/`{iri}` refs, `source` as `{kind}`). The operator calls the provider with its own
+   canvasSystemRole token (see Keycloak).
+3. **AccessGranted:** the provider client roles for the item's `access` (`ACCESS_ROLES_READ`, default
+   `knowledge-viewer`; `ACCESS_ROLES_READWRITE`, default `knowledge-viewer,knowledge-editor`) are mapped to
+   `service-account-<consumer component>` (the consumer is the `oda.tmforum.org/componentName` label).
+4. **Binding Secret** `<drc>-<item>-binding` (server-side apply, ownerRef to the DataResourceConfig; the operator never
+   reads Secrets): `apiUrl` (the provider's published REST URL + `/knowledge/{kbId}`), `queryUrl` (`apiUrl/query`),
+   `mcpUrl` (the published MCP URL), `kbId`, `providerComponent`, `qdrantCollection` (`tmfc060-kb-<kbId>`, for
+   reference only). No store credentials: the consumer calls the URLs with its own credentials.
+5. **DependentAPI** `<drc>-<item>`: `apiType: mcp`, `dependencyKind: data-resource`, the MCP ExposedAPI's
+   specification URL, `required` from the item; ownerRef to the DataResourceConfig, label `componentName` = the
+   consumer. Dependency Management resolves only `openapi` dependencies (and skips `data-resource` ones), so the
+   operator sets its status itself: `implementation.ready: true`, `depapiStatus.url` = `mcpUrl`.
+6. **Status:** `bindings[]` (`name`, `providerComponent`, `kbId`, `secretName`, `dependentApiName`, `access`,
+   `ready`), the conditions ProviderResolved, KnowledgeBaseReady, AccessGranted and Ready (True once every
+   **required** item is bound), `phase` (Ready, Pending while waiting for a provider, Error when refused), `message`,
+   `resourceCount` (bound items). A binding that fails later stays listed with `ready: false`.
+
+An item removed from the spec is released (its Secret and DependentAPI deleted, its roles revoked unless another
+binding of the same consumer to the same provider still needs them). Deleting the DataResourceConfig releases every
+binding the same way and **keeps the knowledge-bases**. The operator unmaps its own canvasSystemRole on a provider
+only when neither the provider's DataResourceConfig nor any consumer binding to it remains.
+
 ## Configuration (environment)
 
 | Variable | Default | Meaning |
@@ -83,6 +117,8 @@ Decided in spike S4 (hw-irc-sni/oda-canvas#61, `source/components/TMFC060-Knowle
 | `COMPONENTNAME_LABEL` | `oda.tmforum.org/componentName` | Label linking a resource to its component |
 | `LISTENER_PORT` | `8081` | Hub event listener |
 | `CALLBACK_BASE` | empty (polling only) | The listener's in-cluster URL, registered on provider hubs (the chart sets it) |
+| `RETRY_INTERVAL_SECONDS` | `15` | Retry of a consumer that is not bound yet |
+| `ACCESS_ROLES_READ`, `ACCESS_ROLES_READWRITE` | `knowledge-viewer`, `knowledge-viewer,knowledge-editor` | Provider client roles granted per access |
 | `LOGGING` | `20` | Python log level |
 
 ## Layout
@@ -92,6 +128,7 @@ docker/
   Dockerfile, DockerfileTest, requirements*.txt
   src/dataResourceOperator.py   kopf handlers, the provider daemon and the hub event listener
   src/mirror.py                 one provider's poll (resolve, grant, list, hub, status) and its cleanup
+  src/consumer.py               one consumer's bindings (provider, knowledge-base, roles, Secret, DependentAPI)
   src/provider.py               ExposedAPI resolution, the providedResources list, the provider API client
   src/kube.py                   Kubernetes reads and the status/annotation patches
   src/common.py                 filters and condition helpers
@@ -109,8 +146,8 @@ cd docker
 pip install -r requirements.txt -r requirementsTest.txt && python -m pytest -q tests
 
 # kind: build, load, install (off by default in canvas-oda; here as its own release)
-docker build -t tmforumodacanvas/dataresource-operator:0.2.0-ai-knowledge .
-kind load docker-image tmforumodacanvas/dataresource-operator:0.2.0-ai-knowledge --name oda-canvas
+docker build -t tmforumodacanvas/dataresource-operator:0.3.0-ai-knowledge .
+kind load docker-image tmforumodacanvas/dataresource-operator:0.3.0-ai-knowledge --name oda-canvas
 helm install dro ../../../../../charts/dataresource-operator -n canvas \
   --set prereleaseSuffix=ai-knowledge --set prereleasePullPolicy=IfNotPresent
 ```

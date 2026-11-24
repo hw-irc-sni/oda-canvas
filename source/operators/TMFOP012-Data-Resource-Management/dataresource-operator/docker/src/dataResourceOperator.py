@@ -7,8 +7,9 @@ knowledge-bases.
 - **Provider role** (``role: provider``, rendered by the provider component's chart): a daemon per resource mirrors
   the knowledge-bases and ontology modules the component serves into ``status.providedResources`` (#63). It polls
   every ``POLL_INTERVAL_SECONDS`` and is woken early by the provider's hub events, received on the HTTP listener.
-- **Consumer role** (default): ensure the knowledge-base on the provider, grant the consumer component the provider's
-  client roles in Keycloak, and write a binding Secret and a DependentAPI (#64; still a stub here).
+- **Consumer role** (default): a daemon per resource ensures the knowledge-base on the provider, grants the consumer
+  component the provider's client roles in Keycloak, and writes a binding Secret and a DependentAPI (#64). On delete
+  it removes them and revokes the roles; the knowledge-base is kept.
 
 DataResourceConfigs of any other provider (for example ``databricks``, handled by its own operator) are never
 touched: no status, finalizer or annotation is written to them (ADR-010 §8). Every handler is filtered on
@@ -25,7 +26,8 @@ import aiohttp
 import kopf
 from aiohttp import web
 
-from common import component_of, condition, is_owned, is_owned_provider, role_of
+from common import component_of, is_owned, is_owned_consumer, is_owned_provider, role_of
+from consumer import ConsumerBinder
 from keycloak import CredentialsMissing, KeycloakAdmin, KeycloakError, TokenManager
 from kube import Kube
 from log_wrapper import LogWrapper
@@ -76,6 +78,10 @@ def mirror_for(namespace: str, name: str) -> ProviderMirror:
     return ProviderMirror(namespace, name, SETTINGS, kube(), TOKENS, ADMIN, http_session)
 
 
+def binder_for(namespace: str, name: str) -> ConsumerBinder:
+    return ConsumerBinder(namespace, name, SETTINGS, kube(), TOKENS, ADMIN, http_session)
+
+
 # --- hub event listener ------------------------------------------------------------------------------------------
 
 
@@ -99,20 +105,6 @@ def listener_app() -> web.Application:
 
 
 # --- kopf --------------------------------------------------------------------------------------------------------
-
-
-def scaffold_status(spec, meta, status) -> dict:
-    """The status of a consumer DataResourceConfig until #64: Pending, Ready Unknown (NotImplemented)."""
-    generation = (meta or {}).get("generation")
-    role = role_of(spec)
-    message = f"TMFOP012 received this {role} DataResourceConfig; the {role} role is not implemented yet"
-    return {
-        "phase": "Pending",
-        "message": message,
-        "observedGeneration": generation,
-        "conditions": [condition("Ready", "Unknown", "NotImplemented", message, generation,
-                                 (status or {}).get("conditions"))],
-    }
 
 
 @kopf.on.startup()
@@ -163,19 +155,15 @@ async def ready_probe(**_):
 @kopf.on.resume(DRC_GROUP, DRC_VERSION, DRC_PLURAL, when=is_owned, retries=5)
 @kopf.on.create(DRC_GROUP, DRC_VERSION, DRC_PLURAL, when=is_owned, retries=5)
 @kopf.on.update(DRC_GROUP, DRC_VERSION, DRC_PLURAL, when=is_owned, field="spec", retries=5)
-async def reconcile(spec, meta, status, name, namespace, patch, reason=None, **_):
-    """Create, update (of the spec) or resume of an owned DataResourceConfig.
-
-    A provider's status belongs to its daemon (``provider_daemon``), so only its spec is logged here. A consumer
-    still gets the scaffold status (#64).
+async def reconcile(spec, meta, name, namespace, reason=None, **_):
+    """Create, update (of the spec) or resume of an owned DataResourceConfig: log it and wake its daemon, which owns
+    the status (``provider_daemon`` or ``consumer_daemon``).
 
     Args:
         spec: The DataResourceConfig spec.
         meta: Its metadata.
-        status: Its current status.
         name: Its name.
         namespace: Its namespace.
-        patch: The kopf patch the status is written to.
         reason: The kopf cause (create, update, resume).
     """
     logw = LogWrapper(handler_name="reconcile", function_name="reconcile",
@@ -185,29 +173,27 @@ async def reconcile(spec, meta, status, name, namespace, patch, reason=None, **_
     items = spec.get("providedDataResources") if role == "provider" else spec.get("dependentDataResources")
     logw.info(f"handling {reason or 'event'} of a {role} DataResourceConfig",
               f"{len(items or [])} item(s): {', '.join(i.get('name', '?') for i in items or [])}")
-    if role == "provider":
-        trigger = TRIGGERS.get((namespace, name))
-        if trigger is not None:
-            trigger.set()          # a changed spec: poll now
-        return
-    for key, value in scaffold_status(spec, meta, status).items():
-        patch.status[key] = value
+    trigger = TRIGGERS.get((namespace, name))
+    if trigger is not None:
+        trigger.set()          # a changed spec: act now
 
 
 @kopf.on.delete(DRC_GROUP, DRC_VERSION, DRC_PLURAL, when=is_owned, retries=5)
-async def delete(spec, meta, name, namespace, **_):
-    """Deletion of an owned DataResourceConfig. Provider: remove the hub subscription and the canvasSystemRole grant,
-    best effort (a provider being uninstalled at the same time must not pin the finalizer)."""
+async def delete(spec, meta, body, name, namespace, **_):
+    """Deletion of an owned DataResourceConfig, best effort (a provider uninstalled at the same time must not pin the
+    finalizer). Provider: remove the hub subscription and the canvasSystemRole grant. Consumer: remove the binding
+    Secrets and DependentAPIs and revoke the granted roles; the knowledge-bases are kept."""
     logw = LogWrapper(handler_name="delete", function_name="delete",
                       resource_name=f"DataResourceConfig/{namespace}/{name}",
                       component_name=component_of(meta, SETTINGS))
-    if role_of(spec) != "provider":
-        logw.info("handling delete of a consumer DataResourceConfig", "nothing to revoke yet")
-        return
-    problems = await mirror_for(namespace, name).cleanup(dict(spec), dict(meta))
+    role = role_of(spec)
+    if role == "provider":
+        problems = await mirror_for(namespace, name).cleanup(dict(spec), dict(meta))
+    else:
+        problems = await binder_for(namespace, name).cleanup(dict(body))
     for p in problems:
-        logw.warning("provider cleanup incomplete", p)
-    logw.info("provider DataResourceConfig deleted", "cleaned up" if not problems else f"{len(problems)} issue(s)")
+        logw.warning(f"{role} cleanup incomplete", p)
+    logw.info(f"{role} DataResourceConfig deleted", "cleaned up" if not problems else f"{len(problems)} issue(s)")
 
 
 @kopf.daemon(DRC_GROUP, DRC_VERSION, DRC_PLURAL, when=is_owned_provider, cancellation_timeout=10)
@@ -225,6 +211,30 @@ async def provider_daemon(stopped, name, namespace, body, **_):
             except Exception as e:  # never let one bad poll kill the daemon
                 mirror.logw.exception("provider poll failed", e)
             await wait_for_trigger(trigger, stopped, SETTINGS.poll_interval)
+    finally:
+        if TRIGGERS.get(key) is trigger:
+            del TRIGGERS[key]
+
+
+@kopf.daemon(DRC_GROUP, DRC_VERSION, DRC_PLURAL, when=is_owned_consumer, cancellation_timeout=10)
+async def consumer_daemon(stopped, name, namespace, body, **_):
+    """Bind one consumer: reconcile, then wait for a spec change, or the poll interval (RETRY_INTERVAL_SECONDS while
+    a required item is not bound), so a reinstalled provider or a lost role is repaired."""
+    key = (namespace, name)
+    trigger = TRIGGERS.setdefault(key, asyncio.Event())
+    binder = binder_for(namespace, name)
+    try:
+        while not stopped:
+            trigger.clear()
+            ready = False
+            try:
+                drc = {k: body.get(k) for k in ("apiVersion", "kind", "metadata", "spec", "status")}
+                patch = await binder.reconcile(drc)
+                st = patch or (body.get("status") or {})
+                ready = st.get("phase") == "Ready"
+            except Exception as e:  # never let one bad pass kill the daemon
+                binder.logw.exception("consumer reconcile failed", e)
+            await wait_for_trigger(trigger, stopped, SETTINGS.poll_interval if ready else SETTINGS.retry_interval)
     finally:
         if TRIGGERS.get(key) is trigger:
             del TRIGGERS[key]

@@ -16,6 +16,12 @@ def test_only_oda_component_is_owned():
     assert not common.is_owned(None)
 
 
+def test_consumer_filter():
+    assert common.is_owned_consumer({"provider": "odaComponent"})
+    assert not common.is_owned_consumer({"provider": "odaComponent", "role": "provider"})
+    assert not common.is_owned_consumer({"provider": "databricks"})
+
+
 def test_provider_filter():
     assert common.is_owned_provider({"provider": "odaComponent", "role": "provider"})
     assert not common.is_owned_provider({"provider": "odaComponent"})                 # role defaults to consumer
@@ -38,24 +44,24 @@ def test_reconcile_leaves_a_provider_status_to_its_daemon():
     trigger = asyncio.Event()
     op.TRIGGERS[("components", "km")] = trigger
     try:
-        asyncio.run(op.reconcile(spec=spec, meta={"generation": 3, "labels": {}}, status={}, name="km",
-                                 namespace="components", patch=patch, reason="update"))
+        asyncio.run(op.reconcile(spec=spec, meta={"generation": 3, "labels": {}}, name="km",
+                                 namespace="components", reason="update"))
     finally:
         del op.TRIGGERS[("components", "km")]
     assert "status" not in patch and trigger.is_set()
 
 
-def test_reconcile_writes_the_scaffold_status_of_a_consumer():
+def test_reconcile_wakes_a_consumer_daemon_too():
     patch = kopf.Patch()
     spec = {"provider": "odaComponent", "dependentDataResources": [{"name": "kb", "providerRef": {}}]}
-    asyncio.run(op.reconcile(spec=spec, meta={"generation": 3, "labels": {}}, status={}, name="km",
-                             namespace="components", patch=patch, reason="create"))
-    st = patch["status"]
-    assert st["phase"] == "Pending" and st["observedGeneration"] == 3
-    assert "consumer role is not implemented" in st["message"]
-    (ready,) = st["conditions"]
-    assert ready["type"] == "Ready" and ready["status"] == "Unknown" and ready["reason"] == "NotImplemented"
-    assert ready["observedGeneration"] == 3 and ready["lastTransitionTime"].endswith("Z")
+    trigger = asyncio.Event()
+    op.TRIGGERS[("components", "kc")] = trigger
+    try:
+        asyncio.run(op.reconcile(spec=spec, meta={"generation": 3, "labels": {}}, name="kc",
+                                 namespace="components", reason="update"))
+    finally:
+        del op.TRIGGERS[("components", "kc")]
+    assert "status" not in patch and trigger.is_set()
 
 
 def test_condition_keeps_transition_time_when_unchanged():
@@ -69,12 +75,14 @@ def test_handlers_are_registered_with_the_owner_filter():
     handlers = [h for h in registry._spawning.get_all_handlers()] + \
                [h for h in registry._changing.get_all_handlers()]
     names = {h.id.split("/")[0] for h in handlers}
-    assert {"reconcile", "delete", "provider_daemon"} <= names
+    assert {"reconcile", "delete", "provider_daemon", "consumer_daemon"} <= names
     for h in handlers:
         if h.id.split("/")[0] in ("reconcile", "delete"):
             assert h.when is common.is_owned
         if h.id.split("/")[0] == "provider_daemon":
             assert h.when is common.is_owned_provider
+        if h.id.split("/")[0] == "consumer_daemon":
+            assert h.when is common.is_owned_consumer
 
 
 def test_listener_wakes_the_right_daemon():
