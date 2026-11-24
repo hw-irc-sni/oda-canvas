@@ -910,7 +910,7 @@ const resourceInventoryUtils = {
   },
 
   /**
-   * Function that creates a DataResourceConfig custom resource (ADR-010)
+   * Function that creates a DataResourceConfig custom resource (ADR-010), or updates the one left by an earlier scenario
    * @param    {String} name              Name of the DataResourceConfig
    * @param    {String} inNamespace       Namespace where to create it
    * @param    {Object} labels            Labels, for example oda.tmforum.org/componentName
@@ -925,8 +925,18 @@ const resourceInventoryUtils = {
       metadata: { name: name, namespace: inNamespace, labels: labels || {} },
       spec: spec
     }
-    const response = await k8sCustomApi.createNamespacedCustomObject(GROUP, DATA_RESOURCE_CONFIG_VERSION, inNamespace, DATA_RESOURCE_CONFIGS_PLURAL, body)
-    return response.body
+    try {
+      const response = await k8sCustomApi.createNamespacedCustomObject(GROUP, DATA_RESOURCE_CONFIG_VERSION, inNamespace, DATA_RESOURCE_CONFIGS_PLURAL, body)
+      return response.body
+    } catch (error) {
+      // Left by an earlier scenario: update it to the requested labels and spec
+      if (!(error.response && error.response.statusCode === 409)) throw error
+      const patch = { metadata: { labels: labels || {} }, spec: spec }
+      const response = await k8sCustomApi.patchNamespacedCustomObject(GROUP, DATA_RESOURCE_CONFIG_VERSION, inNamespace,
+        DATA_RESOURCE_CONFIGS_PLURAL, name, patch, undefined, undefined, undefined,
+        { headers: { 'Content-Type': 'application/merge-patch+json' } })
+      return response.body
+    }
   },
 
   /**

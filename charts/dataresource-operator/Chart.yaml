@@ -2,7 +2,8 @@ apiVersion: v2
 name: dataresource-operator
 description: TMFOP012 Data Resource Management operator (DataResourceConfig provider odaComponent)
 type: application
-version: 0.3.0
+version: 0.3.1
+# version: 0.3.1 - the teardown hook has its own ServiceAccount and Role (hooks too), so uninstalling a release whose install failed doesn't hang; hooks are removed when they fail too
 # version: 0.3.0 - consumer role: knowledge-base, role grant, binding Secret and MCP DependentAPI per dependency
 # version: 0.2.0 - provider role: mirror of the provider's knowledge-bases and modules, hub event listener and Service
 # version: 0.1.0 - scaffold: kopf operator for DataResourceConfig provider odaComponent with stub handlers, RBAC and

@@ -125,7 +125,7 @@ dependencies:
     repository: 'file://../dependency-management-keycloak-authz'
     condition: dependency-management-keycloak-authz.enabled
   - name: dataresource-operator
-    version: "0.3.0"
+    version: "0.3.1"
     repository: 'file://../dataresource-operator'
     condition: dataresource-operator.enabled
   - name: secretsmanagement-operator

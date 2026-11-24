@@ -63,14 +63,56 @@ spec:
         securityContext:
           {{- include "dataresource-operator.securityContext" . | nindent 10 }}
 ---
-# Removes the client and the Secret before the release is deleted; never fails the uninstall
+# Teardown, before the release is deleted: removes the client and the Secret and never fails the uninstall. Its
+# ServiceAccount and Role are hooks too, created just before it, so it also works for a release whose install never
+# completed (the release's own ServiceAccount may not exist then).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "dataresource-operator.name" . }}-kc-teardown
+  annotations:
+    helm.sh/hook: pre-delete
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded,hook-failed
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "dataresource-operator.name" . }}-kc-teardown
+  annotations:
+    helm.sh/hook: pre-delete
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded,hook-failed
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [{{ .Values.oidc.secretName | quote }}]
+    verbs: [delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "dataresource-operator.name" . }}-kc-teardown
+  annotations:
+    helm.sh/hook: pre-delete
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded,hook-failed
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "dataresource-operator.name" . }}-kc-teardown
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "dataresource-operator.name" . }}-kc-teardown
+    namespace: {{ .Release.Namespace }}
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ include "dataresource-operator.name" . }}-kc-teardown
   annotations:
     helm.sh/hook: pre-delete
-    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded,hook-failed
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 120
@@ -80,7 +122,7 @@ spec:
         sidecar.istio.io/inject: "false"
     spec:
       restartPolicy: Never
-      serviceAccountName: {{ include "dataresource-operator.name" . }}-kc-setup
+      serviceAccountName: {{ include "dataresource-operator.name" . }}-kc-teardown
       {{- include "dataresource-operator.pullSecrets" . | nindent 6 }}
       securityContext:
         runAsNonRoot: true
