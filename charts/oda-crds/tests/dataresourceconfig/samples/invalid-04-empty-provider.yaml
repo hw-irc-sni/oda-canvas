@@ -1,0 +1,8 @@
+# expect: reject: provider lists at least one
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: invalid-04-empty-provider
+spec:
+  provider: odaComponent
+  role: provider

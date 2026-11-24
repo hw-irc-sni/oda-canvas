@@ -1,0 +1,13 @@
+# expect: reject: not both
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: invalid-09-providerref-id-and-create
+spec:
+  provider: odaComponent
+  dependentDataResources:
+  - name: incident-kb
+    providerRef:
+      componentId: TMFC060
+      knowledgeId: kb-1
+      create: {name: incident-knowledge}

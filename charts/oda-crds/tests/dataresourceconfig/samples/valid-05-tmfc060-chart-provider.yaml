@@ -1,0 +1,28 @@
+# expect: accept
+# The provider DataResourceConfig rendered by the TMFC060 chart (release km)
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: km-knowledgemanagement
+  labels:
+    oda.tmforum.org/componentName: km-knowledgemanagement
+spec:
+  provider: odaComponent
+  role: provider
+  providedDataResources:
+  - name: knowledge-vectors
+    type: vectorStore
+    description: "Hybrid dense and sparse vector store, one collection per knowledge-base"
+    engine: qdrant
+    exposedAPI: knowledgemanagement
+    mcpAPI: knowledgemcp
+    retrieval:
+      hybrid: true
+      scoreThreshold: 0.3
+      topK: 8
+  - name: knowledge-graph
+    type: knowledgeGraph
+    description: "RDF graph store, one named graph per knowledge-base and per ontology module"
+    engine: pyoxigraph
+    exposedAPI: knowledgemanagement
+    mcpAPI: knowledgemcp

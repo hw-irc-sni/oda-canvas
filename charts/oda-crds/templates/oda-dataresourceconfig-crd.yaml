@@ -1,0 +1,451 @@
+# DataResourceConfig: the data resources a component depends on (consumer) or serves (provider).
+#
+# Standalone and namespaced: linked to its component by the oda.tmforum.org/componentName label or an ownerRef, so the
+# Component CRD and the conversion webhook are unchanged (single version, no conversion).
+#
+# This is the ai-canvas-architecture draft CRD (CRDS/dataresourceconfig-v1alpha1-crd.yaml, provider databricks),
+# extended backward compatibly by ADR-010 (data resource types, provider and consumer roles, provisioning by the
+# Data Resource Management operator TMFOP012). Every DataResourceConfig valid against the draft stays valid: the
+# draft's required fields are loosened and restored as CEL rules for provider databricks.
+#
+# Status ownership (ADR-010 §8): an operator writes status only on the DataResourceConfigs whose spec.provider it
+# handles (databricks: the Databricks data operator; odaComponent: TMFOP012).
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: dataresourceconfigs.oda.tmforum.org
+spec:
+  group: oda.tmforum.org
+  scope: Namespaced
+  names:
+    kind: DataResourceConfig
+    listKind: DataResourceConfigList
+    plural: dataresourceconfigs
+    singular: dataresourceconfig
+    shortNames:
+    - drc
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        description: >-
+          DataResourceConfig declares the data resources a component depends on (role consumer), hosted on an external
+          data platform such as Databricks or served by an ODA Component in the Canvas, or the data resources a
+          component serves (role provider).
+        properties:
+          spec:
+            type: object
+            description: The data resources and the platform that serves them.
+            required:
+            - provider
+            x-kubernetes-validations:
+            - rule: "self.provider != 'databricks' || has(self.workspace)"
+              message: A databricks DataResourceConfig needs a workspace
+            - rule: "self.provider != 'databricks' || !has(self.dependentDataResources) || self.dependentDataResources.all(r, has(r.accessType))"
+              message: Every databricks data resource needs an accessType
+            - rule: "(has(self.role) && self.role == 'provider') || (has(self.dependentDataResources) && size(self.dependentDataResources) > 0)"
+              message: A consumer lists at least one dependentDataResources item
+            - rule: "!has(self.role) || self.role != 'provider' || (has(self.providedDataResources) && size(self.providedDataResources) > 0)"
+              message: A provider lists at least one providedDataResources item
+            - rule: "self.provider != 'odaComponent' || !has(self.dependentDataResources) || self.dependentDataResources.all(r, has(r.providerRef))"
+              message: Every odaComponent data resource needs a providerRef naming the component that serves it
+            properties:
+              provider:
+                type: string
+                enum:
+                - databricks
+                - odaComponent
+                description: >-
+                  The platform serving the data resources. databricks: a Databricks workspace (Managed MCP endpoints).
+                  odaComponent: an ODA Component in the Canvas, named per resource in providerRef (consumer) or the
+                  owning component itself (provider). Each value is handled by its own operator.
+              role:
+                type: string
+                enum:
+                - consumer
+                - provider
+                default: consumer
+                description: >-
+                  consumer: dependentDataResources lists what the owning component depends on. provider:
+                  providedDataResources lists what the owning component serves (normally rendered by its own chart).
+              workspace:
+                type: object
+                description: Connection details of the Databricks workspace (provider databricks only).
+                required:
+                - host
+                properties:
+                  host:
+                    type: string
+                    description: Full URL of the Databricks workspace, used to build the Managed MCP endpoint URLs.
+                  authSecretRef:
+                    type: string
+                    description: >-
+                      Name of a Secret in the same namespace with the OAuth credentials (client_id, client_secret) for
+                      the workspace. If omitted, the credentials are managed externally.
+              dependentDataResources:
+                type: array
+                description: >-
+                  The data resources the owning component depends on (role consumer). Databricks: each becomes one
+                  DependentAPI. odaComponent: each is bound by TMFOP012 to a knowledge-base on the provider component,
+                  with a binding Secret and a DependentAPI.
+                items:
+                  type: object
+                  required:
+                  - name
+                  properties:
+                    name:
+                      type: string
+                      pattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
+                      description: >-
+                        Logical name, unique within this DataResourceConfig. Used in the names of the DependentAPI and
+                        the binding Secret.
+                    id:
+                      type: string
+                      description: Data product identifier from an external catalog or governance system (ADR-007).
+                    description:
+                      type: string
+                      description: What the resource provides, shown in the Canvas inventories so agents can decide to use it.
+                    type:
+                      type: string
+                      enum:
+                      - vectorStore
+                      - knowledgeGraph
+                      - dataProduct
+                      - cache
+                      description: >-
+                        Platform-neutral class of the resource (ADR-010 §4, from the Component v2alpha1 proposal).
+                        dataProductType refines it for dataProduct and Databricks resources (vectorDb corresponds to
+                        vectorStore).
+                    dataProductType:
+                      type: string
+                      enum:
+                      - table
+                      - vectorDb
+                      - stream
+                      - featureStore
+                      description: Classification of a data product (ADR-007), independent of how it is reached.
+                    required:
+                      type: boolean
+                      default: true
+                      description: >-
+                        Whether the component needs this resource. The DataResourceConfig is Ready once every required
+                        item is bound; an unbound optional item does not block it.
+                    retrieval:
+                      type: object
+                      description: Retrieval settings for a vector store.
+                      properties:
+                        topK:
+                          type: integer
+                          minimum: 1
+                          description: Number of hits returned by a search.
+                        scoreThreshold:
+                          type: number
+                          description: Minimum score of a returned hit.
+                        hybrid:
+                          type: boolean
+                          description: Combine dense and sparse (keyword) search.
+                    access:
+                      type: string
+                      enum:
+                      - read
+                      - readWrite
+                      default: read
+                      description: >-
+                        Access the consumer needs (odaComponent). TMFOP012 grants the matching provider client roles to
+                        the consumer component; for TMFC060, knowledge-viewer, plus knowledge-editor for readWrite.
+                    providerRef:
+                      type: object
+                      description: >-
+                        The ODA Component serving this resource (provider odaComponent), and the knowledge-base to use
+                        or create on it.
+                      x-kubernetes-validations:
+                      - rule: "has(self.componentId) != has(self.componentName)"
+                        message: providerRef names the provider by exactly one of componentId and componentName
+                      - rule: "!(has(self.knowledgeId) && has(self.create))"
+                        message: providerRef uses an existing knowledgeId or creates one, not both
+                      properties:
+                        componentId:
+                          type: string
+                          description: The provider's component specification id (componentMetadata.id), e.g. TMFC060.
+                        componentName:
+                          type: string
+                          description: The provider component instance name (release-component), e.g. km-knowledgemanagement.
+                        namespace:
+                          type: string
+                          description: Namespace of the provider component (default components).
+                        knowledgeId:
+                          type: string
+                          description: Id of an existing knowledge-base on the provider.
+                        create:
+                          type: object
+                          description: The knowledge-base to create on the provider if it doesn't exist.
+                          required:
+                          - name
+                          properties:
+                            name:
+                              type: string
+                              description: Knowledge-base name.
+                            description:
+                              type: string
+                            storeKind:
+                              type: string
+                              enum:
+                              - graph
+                              - vector
+                              - hybrid
+                              description: Where the knowledge-base keeps its content.
+                            conformsTo:
+                              type: array
+                              description: Ontology modules (knowledgeSpecification ids or IRIs) the content conforms to.
+                              items:
+                                type: string
+                            source:
+                              type: array
+                              description: Where the knowledge-base content comes from.
+                              items:
+                                type: string
+                                enum:
+                                - upload
+                                - tmf639
+                                - tmf638
+                                - tmf642
+                                - tmf628
+                                - tmf921
+                    physicalStorage:
+                      type: object
+                      description: Where and how the data is physically stored (ADR-007).
+                      properties:
+                        location:
+                          type: string
+                        format:
+                          type: string
+                    accessType:
+                      type: string
+                      enum:
+                      - sql
+                      - vector-search
+                      - genie
+                      - functions
+                      description: Databricks Managed MCP server type (provider databricks, required there).
+                    catalogRef:
+                      type: object
+                      description: Unity Catalog reference of the resource (ADR-007).
+                      properties:
+                        catalog:
+                          type: string
+                        schema:
+                          type: string
+                        object:
+                          type: string
+                    index:
+                      type: object
+                      description: Vector Search index (Databricks accessType vector-search).
+                      properties:
+                        catalog:
+                          type: string
+                        schema:
+                          type: string
+                        indexName:
+                          type: string
+                    genieSpaceId:
+                      type: string
+                      description: Genie Space id (Databricks accessType genie).
+                    functions:
+                      type: array
+                      description: Unity Catalog functions to expose (Databricks accessType functions).
+                      items:
+                        type: object
+                        required:
+                        - catalog
+                        - schema
+                        - functionName
+                        properties:
+                          catalog:
+                            type: string
+                          schema:
+                            type: string
+                          functionName:
+                            type: string
+              providedDataResources:
+                type: array
+                description: >-
+                  The data resources (stores) the owning component serves (role provider). Their contents, such as
+                  knowledge-bases, change at runtime and are mirrored into status.providedResources by the operator.
+                items:
+                  type: object
+                  required:
+                  - name
+                  - type
+                  properties:
+                    name:
+                      type: string
+                      pattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
+                      description: Logical name of the store, unique within this DataResourceConfig.
+                    type:
+                      type: string
+                      enum:
+                      - vectorStore
+                      - knowledgeGraph
+                      - dataProduct
+                      - cache
+                      description: Platform-neutral class of the store.
+                    description:
+                      type: string
+                    engine:
+                      type: string
+                      description: The store engine, e.g. qdrant or pyoxigraph.
+                    exposedAPI:
+                      type: string
+                      description: Name of the component's ExposedAPI serving the REST API, e.g. knowledgemanagement.
+                    mcpAPI:
+                      type: string
+                      description: Name of the component's ExposedAPI serving MCP, e.g. knowledgemcp.
+                    retrieval:
+                      type: object
+                      description: Default retrieval settings for consumers.
+                      properties:
+                        topK:
+                          type: integer
+                          minimum: 1
+                        scoreThreshold:
+                          type: number
+                        hybrid:
+                          type: boolean
+          status:
+            type: object
+            description: Observed state, written only by the operator handling spec.provider.
+            properties:
+              phase:
+                type: string
+                enum:
+                - Pending
+                - Ready
+                - Error
+                - Skipped
+                description: Overall phase. Skipped is deprecated (ADR-010 §8) and kept for compatibility.
+              message:
+                type: string
+                description: Human-readable state, especially in phase Error.
+              resourceCount:
+                type: integer
+                description: Number of data resources handled (DependentAPIs created, or bindings).
+              endpoints:
+                type: array
+                description: The Databricks Managed MCP endpoints created.
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    accessType:
+                      type: string
+                    mcpUrl:
+                      type: string
+                    status:
+                      type: string
+                    dependentApiName:
+                      type: string
+              observedGeneration:
+                type: integer
+                format: int64
+                description: The metadata.generation the status reflects.
+              conditions:
+                type: array
+                description: Ready, ProviderResolved, KnowledgeBaseReady and AccessGranted.
+                items:
+                  type: object
+                  required:
+                  - type
+                  - status
+                  properties:
+                    type:
+                      type: string
+                    status:
+                      type: string
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                    reason:
+                      type: string
+                    message:
+                      type: string
+                    lastTransitionTime:
+                      type: string
+                      format: date-time
+                    observedGeneration:
+                      type: integer
+                      format: int64
+              providedResources:
+                type: array
+                description: The knowledge-bases and ontology modules the provider serves (role provider).
+                items:
+                  type: object
+                  properties:
+                    kind:
+                      type: string
+                      enum:
+                      - knowledge
+                      - knowledgeSpecification
+                    id:
+                      type: string
+                    name:
+                      type: string
+                    type:
+                      type: string
+                      description: The store type the resource lives in.
+                    storeKind:
+                      type: string
+                      description: Knowledge-base store kind (graph, vector, hybrid).
+                    layer:
+                      type: string
+                      description: Ontology module layer.
+                    lifecycleStatus:
+                      type: string
+                    href:
+                      type: string
+              bindings:
+                type: array
+                description: The bound data resources (role consumer, provider odaComponent).
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    providerComponent:
+                      type: string
+                    kbId:
+                      type: string
+                    secretName:
+                      type: string
+                    dependentApiName:
+                      type: string
+                    access:
+                      type: string
+                    ready:
+                      type: boolean
+    subresources:
+      status: {}
+    additionalPrinterColumns:
+    - name: Provider
+      type: string
+      jsonPath: .spec.provider
+      description: Platform serving the data resources
+    - name: Role
+      type: string
+      jsonPath: .spec.role
+      description: consumer or provider
+    - name: Phase
+      type: string
+      jsonPath: .status.phase
+      description: Current phase
+    - name: Resources
+      type: integer
+      jsonPath: .status.resourceCount
+      description: Number of data resources handled
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp

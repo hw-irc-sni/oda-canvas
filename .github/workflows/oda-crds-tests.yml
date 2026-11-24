@@ -1,0 +1,32 @@
+name: ODA CRDs tests
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'charts/oda-crds/**'
+      - '.github/workflows/oda-crds-tests.yml'
+  push:
+    branches:
+      - ai-knowledge
+    paths:
+      - 'charts/oda-crds/**'
+      - '.github/workflows/oda-crds-tests.yml'
+  workflow_dispatch:
+jobs:
+  dataresourceconfig:
+    # The DataResourceConfig CEL validation rules need a real API server: a throwaway kind cluster
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: 'v3.17.2'
+      - name: helm lint
+        # oda-crds takes global.certificate.appName from canvas-oda
+        run: helm lint charts/oda-crds --set global.certificate.appName=compcrdwebhook
+      - uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: oda-crds
+      - name: DataResourceConfig samples
+        run: charts/oda-crds/tests/dataresourceconfig/run.sh

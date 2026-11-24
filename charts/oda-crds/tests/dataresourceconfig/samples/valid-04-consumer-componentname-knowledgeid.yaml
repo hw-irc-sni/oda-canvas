@@ -1,0 +1,28 @@
+# expect: accept
+# A consumer naming the provider instance and an existing knowledge-base, read-write, plus an optional item
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: planning-agent-knowledge
+spec:
+  provider: odaComponent
+  role: consumer
+  dependentDataResources:
+  - name: network-graph
+    type: knowledgeGraph
+    access: readWrite
+    providerRef:
+      componentName: km-knowledgemanagement
+      namespace: components
+      knowledgeId: kb-0001
+  - name: lessons-learned
+    type: vectorStore
+    required: false
+    providerRef:
+      componentId: TMFC060
+      create:
+        name: lessons-learned
+        description: Post-incident reviews
+        storeKind: vector
+        conformsTo: [tio-core]
+        source: [upload]

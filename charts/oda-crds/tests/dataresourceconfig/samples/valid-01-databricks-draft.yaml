@@ -1,0 +1,29 @@
+# expect: accept
+# The draft CRD's Databricks shape (ai-canvas-architecture CRDS/dataresourceconfig-v1alpha1-crd.yaml), unchanged
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: telco-data
+spec:
+  provider: databricks
+  workspace:
+    host: https://my-workspace.cloud.databricks.com
+    authSecretRef: databricks-oauth
+  dependentDataResources:
+  - name: network-kpis
+    id: DP-NET-001
+    dataProductType: table
+    accessType: sql
+    description: Network KPIs per cell
+    catalogRef: {catalog: tmforum, schema: oda_canvas_telco, object: network_kpis}
+  - name: incident-index
+    dataProductType: vectorDb
+    accessType: vector-search
+    index: {catalog: tmforum, schema: oda_canvas_telco, indexName: incidents_idx}
+  - name: telco-genie
+    accessType: genie
+    genieSpaceId: 01ef0000000000000000000000000000
+  - name: telco-functions
+    accessType: functions
+    functions:
+    - {catalog: tmforum, schema: oda_canvas_telco, functionName: churn_score}

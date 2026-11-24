@@ -1,0 +1,9 @@
+# expect: reject: consumer lists at least one
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: invalid-03-empty-consumer
+spec:
+  provider: odaComponent
+  role: consumer
+  dependentDataResources: []
