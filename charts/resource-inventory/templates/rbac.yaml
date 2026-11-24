@@ -22,6 +22,10 @@ rules:
   - apiGroups: [oda.tmforum.org]
     resources: [exposedapis]
     verbs: [list, get]
+  # DataResource category (ADR-011): projected from DataResourceConfigs
+  - apiGroups: [oda.tmforum.org]
+    resources: [dataresourceconfigs]
+    verbs: [list, get]
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
