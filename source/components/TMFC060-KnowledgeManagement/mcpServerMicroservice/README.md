@@ -48,5 +48,6 @@ docker build -t tmforumodacanvas/tmfc060-mcp-server:dev .
 |---|---|---|
 | `KNOWLEDGE_API_URL` | `http://localhost:8080/tmfc060-knowledgemanagement/tmf-api/knowledgeManagement/v5` | The knowledge API's TMFxxx base URL |
 | `REQUEST_TIMEOUT` | `60` | Seconds per API call |
-| `MCP_HOST` / `MCP_PORT` | `0.0.0.0` / `8080` | Listener (`/mcp`, `/health`) |
+| `MCP_HOST` / `MCP_PORT` | `0.0.0.0` / `8080` | Listener (`MCP_PATH` and `/health`) |
+| `MCP_PATH` | `/mcp` | Path of the streamable HTTP endpoint. In the cluster it is `/<component>/mcp`, the ExposedAPI path, because the gateway doesn't rewrite paths |
 | `LOG_LEVEL` | `INFO` | Log level |

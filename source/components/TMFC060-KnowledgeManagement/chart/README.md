@@ -16,6 +16,38 @@ The Component is named `<release>-<component.name>` (by default `<release>-knowl
 
 The specification URLs of `knowledgemanagement` and `processflow` default to the OAS files the API serves at its in-cluster Service (`<base>/openapi.yaml`, with Swagger UI at `<base>/docs`). Set `component.knowledgeApiSpecification` and `component.processFlowApiSpecification` to publish other URLs.
 
+## Workloads
+
+| Object | Kind | Role |
+|---|---|---|
+| `<release>-kmapi` | StatefulSet, **always 1 replica** | The knowledge API. Its pyoxigraph (RocksDB) store has a single writer and lives on the `store` PVC (`knowledgeApi.store.size`, `storageClass`). Ports: 8080 (API), 8081 (internal API of the workers), 4000 (metrics) |
+| `<release>-kmworker` | Deployment (`pipelineWorker.replicas`, `concurrency`) | Pipeline workers. They claim tasks through the internal API, with the token of the `<release>-km-internal-token` Secret, which is generated once and kept across upgrades |
+| `<release>-kmmcp` | Deployment (`mcpServer.replicas`) | MCP server at `/<component>/mcp`. It forwards the caller's token to the API |
+| `<release>-kmapi`, `<release>-kminternal`, `<release>-kmapi-hl`, `<release>-kmmcp` | Services | Public API and metrics (the ExposedAPIs' targets), the internal API, the StatefulSet's governing Service, and MCP |
+| `<release>-km` | ServiceAccount | Used by all three workloads |
+| `<release>-kmapi-internal` | NetworkPolicy, `networkPolicy.enabled` (off by default) | Only the workers may reach the internal port; it needs a CNI that enforces policies |
+
+Every container runs as uid 10001 with a read-only root filesystem, no privilege escalation and no capabilities. `/tmp` is an emptyDir.
+
+The image tag defaults to `<version>-<prereleaseSuffix>` (`0.1.0-ai-knowledge`), the tag the build workflows push. Set `<workload>.tag` to override it. The images aren't on Docker Hub yet, so on kind build and load them:
+
+```bash
+for p in "knowledgeApiMicroservice tmfc060-knowledge-api" "pipelineWorkerMicroservice tmfc060-pipeline-worker" "mcpServerMicroservice tmfc060-mcp-server"; do
+  set -- $p; docker build -t tmforumodacanvas/$2:0.1.0-ai-knowledge ../$1
+  kind load docker-image tmforumodacanvas/$2:0.1.0-ai-knowledge --name <cluster>
+done
+```
+
+### Stores and settings
+
+| Values | Meaning |
+|---|---|
+| `database.external.url` or `.existingSecret`/`.key` | PostgreSQL URL (the in-chart PostgreSQL comes with #53) |
+| `qdrant.external.url` | Qdrant URL (the in-chart Qdrant comes with #54) |
+| `keycloak.baseUrl`, `realm`, `extraIssuers` | Token validation: keys from the in-cluster JWKS. A token's issuer must be the in-cluster realm URL or one of `extraIssuers`, such as the public URL the portal uses. The audience must contain the Component name |
+| `models.agentgateway.*`, `models.openaiCompatible.*` (API key from a Secret, mounted as a file), `models.embeddingDimension` | Model routes of the API. The workers call models through the API |
+| `events.callbackBase`, `callbackAllowedHosts`, `canvasInfoUrl`, `hrefBase` | Event delivery and event-driven ingestion. With no `callbackBase`, nothing registers on TMF providers |
+
 ## Dependent APIs
 
 The Component operator counts every DependentAPI towards the Component's deployment status, `required: false` included. A dependency without a provider would therefore keep a plain install from completing, so every dependency is off by default.

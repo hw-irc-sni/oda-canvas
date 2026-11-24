@@ -1,0 +1,49 @@
+{{- $sel := include "km.selectorLabels" (dict "root" . "workload" "api") -}}
+# The public API and its metrics: the targets of the knowledgemanagement, processflow and metrics ExposedAPIs
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "km.apiService" . }}
+  labels:
+    {{- include "km.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- $sel | nindent 4 }}
+  ports:
+  - name: http-api
+    port: {{ .Values.ports.api }}
+    targetPort: api
+  - name: http-metrics
+    port: {{ .Values.ports.metrics }}
+    targetPort: metrics
+---
+# The internal API of the pipeline workers (service token); no ExposedAPI points at it
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "km.internalService" . }}
+  labels:
+    {{- include "km.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- $sel | nindent 4 }}
+  ports:
+  - name: http-internal
+    port: {{ .Values.ports.internal }}
+    targetPort: internal
+---
+# The StatefulSet's governing Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "km.headlessService" . }}
+  labels:
+    {{- include "km.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- $sel | nindent 4 }}
+  ports:
+  - name: http-api
+    port: {{ .Values.ports.api }}
+    targetPort: api

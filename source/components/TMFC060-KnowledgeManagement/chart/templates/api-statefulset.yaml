@@ -1,0 +1,137 @@
+{{- $v := .Values.knowledgeApi -}}
+{{- $comp := include "km.componentName" . -}}
+{{- if not (or .Values.database.external.url .Values.database.external.existingSecret) -}}
+{{- fail "database: set database.external.url or database.external.existingSecret (the in-chart PostgreSQL comes with #53)" -}}
+{{- end -}}
+{{- if not .Values.qdrant.external.url -}}
+{{- fail "qdrant: set qdrant.external.url (the in-chart Qdrant comes with #54)" -}}
+{{- end -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "km.apiService" . }}
+  labels:
+    {{- include "km.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  # Exactly one: the pyoxigraph (RocksDB) store has a single writer
+  replicas: 1
+  serviceName: {{ include "km.headlessService" . }}
+  selector:
+    matchLabels:
+      {{- include "km.selectorLabels" (dict "root" . "workload" "api") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "km.labels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+      {{- with $v.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "km.serviceAccount" . }}
+      securityContext:
+        {{- include "km.podSecurity" . | nindent 8 }}
+      {{- include "km.scheduling" $v | nindent 6 }}
+      containers:
+      - name: api
+        image: {{ include "km.image" $v }}
+        imagePullPolicy: {{ $v.pullPolicy }}
+        securityContext:
+          {{- include "km.containerSecurity" . | nindent 10 }}
+        ports:
+        - {name: api, containerPort: {{ .Values.ports.api }}}
+        - {name: internal, containerPort: {{ .Values.ports.internal }}}
+        - {name: metrics, containerPort: {{ .Values.ports.metrics }}}
+        command: ["uvicorn", "--factory", "app.main:create_app", "--host", "0.0.0.0", "--port", "{{ .Values.ports.api }}"]
+        env:
+        - {name: COMPONENT_NAME, value: {{ $comp | quote }}}
+        - {name: STORE_PATH, value: /data/store}
+        - name: DATABASE_URL
+          {{- if .Values.database.external.existingSecret }}
+          valueFrom:
+            secretKeyRef: {name: {{ .Values.database.external.existingSecret }}, key: {{ .Values.database.external.key }}}
+          {{- else }}
+          value: {{ .Values.database.external.url | quote }}
+          {{- end }}
+        - {name: QDRANT_URL, value: {{ .Values.qdrant.external.url | quote }}}
+        - {name: KEYCLOAK_JWKS_URL, value: {{ printf "%s/protocol/openid-connect/certs" (include "km.realmUrl" .) | quote }}}
+        - {name: KEYCLOAK_ISSUERS, value: {{ prepend .Values.keycloak.extraIssuers (include "km.realmUrl" .) | join "," | quote }}}
+        - {name: CANVAS_SYSTEM_ROLE, value: {{ .Values.security.canvasSystemRole | quote }}}
+        - {name: INTERNAL_PORT, value: {{ .Values.ports.internal | quote }}}
+        - {name: INTERNAL_TOKEN_FILE, value: /etc/tmfc060/internal/token}
+        - {name: METRICS_PORT, value: {{ .Values.ports.metrics | quote }}}
+        - {name: EMBEDDING_DIMENSION, value: {{ .Values.models.embeddingDimension | quote }}}
+        {{- with .Values.models.agentgateway }}
+        {{- if .url }}
+        - {name: AGENTGATEWAY_URL, value: {{ .url | quote }}}
+        - {name: AGENTGATEWAY_CHAT_MODEL, value: {{ .chatModel | quote }}}
+        - {name: AGENTGATEWAY_EMBEDDING_MODEL, value: {{ .embeddingModel | quote }}}
+        {{- end }}
+        {{- end }}
+        {{- with .Values.models.openaiCompatible }}
+        {{- if .baseUrl }}
+        - {name: OPENAI_BASE_URL, value: {{ .baseUrl | quote }}}
+        - {name: OPENAI_CHAT_MODEL, value: {{ .chatModel | quote }}}
+        - {name: OPENAI_EMBEDDING_MODEL, value: {{ .embeddingModel | quote }}}
+        {{- if .apiKeySecret }}
+        - {name: OPENAI_API_KEY_FILE, value: /etc/tmfc060/openai/api-key}
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        - {name: EVENT_CALLBACK_BASE, value: {{ .Values.events.callbackBase | quote }}}
+        - {name: EVENT_CALLBACK_ALLOWED_HOSTS, value: {{ join "," .Values.events.callbackAllowedHosts | quote }}}
+        - {name: CANVAS_INFO_URL, value: {{ .Values.events.canvasInfoUrl | quote }}}
+        - {name: EVENT_HREF_BASE, value: {{ .Values.events.hrefBase | quote }}}
+        - {name: LOG_LEVEL, value: {{ $v.logLevel | quote }}}
+        {{- with $v.extraEnv }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        startupProbe:
+          httpGet: {path: /health, port: api}
+          periodSeconds: 5
+          failureThreshold: 60
+        livenessProbe:
+          httpGet: {path: /health, port: api}
+          periodSeconds: 20
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet: {path: /ready, port: api}
+          periodSeconds: 10
+          timeoutSeconds: 10
+        resources:
+          {{- toYaml $v.resources | nindent 10 }}
+        volumeMounts:
+        - {name: store, mountPath: /data/store}
+        - {name: tmp, mountPath: /tmp}
+        - {name: internal-token, mountPath: /etc/tmfc060/internal, readOnly: true}
+        {{- if and .Values.models.openaiCompatible.baseUrl .Values.models.openaiCompatible.apiKeySecret }}
+        - {name: openai-key, mountPath: /etc/tmfc060/openai, readOnly: true}
+        {{- end }}
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: internal-token
+        secret:
+          secretName: {{ include "km.tokenSecret" . }}
+          items: [{key: token, path: token}]
+      {{- if and .Values.models.openaiCompatible.baseUrl .Values.models.openaiCompatible.apiKeySecret }}
+      - name: openai-key
+        secret:
+          secretName: {{ .Values.models.openaiCompatible.apiKeySecret }}
+          items: [{key: {{ .Values.models.openaiCompatible.apiKeySecretKey }}, path: api-key}]
+      {{- end }}
+  volumeClaimTemplates:
+  - metadata:
+      name: store
+      labels:
+        {{- include "km.selectorLabels" (dict "root" . "workload" "api") | nindent 8 }}
+    spec:
+      accessModes: [ReadWriteOnce]
+      {{- with $v.store.storageClass }}
+      storageClassName: {{ . }}
+      {{- end }}
+      resources:
+        requests:
+          storage: {{ $v.store.size }}

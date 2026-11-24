@@ -1,4 +1,4 @@
-"""The MCP server app: FastMCP over streamable HTTP at /mcp, which needs a bearer token (401 otherwise), and /health."""
+"""The MCP server app: FastMCP over streamable HTTP at MCP_PATH (/mcp by default), which needs a bearer token (401 otherwise), and /health."""
 import contextlib
 
 from mcp.server.fastmcp import FastMCP
@@ -38,7 +38,8 @@ def create_app(settings: Settings | None = None, api: KnowledgeApi | None = None
     # In the cluster the Host header is the Service name and every call needs a bearer token, so FastMCP's
     # DNS-rebinding protection (meant for servers on localhost) is off.
     mcp = FastMCP("tmfc060-knowledge", instructions=INSTRUCTIONS, stateless_http=True, json_response=True,
-                  transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False))
+                  transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+                  streamable_http_path=settings.mcp_path)
     tools.register(mcp, api)
     kb_tools.register(mcp, api)
     mcp_app = mcp.streamable_http_app()

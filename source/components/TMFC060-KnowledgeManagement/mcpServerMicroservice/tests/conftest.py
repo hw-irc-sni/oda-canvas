@@ -90,10 +90,11 @@ async def running(postgres_url, tmp_path, qdrant_url="http://127.0.0.1:9", **ove
         rest = httpx.AsyncClient(transport=httpx.ASGITransport(app=api_app), base_url="http://api")
         base = settings.base_path
         mcp_api = KnowledgeApi(f"http://api{base}", transport=httpx.ASGITransport(app=api_app))
-        server, task, url = await serve(create_mcp(McpSettings(), mcp_api))
+        # The cluster path: the ExposedAPI path /<component>/mcp, which the gateway does not rewrite
+        server, task, url = await serve(create_mcp(McpSettings(mcp_path=f"/{CLIENT}/mcp"), mcp_api))
         try:
             rest.app = api_app
-            yield rest, base, f"{url}/mcp"
+            yield rest, base, f"{url}/{CLIENT}/mcp"
         finally:
             server.should_exit = True
             await task

@@ -1,0 +1,72 @@
+{{- $v := .Values.mcpServer -}}
+{{- $comp := include "km.componentName" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "km.mcpService" . }}
+  labels:
+    {{- include "km.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp
+spec:
+  replicas: {{ $v.replicas }}
+  selector:
+    matchLabels:
+      {{- include "km.selectorLabels" (dict "root" . "workload" "mcp") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "km.labels" . | nindent 8 }}
+        app.kubernetes.io/component: mcp
+      {{- with $v.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "km.serviceAccount" . }}
+      securityContext:
+        {{- include "km.podSecurity" . | nindent 8 }}
+      {{- include "km.scheduling" $v | nindent 6 }}
+      containers:
+      - name: mcp
+        image: {{ include "km.image" $v }}
+        imagePullPolicy: {{ $v.pullPolicy }}
+        securityContext:
+          {{- include "km.containerSecurity" . | nindent 10 }}
+        ports:
+        - {name: mcp, containerPort: {{ .Values.ports.mcp }}}
+        env:
+        - {name: KNOWLEDGE_API_URL, value: {{ printf "http://%s:%v%s" (include "km.apiService" .) .Values.ports.api (include "km.knowledgeBase" .) | quote }}}
+        - {name: MCP_PORT, value: {{ .Values.ports.mcp | quote }}}
+        # The ExposedAPI path: the gateway routes /<component>/mcp here without rewriting it
+        - {name: MCP_PATH, value: {{ printf "/%s/mcp" $comp | quote }}}
+        - {name: LOG_LEVEL, value: {{ $v.logLevel | quote }}}
+        {{- with $v.extraEnv }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        livenessProbe:
+          httpGet: {path: /health, port: mcp}
+          periodSeconds: 20
+        readinessProbe:
+          httpGet: {path: /health, port: mcp}
+          periodSeconds: 10
+        resources:
+          {{- toYaml $v.resources | nindent 10 }}
+        volumeMounts:
+        - {name: tmp, mountPath: /tmp}
+      volumes:
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "km.mcpService" . }}
+  labels:
+    {{- include "km.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "km.selectorLabels" (dict "root" . "workload" "mcp") | nindent 4 }}
+  ports:
+  - name: http-mcp
+    port: {{ .Values.ports.mcp }}
+    targetPort: mcp

@@ -1,19 +1,61 @@
 # TMFC060 Knowledge Management chart values.
 
-# The three images. The generated docker build workflows read image, version and prereleaseSuffix
+# The three workloads. The generated docker build workflows read image, version and prereleaseSuffix
 # (automation/generators/dockerbuild-workflow-generator), so keep these keys where they are.
 knowledgeApi:
   image: tmforumodacanvas/tmfc060-knowledge-api
   version: 0.1.0
   prereleaseSuffix: ai-knowledge
+  # The image tag; empty means <version>-<prereleaseSuffix> (or <version> without a suffix)
+  tag: ""
+  pullPolicy: IfNotPresent
+  # The pyoxigraph (RocksDB) store. The API is a StatefulSet with exactly one replica: the store has one writer.
+  store:
+    size: 5Gi
+    storageClass: ""
+  logLevel: INFO
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {memory: 2Gi}
+  extraEnv: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
 pipelineWorker:
   image: tmforumodacanvas/tmfc060-pipeline-worker
   version: 0.1.0
   prereleaseSuffix: ai-knowledge
+  tag: ""
+  pullPolicy: IfNotPresent
+  replicas: 1
+  # Tasks each worker runs at the same time
+  concurrency: 2
+  logLevel: INFO
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {memory: 2Gi}
+  extraEnv: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
 mcpServer:
   image: tmforumodacanvas/tmfc060-mcp-server
   version: 0.1.0
   prereleaseSuffix: ai-knowledge
+  tag: ""
+  pullPolicy: IfNotPresent
+  replicas: 1
+  logLevel: INFO
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {memory: 512Mi}
+  extraEnv: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
 
 component:
   id: TMFC060
@@ -117,8 +159,67 @@ dependentAPIs:
     description: Party Role Management
     specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF669_Party_Role/5.0.0/swagger/TMF669-Party_Role_Management-v5.0.0.oas.yaml
 
-# Ports of the knowledge API container (the Component's ExposedAPIs point at them)
+# Ports of the containers and Services (the Component's ExposedAPIs point at api, metrics and mcp; the workers call
+# internal, which no ExposedAPI exposes)
 ports:
   api: 8080
   metrics: 4000
+  internal: 8081
   mcp: 8080
+  workerHealth: 8082
+
+# The stores. Until the chart deploys its own (PostgreSQL #53, Qdrant #54), they are external.
+database:
+  external:
+    # A postgresql:// URL, or a Secret holding one (the Secret wins)
+    url: ""
+    existingSecret: ""
+    key: url
+qdrant:
+  external:
+    url: ""
+
+# Token validation (spike S1): keys from the in-cluster JWKS of the Canvas Keycloak; a token's issuer must be the
+# in-cluster realm URL or one of extraIssuers (for example the public URL the portal uses).
+keycloak:
+  baseUrl: http://canvas-keycloak-headless.canvas.svc.cluster.local:8083/auth
+  realm: odari
+  extraIssuers: []
+
+# Model routes of the API (the workers call models through the API). The ModelGatewayService route is #55.
+models:
+  agentgateway:
+    # For example http://agentgateway.canvas.svc.cluster.local:8080/v1
+    url: ""
+    chatModel: ""
+    embeddingModel: ""
+  openaiCompatible:
+    baseUrl: ""
+    chatModel: ""
+    embeddingModel: ""
+    # A Secret with the API key, mounted as a file
+    apiKeySecret: ""
+    apiKeySecretKey: api-key
+  # Dimension of the dense vectors (the embedding model's)
+  embeddingDimension: 1024
+
+# Event delivery and event-driven ingestion (#46)
+events:
+  # Externally reachable base URL of the knowledge API, for the callbacks of provider hubs; empty means no
+  # registrations on TMF providers
+  callbackBase: ""
+  # Callback hosts allowed even when they resolve to private addresses (glob patterns)
+  callbackAllowedHosts: ["*.svc.cluster.local"]
+  canvasInfoUrl: http://info.canvas.svc.cluster.local
+  # Base URL that makes the hrefs in events absolute
+  hrefBase: ""
+
+# Only the worker pods may reach the API's internal port (the service token stays the real guard). Needs a CNI that
+# enforces NetworkPolicies.
+networkPolicy:
+  enabled: false
+
+serviceAccount:
+  # Empty means <release>-km
+  name: ""
+  annotations: {}

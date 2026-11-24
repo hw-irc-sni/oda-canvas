@@ -6,7 +6,7 @@ import pytest
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
-from .conftest import running, token
+from .conftest import CLIENT, running, token
 
 pytestmark = pytest.mark.integration
 
@@ -121,4 +121,5 @@ async def test_missing_or_insufficient_token(env):
     refused = await call(mcp_url, "modules", {}, roles=())
     assert refused.isError and "403" in refused.content[0].text
     async with httpx.AsyncClient() as client:
-        assert (await client.get(mcp_url.replace("/mcp", "/health"))).json() == {"status": "up"}
+        root = mcp_url.removesuffix(f"/{CLIENT}/mcp")
+        assert (await client.get(f"{root}/health")).json() == {"status": "up"}  # probes stay at the root

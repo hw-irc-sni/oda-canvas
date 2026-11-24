@@ -1,0 +1,67 @@
+{{- $v := .Values.pipelineWorker -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "km.workerName" . }}
+  labels:
+    {{- include "km.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ $v.replicas }}
+  selector:
+    matchLabels:
+      {{- include "km.selectorLabels" (dict "root" . "workload" "worker") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "km.labels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+      {{- with $v.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "km.serviceAccount" . }}
+      # A worker finishes or hands back its tasks on SIGTERM (WORKER_SHUTDOWN_GRACE, 30 s)
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        {{- include "km.podSecurity" . | nindent 8 }}
+      {{- include "km.scheduling" $v | nindent 6 }}
+      containers:
+      - name: worker
+        image: {{ include "km.image" $v }}
+        imagePullPolicy: {{ $v.pullPolicy }}
+        securityContext:
+          {{- include "km.containerSecurity" . | nindent 10 }}
+        ports:
+        - {name: health, containerPort: {{ .Values.ports.workerHealth }}}
+        env:
+        - {name: INTERNAL_API_URL, value: {{ printf "http://%s:%v" (include "km.internalService" .) .Values.ports.internal | quote }}}
+        - {name: INTERNAL_TOKEN_FILE, value: /etc/tmfc060/internal/token}
+        - name: WORKER_ID
+          valueFrom:
+            fieldRef: {fieldPath: metadata.name}
+        - {name: WORKER_CONCURRENCY, value: {{ $v.concurrency | quote }}}
+        - {name: WORKER_HEALTH_PORT, value: {{ .Values.ports.workerHealth | quote }}}
+        - {name: LOG_LEVEL, value: {{ $v.logLevel | quote }}}
+        {{- with $v.extraEnv }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        livenessProbe:
+          httpGet: {path: /health, port: health}
+          periodSeconds: 20
+        readinessProbe:
+          httpGet: {path: /ready, port: health}
+          periodSeconds: 10
+        resources:
+          {{- toYaml $v.resources | nindent 10 }}
+        volumeMounts:
+        - {name: tmp, mountPath: /tmp}
+        - {name: internal-token, mountPath: /etc/tmfc060/internal, readOnly: true}
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: internal-token
+        secret:
+          secretName: {{ include "km.tokenSecret" . }}
+          items: [{key: token, path: token}]

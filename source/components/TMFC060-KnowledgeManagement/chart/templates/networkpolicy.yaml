@@ -1,0 +1,24 @@
+{{- if .Values.networkPolicy.enabled }}
+# Only the pipeline workers may reach the API's internal port; its other ports (API, metrics) stay open
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "km.name" (dict "root" . "suffix" "kmapi-internal") }}
+  labels:
+    {{- include "km.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "km.selectorLabels" (dict "root" . "workload" "api") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- include "km.selectorLabels" (dict "root" . "workload" "worker") | nindent 10 }}
+    ports:
+    - {port: {{ .Values.ports.internal }}, protocol: TCP}
+  - ports:
+    - {port: {{ .Values.ports.api }}, protocol: TCP}
+    - {port: {{ .Values.ports.metrics }}, protocol: TCP}
+{{- end }}

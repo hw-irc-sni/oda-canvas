@@ -49,3 +49,61 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
 {{- end -}}
 {{- toYaml $out -}}
 {{- end -}}
+
+{{/* More object names */}}
+{{- define "km.name" -}}{{ printf "%s-%s" .root.Release.Name .suffix | trunc 63 | trimSuffix "-" }}{{- end -}}
+{{- define "km.workerName" -}}{{ include "km.name" (dict "root" . "suffix" "kmworker") }}{{- end -}}
+{{- define "km.internalService" -}}{{ include "km.name" (dict "root" . "suffix" "kminternal") }}{{- end -}}
+{{- define "km.headlessService" -}}{{ include "km.name" (dict "root" . "suffix" "kmapi-hl") }}{{- end -}}
+{{- define "km.tokenSecret" -}}{{ include "km.name" (dict "root" . "suffix" "km-internal-token") }}{{- end -}}
+{{- define "km.serviceAccount" -}}{{ .Values.serviceAccount.name | default (include "km.name" (dict "root" . "suffix" "km")) }}{{- end -}}
+
+{{/* Selector labels of a workload (stable across upgrades); .workload is api, worker or mcp */}}
+{{- define "km.selectorLabels" -}}
+app.kubernetes.io/instance: {{ .root.Release.Name }}
+app.kubernetes.io/component: {{ .workload }}
+{{- end -}}
+
+{{/* Image of a workload: .img is its values block (image, version, prereleaseSuffix, tag) */}}
+{{- define "km.image" -}}
+{{- $tag := .tag | default (ternary (printf "%s-%s" .version .prereleaseSuffix) .version (not (empty .prereleaseSuffix))) -}}
+{{- printf "%s:%s" .image $tag -}}
+{{- end -}}
+
+{{/* Security context of every container */}}
+{{- define "km.containerSecurity" -}}
+allowPrivilegeEscalation: false
+readOnlyRootFilesystem: true
+runAsNonRoot: true
+runAsUser: 10001
+runAsGroup: 10001
+capabilities:
+  drop: [ALL]
+{{- end -}}
+{{- define "km.podSecurity" -}}
+runAsNonRoot: true
+runAsUser: 10001
+runAsGroup: 10001
+fsGroup: 10001
+seccompProfile:
+  type: RuntimeDefault
+{{- end -}}
+
+{{/* Scheduling and annotations of a workload's pod spec, from its values block */}}
+{{- define "km.scheduling" -}}
+{{- with .nodeSelector }}
+nodeSelector:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .tolerations }}
+tolerations:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .affinity }}
+affinity:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- end -}}
+
+{{/* The Keycloak realm URL inside the cluster */}}
+{{- define "km.realmUrl" -}}{{ trimSuffix "/" .Values.keycloak.baseUrl }}/realms/{{ .Values.keycloak.realm }}{{- end -}}

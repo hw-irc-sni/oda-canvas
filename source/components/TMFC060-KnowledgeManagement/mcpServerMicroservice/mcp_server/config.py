@@ -10,4 +10,7 @@ class Settings(BaseSettings):
     request_timeout: float = 60.0
     mcp_host: str = "0.0.0.0"
     mcp_port: int = 8080
+    # Path of the streamable HTTP endpoint. In the cluster: /<component>/mcp, the ExposedAPI path (the gateway does not
+    # rewrite paths)
+    mcp_path: str = "/mcp"
     log_level: str = "INFO"
