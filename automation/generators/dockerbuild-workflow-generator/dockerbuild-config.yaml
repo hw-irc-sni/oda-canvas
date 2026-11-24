@@ -101,6 +101,20 @@ dependentapi-simple-operator:
   # default is "linux/amd64,linux/arm64"
   #platforms: linux/amd64,linux/arm64
 
+agentgateway-mcp-operator:
+  displayName: Agentgateway-MCP-Operator
+  fileName: agentgateway-mcp-operator
+
+  valuesYamlFile: charts/canvas-oda/values.yaml
+  valuesPathImage: .agentgateway-mcp-operator.image
+  valuesPathVersion: .agentgateway-mcp-operator.version
+  valuesPathPrereleaseSuffix: .agentgateway-mcp-operator.prereleaseSuffix
+
+  paths:
+    - source/operators/TMFOP013-AI-Gateway-Management/agentgateway-mcp-operator/docker/**/*
+  buildContext: source/operators/TMFOP013-AI-Gateway-Management/agentgateway-mcp-operator/docker
+  testDockerfile: source/operators/TMFOP013-AI-Gateway-Management/agentgateway-mcp-operator/docker/DockerfileTest
+
 dataresource-operator:
   displayName: Dataresource-Operator
   fileName: dataresource-operator

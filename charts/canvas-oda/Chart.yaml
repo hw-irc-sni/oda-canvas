@@ -16,7 +16,8 @@ type: application
 # to the chart and its templates, including the app version.
 # Versions are expected to follow Semantic Versioning (https://semver.org/)
 
-version: 1.2.6-rc15
+version: 1.2.6-rc16
+# version: 1.2.6-rc16 - TMFOP013 agentgateway-mcp-operator 0.1.0 (MCP ExposedAPIs registered with agentgateway), off by default
 # version: 1.2.6-rc15 - Component Registry 0.2.0: DataResource category (ADR-011)
 # version: 1.2.6-rc14 - Resource Inventory 1.2.0: DataResource category and componentId (ADR-011)
 # version: 1.2.6-rc13 - oda-crds 1.5.0 (DependentAPI apiType mcp, dependencyKind), TMFOP012 consumer role, TMFOP005 simple operator skips data-resource DependentAPIs
@@ -129,6 +130,10 @@ dependencies:
     version: "0.3.1"
     repository: 'file://../dataresource-operator'
     condition: dataresource-operator.enabled
+  - name: agentgateway-mcp-operator
+    version: "0.1.0"
+    repository: 'file://../agentgateway-mcp-operator'
+    condition: agentgateway-mcp-operator.enabled
   - name: secretsmanagement-operator
     version: "1.0.3"
     repository: 'file://../secretsmanagement-operator'

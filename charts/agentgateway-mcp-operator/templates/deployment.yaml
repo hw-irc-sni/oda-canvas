@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentgateway-mcp-operator.name" . }}
+  labels:
+    app: {{ include "agentgateway-mcp-operator.name" . }}
+    oda.tmforum.org/operator: "true"
+    oda.tmforum.org/operatorName: agentgateway-mcp-operator
+    oda.tmforum.org/operatorId: TMFOP013
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ include "agentgateway-mcp-operator.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "agentgateway-mcp-operator.name" . }}
+    spec:
+      serviceAccountName: {{ include "agentgateway-mcp-operator.name" . }}-account
+      {{- include "agentgateway-mcp-operator.pullSecrets" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+      containers:
+      - name: agentgateway-mcp-operator
+        image: {{ include "agentgateway-mcp-operator.image" . }}
+        imagePullPolicy: {{ include "agentgateway-mcp-operator.imagePullPolicy" . }}
+        env:
+        - name: LOGGING
+          value: {{ .Values.loglevel | quote }}
+        - name: GATEWAY_NAMESPACE
+          value: {{ .Values.gateway.namespace | quote }}
+        - name: GATEWAY_CONFIG_MAP
+          value: {{ .Values.gateway.configMap | quote }}
+        - name: GATEWAY_CONFIG_KEY
+          value: {{ .Values.gateway.configKey | quote }}
+        - name: GATEWAY_POD_SELECTOR
+          value: {{ .Values.gateway.podSelector | quote }}
+        - name: GATEWAY_MCP_GATEWAY
+          value: {{ .Values.gateway.mcpGateway | quote }}
+        - name: WATCHED_NAMESPACES
+          value: {{ .Values.watchedNamespaces | quote }}
+        - name: RESYNC_INTERVAL_SECONDS
+          value: {{ .Values.resyncIntervalSeconds | quote }}
+        ports:
+        - name: health
+          containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: health
+          initialDelaySeconds: 15
+          periodSeconds: 30
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 10001
+          runAsGroup: 10001
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}

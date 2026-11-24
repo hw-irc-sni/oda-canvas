@@ -61,6 +61,16 @@
           }
         },
         "required": ["enabled"]
+      },
+      "agentgateway-mcp-operator": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": ["enabled"]
       }
     },
     "allOf": [

@@ -125,6 +125,7 @@ noTests:
   - ".github/workflows/canvas-portal-v2-backend-unit-tests.yml"
   - ".github/workflows/tmfc060-unit-tests.yml"
   - ".github/workflows/tmfop012-unit-tests.yml"
+  - ".github/workflows/tmfop013-unit-tests.yml"
   - ".github/workflows/oda-crds-tests.yml"
   - ".github/workflows/local-test.yml"
   - ".github/workflows/Chart-Releaser-ReleasedChartTester-TrivyScanner.yml"
@@ -239,6 +240,15 @@ rules:
       - component-registry
     # UC018-F001: the data resources a component provides (DataResource, ADR-011)
     tags: "@UC016 or @UC018-F001"
+
+  # TMFOP013 registers MCP ExposedAPIs with agentgateway (UC018-F003).
+  - name: AI Gateway Management operator (TMFOP013)
+    paths:
+      - "source/operators/TMFOP013-AI-Gateway-Management/**"
+      - "charts/agentgateway-mcp-operator/**"
+    canvasSections:
+      - agentgateway-mcp-operator
+    tags: "@UC018-F003"
 
   # TMFC060 Knowledge Management: the knowledgemanagement-v1 test chart wraps its chart, so the UC018 features
   # run its images.

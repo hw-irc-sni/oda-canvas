@@ -15,6 +15,9 @@ const GATEWAY_NAMESPACE = process.env.AI_GATEWAY_NAMESPACE || 'canvas'
 const GATEWAY_CONFIGMAP = process.env.AI_GATEWAY_CONFIGMAP || 'agentgateway-config'
 const GATEWAY_CONFIG_KEY = process.env.AI_GATEWAY_CONFIG_KEY || 'config.yaml'
 const GATEWAY_MCP_URL = process.env.AI_GATEWAY_MCP_URL || 'http://localhost:8080/mcp'
+// ODA Component MCP targets get the caller's token (TMFOP013, backendAuth passthrough), and TMFC060's MCP API
+// refuses a call without one. Listing tools only needs a token to be present; calling them needs a real one.
+const GATEWAY_TOKEN = process.env.AI_GATEWAY_TOKEN || 'bdd-tools-list'
 
 /**
  * Parses an MCP JSON-RPC response that is either plain JSON or server-sent events.
@@ -69,7 +72,11 @@ const aiGatewayUtils = {
     const response = await axios.post(GATEWAY_MCP_URL,
       { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
       {
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          Authorization: `Bearer ${GATEWAY_TOKEN}`
+        },
         transformResponse: [data => data]
       })
     const message = parseMcpResponse(response.data)

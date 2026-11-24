@@ -25,6 +25,9 @@ agentgateway-standalone:
     mcp:
       gateways: default
       statefulMode: stateless
+      # A target that needs a token (an ODA Component MCP API registered by TMFOP013, with the caller's token
+      # forwarded) must not fail tools/list for the other targets when a client sends none
+      failureMode: failOpen
       targets:
         - name: test-mcp
           mcp:

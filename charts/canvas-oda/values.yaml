@@ -259,6 +259,19 @@ dataresource-operator:
   imagePullPolicy: IfNotPresent
   loglevel: '20'
 
+# -----------------------------------------------------------------------------
+# TMFOP013 AI Gateway Management operator: registers every ready MCP ExposedAPI with agentgateway (charts/agentgateway,
+# a separate release) as the target oda-<namespace>-<exposedapi>, forwarding the caller's token. Off by default: its
+# image is not published yet, and it needs agentgateway installed. See charts/agentgateway-mcp-operator/values.yaml.
+# -----------------------------------------------------------------------------
+agentgateway-mcp-operator:
+  enabled: false
+  image: tmforumodacanvas/agentgateway-mcp-operator
+  version: 0.1.0
+  prereleaseSuffix:
+  imagePullPolicy: IfNotPresent
+  loglevel: '20'
+
 canvas-vault:
   enabled: true
   # changing the auth_path requires changing the encrypted token in secretsmanagement-operator

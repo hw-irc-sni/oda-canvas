@@ -10,9 +10,12 @@
 # The Canvas registers only the MCP targets it owns, and removes them when the component is
 # uninstalled. Targets added to the AI gateway by hand are left alone.
 #
-# @SkipTest: these scenarios need the automatic registration of MCP ExposedAPIs with the AI
-# gateway, which follows the merge of the AI gateway work. Remove the tag when it is delivered
-# (hw-irc-sni/oda-canvas#68).
+# The scenarios need agentgateway (charts/agentgateway, a separate release), the AI Gateway Management operator
+# (TMFOP013, canvas-oda agentgateway-mcp-operator.enabled=true) and the TMFC060 images, which are built locally until
+# they are published, so the scenarios keep @SkipTest in CI. They pass on a kind canvas with all three
+# (hw-irc-sni/oda-canvas#68): run a copy of this file without the @SkipTest tags, with AI_GATEWAY_MCP_URL pointing at
+# the gateway's MCP endpoint. Listing tools sends a placeholder bearer token (AI_GATEWAY_TOKEN): the TMFC060 target
+# gets the caller's token, and its MCP API needs one to be present.
 
 @UC018 @UC018-F003
 Feature: UC018-F003 Register MCP API with the AI Gateway

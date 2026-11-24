@@ -21,6 +21,7 @@ subdirectory per implementation.
 | `TMFOP010-Disruption-Budget-Management/` | `pdb-management/` | Pod Disruption Budget management | **Go/kubebuilder** |
 | `TMFOP011-Carbon-Management/` | `carbon-management/src/main.py` | Carbon-aware scaling (KEDA) | Python |
 | `TMFOP012-Data-Resource-Management/` | `dataresource-operator/docker/src/dataResourceOperator.py` | DataResourceConfig with provider `odaComponent`: provider mirroring and consumer bindings | Python/KOPF |
+| `TMFOP013-AI-Gateway-Management/` | `agentgateway-mcp-operator/docker/src/agentgatewayMcpOperator.py` | Registers MCP ExposedAPIs as agentgateway MCP targets | Python/KOPF |
 
 The operators are deployed by Helm charts in `charts/` (for example `component-operator`, `api-operator-istio`,
 `identityconfig-operator-keycloak`, `pdb-management-operator`), mostly through the `canvas-oda` umbrella chart.
