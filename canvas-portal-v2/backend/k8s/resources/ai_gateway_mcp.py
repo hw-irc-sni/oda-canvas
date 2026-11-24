@@ -2,6 +2,11 @@
 
 Unlike a model, a bad target still reloads cleanly. With the default failureMode, it then
 fails every MCP request through the gateway, so each change is also checked by listing tools.
+
+Targets named oda-... are managed by the Canvas: the AI Gateway Management operator (TMFOP013) registers the MCP
+APIs of ODA Components under these names and removes them with the component. The portal lists them as managed and
+never changes, renames or removes them; a save re-reads the config and changes only its own entry, so the
+operator's targets stay as they are.
 """
 
 import base64
@@ -25,6 +30,22 @@ _TRANSPORTS = ("mcp", "sse", "openapi", "stdio")
 _ADDRESS_FIELDS = ("host", "port", "path", "backend")
 _TOKEN_PATH = ("policies", "backendAuth", "key", "file")
 _FIELDS_THAT_KEEP_THE_UPSTREAM = {"name", "condition"}
+# MCP targets the Canvas manages (TMFOP013 registers ODA Component MCP APIs as oda-<namespace>-<exposedapi>)
+MANAGED_PREFIX = "oda-"
+MANAGED_BY = "TMFOP013 AI Gateway Management operator"
+
+
+def is_managed(name: Any) -> bool:
+    return isinstance(name, str) and name.startswith(MANAGED_PREFIX)
+
+
+def _refuse_managed(name: Any) -> None:
+    if is_managed(name):
+        raise GatewayRequestRefused(
+            403,
+            f"MCP servers named {MANAGED_PREFIX}... are managed by the Canvas ({MANAGED_BY}): they follow the components' "
+            "MCP APIs and can't be added, changed or removed here.",
+        )
 
 
 def _entries(config: config_file.GatewayConfig) -> list[Any]:
@@ -62,6 +83,8 @@ def _view(entry: dict[str, Any]) -> dict[str, Any]:
         "tokenSet": _has_token(entry),
         "policies": policies,
         "revision": config_file.revision(entry),
+        "managed": is_managed(entry.get("name")),
+        "managedBy": MANAGED_BY if is_managed(entry.get("name")) else None,
     }
 
 
@@ -217,6 +240,8 @@ def _listing_problem(http: httpx.Client) -> str | None:
 def _save(
     request: dict[str, Any], original_name: str | None, revision: str | None, core: k8s.CoreV1Api, http: httpx.Client
 ) -> dict[str, Any]:
+    _refuse_managed(original_name)
+    _refuse_managed(request.get("name"))
     config = config_file.read_config(core)
     entries = _entries(config)
     existing = config_file.find_entry(entries, original_name) if original_name else None
@@ -280,6 +305,7 @@ def save_mcp_target(
 
 
 def _remove(name: str, core: k8s.CoreV1Api, http: httpx.Client) -> dict[str, Any]:
+    _refuse_managed(name)
     config = config_file.read_config(core)
     entries = _entries(config)
     existing = config_file.find_entry(entries, name)
