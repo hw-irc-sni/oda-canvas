@@ -161,5 +161,20 @@ refuse "MGS on without a name" "modelResolver.modelGatewayService.name" \
 refuse "MGS on without models" "modelResolver.modelGatewayService.chatModel" \
   --set modelResolver.modelGatewayService.enabled=true --set modelResolver.modelGatewayService.name=llm
 
+# Provider DataResourceConfig (#56)
+DRC_SPEC='{"provider": "odaComponent", "role": "provider", "providedDataResources": [{"name": "knowledge-vectors", "type": "vectorStore", "description": "Hybrid dense and sparse vector store, one collection per knowledge-base", "engine": "qdrant", "exposedAPI": "knowledgemanagement", "mcpAPI": "knowledgemcp", "retrieval": {"hybrid": True, "scoreThreshold": 0.3, "topK": 8}}, {"name": "knowledge-graph", "type": "knowledgeGraph", "description": "RDF graph store, one named graph per knowledge-base and per ontology module", "engine": "pyoxigraph", "exposedAPI": "knowledgemanagement", "mcpAPI": "knowledgemcp"}]}'
+expect "no DataResourceConfig without the CRD" 'kind("DataResourceConfig") == []'
+expect "DataResourceConfig when the Canvas has the CRD (no flag), as in ADR-010" \
+  'kind("DataResourceConfig")[0]["spec"] == '"$DRC_SPEC"' and kind("DataResourceConfig")[0]["metadata"]["name"] == "km-knowledgemanagement" and kind("DataResourceConfig")[0]["metadata"]["labels"]["oda.tmforum.org/componentId"] == "TMFC060" and kind("DataResourceConfig")[0]["metadata"]["labels"]["oda.tmforum.org/componentName"] == "km-knowledgemanagement"' \
+  --api-versions oda.tmforum.org/v1alpha1/DataResourceConfig
+expect "DataResourceConfig forced by the flag" 'len(kind("DataResourceConfig")) == 1' --set dataResourceConfig.enabled=true
+expect "the APIs it names are the Component's" \
+  '{r["exposedAPI"] for r in kind("DataResourceConfig")[0]["spec"]["providedDataResources"]} <= {a["name"] for a in comp["coreFunction"]["exposedAPIs"]} and {r["mcpAPI"] for r in kind("DataResourceConfig")[0]["spec"]["providedDataResources"]} <= {a["name"] for a in comp["coreFunction"]["exposedAPIs"] if a["apiType"] == "mcp"}' \
+  --set dataResourceConfig.enabled=true
+refuse "unknown data resource type" "providedDataResources.0.type" --set dataResourceConfig.providedDataResources[0].type=blob
+refuse "an exposedAPI the Component lacks" "providedDataResources.0.exposedAPI" --set dataResourceConfig.providedDataResources[0].exposedAPI=other
+refuse "topK above the API limit" "topK" --set dataResourceConfig.providedDataResources[0].retrieval.topK=500
+refuse "no provided data resources" "providedDataResources" --set-json 'dataResourceConfig.providedDataResources=[]'
+
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all chart checks passed"

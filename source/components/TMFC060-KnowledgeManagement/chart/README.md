@@ -84,6 +84,17 @@ Qdrant keeps files open for every collection segment, and the API creates one co
 
 The subchart needs `helm dependency build` (the repository is `https://qdrant.github.io/qdrant-helm`) before `helm install` from a checkout; `tests/check.sh` runs it when `charts/` is empty.
 
+## Data resources (provider DataResourceConfig)
+
+The chart declares the component's stores to the Canvas as a provider `DataResourceConfig` (`oda.tmforum.org/v1alpha1`, ADR-010), named like the Component:
+
+- `knowledge-vectors`: vectorStore, qdrant, retrieval defaults `{topK: 8, scoreThreshold: 0.3, hybrid: true}`
+- `knowledge-graph`: knowledgeGraph, pyoxigraph
+
+Both are served through the `knowledgemanagement` (REST) and `knowledgemcp` (MCP) ExposedAPIs. The knowledge-bases inside them are not declared: the Data Resource Management operator (Phase 4) mirrors them into the CR's status.
+
+The CR is rendered only when the Canvas has the DataResourceConfig CRD (`.Capabilities`), or with `dataResourceConfig.enabled=true`, so the chart also installs on a Canvas without it. `helm template` doesn't see the cluster's CRDs: pass `--api-versions oda.tmforum.org/v1alpha1/DataResourceConfig` or the flag to render it. The list is `dataResourceConfig.providedDataResources`. `exposedAPI` and `mcpAPI` must name this Component's ExposedAPIs, and `topK` is at most 100, the API's limit.
+
 ## Dependent APIs
 
 The Component operator counts every DependentAPI towards the Component's deployment status, `required: false` included. A dependency without a provider would therefore keep a plain install from completing, so every dependency is off by default.

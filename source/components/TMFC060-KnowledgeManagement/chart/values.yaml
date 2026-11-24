@@ -159,6 +159,30 @@ dependentAPIs:
     description: Party Role Management
     specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF669_Party_Role/5.0.0/swagger/TMF669-Party_Role_Management-v5.0.0.oas.yaml
 
+# Provider DataResourceConfig (ADR-010): declares the component's stores to the Canvas. It is rendered when the Canvas
+# has the oda.tmforum.org/v1alpha1 DataResourceConfig CRD (Phase 4), or when enabled is true, so the chart also
+# installs on a Canvas without it. The stores are declared, not their knowledge-bases: the Data Resource Management
+# operator mirrors those into the CR's status.
+dataResourceConfig:
+  enabled: false
+  providedDataResources:
+  - name: knowledge-vectors
+    type: vectorStore
+    description: Hybrid dense and sparse vector store, one collection per knowledge-base
+    engine: qdrant
+    exposedAPI: knowledgemanagement
+    mcpAPI: knowledgemcp
+    retrieval:
+      topK: 8
+      scoreThreshold: 0.3
+      hybrid: true
+  - name: knowledge-graph
+    type: knowledgeGraph
+    description: RDF graph store, one named graph per knowledge-base and per ontology module
+    engine: pyoxigraph
+    exposedAPI: knowledgemanagement
+    mcpAPI: knowledgemcp
+
 # Ports of the containers and Services (the Component's ExposedAPIs point at api, metrics and mcp; the workers call
 # internal, which no ExposedAPI exposes)
 ports:

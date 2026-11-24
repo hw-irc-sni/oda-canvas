@@ -864,6 +864,87 @@
           }
         }
       }
+    },
+    "dataResourceConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "providedDataResources"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "providedDataResources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "type",
+              "engine",
+              "exposedAPI",
+              "mcpAPI"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+                "maxLength": 63
+              },
+              "type": {
+                "enum": [
+                  "vectorStore",
+                  "knowledgeGraph",
+                  "dataProduct",
+                  "cache"
+                ]
+              },
+              "description": {
+                "type": "string"
+              },
+              "engine": {
+                "type": "string",
+                "minLength": 1
+              },
+              "exposedAPI": {
+                "description": "An ExposedAPI of this Component that serves REST",
+                "enum": [
+                  "knowledgemanagement"
+                ]
+              },
+              "mcpAPI": {
+                "description": "The ExposedAPI of this Component that serves MCP",
+                "enum": [
+                  "knowledgemcp"
+                ]
+              },
+              "retrieval": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "topK": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "scoreThreshold": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "hybrid": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "additionalProperties": false
