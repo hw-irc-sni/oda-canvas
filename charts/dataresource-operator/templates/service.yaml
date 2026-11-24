@@ -1,0 +1,16 @@
+{{- if .Values.events.enabled }}
+# The hub event listener: provider components deliver their change events here
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dataresource-operator.name" . }}
+  labels:
+    app: {{ include "dataresource-operator.name" . }}
+spec:
+  selector:
+    app: {{ include "dataresource-operator.name" . }}
+  ports:
+  - name: http-events
+    port: {{ .Values.events.listenerPort }}
+    targetPort: events
+{{- end }}

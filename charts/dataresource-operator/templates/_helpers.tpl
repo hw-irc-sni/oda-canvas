@@ -63,3 +63,10 @@ seccompProfile:
 - name: SETUP_TIMEOUT_SECONDS
   value: {{ .Values.keycloak.setup.timeoutSeconds | quote }}
 {{- end -}}
+
+{{/* The listener URL registered on provider hubs; empty when events are disabled */}}
+{{- define "dataresource-operator.callbackBase" -}}
+{{- if .Values.events.enabled -}}
+{{- .Values.events.callbackBase | default (printf "http://%s.%s.svc.cluster.local:%v" (include "dataresource-operator.name" .) .Release.Namespace .Values.events.listenerPort) -}}
+{{- end -}}
+{{- end -}}

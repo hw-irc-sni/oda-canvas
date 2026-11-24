@@ -12,6 +12,8 @@ when `dataresource-operator.enabled` is true (off by default), or on its own in 
   - `components`, `exposedapis` (read); `dependentapis` (read, create, patch, delete);
   - `secrets` (create, patch, delete only: binding Secrets are written without reading any Secret);
   - CRDs and namespaces (list, watch) and events (create) for kopf.
+- With `events.enabled` (default): the Service of the hub event listener (`events.listenerPort`), registered on
+  provider hubs as `events.callbackBase` (default: this Service's in-cluster URL).
 - With `keycloak.setup.enabled` (default):
   - a Job per release revision that creates the operator's Keycloak client `oidc.clientId` (realm-management
     `view-clients`, `manage-users`) and the Secret `oidc.secretName`, using the admin password from
@@ -24,11 +26,12 @@ when `dataresource-operator.enabled` is true (off by default), or on its own in 
 
 | Value | Default | Meaning |
 |---|---|---|
-| `image`, `version`, `prereleaseSuffix` | `tmforumodacanvas/dataresource-operator`, `0.1.0`, empty | Image `<image>:<version>[-<prereleaseSuffix>]`, with `global.image.registry` |
+| `image`, `version`, `prereleaseSuffix` | `tmforumodacanvas/dataresource-operator`, `0.2.0`, empty | Image `<image>:<version>[-<prereleaseSuffix>]`, with `global.image.registry` |
 | `imagePullPolicy` / `prereleasePullPolicy` | `IfNotPresent` / `Always` | Pull policy of a release / prerelease image |
 | `loglevel` | `'20'` | Python log level |
 | `pollIntervalSeconds` | `60` | Provider poll interval |
 | `componentNamespace` | `components` | Default provider namespace |
+| `events.enabled`, `listenerPort`, `callbackBase` | `true`, `8081`, empty (the Service URL) | Provider hub events; disabled: polling only |
 | `keycloak.url` | `http://canvas-keycloak-headless.canvas.svc.cluster.local:8083/auth` | Must match the issuer host providers expect |
 | `keycloak.realm` | `odari` | |
 | `keycloak.adminUser`, `adminSecret`, `adminPasswordKey` | `admin`, `canvas-keycloak`, `admin-password` | Admin credentials for the setup Jobs only |

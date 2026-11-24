@@ -41,9 +41,15 @@ spec:
           value: {{ .Values.pollIntervalSeconds | quote }}
         - name: COMPONENT_NAMESPACE
           value: {{ .Values.componentNamespace | quote }}
+        - name: LISTENER_PORT
+          value: {{ .Values.events.listenerPort | quote }}
+        - name: CALLBACK_BASE
+          value: {{ include "dataresource-operator.callbackBase" . | quote }}
         ports:
         - name: health
           containerPort: 8080
+        - name: events
+          containerPort: {{ .Values.events.listenerPort }}
         livenessProbe:
           httpGet:
             path: /healthz

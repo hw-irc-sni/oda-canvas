@@ -16,7 +16,8 @@ type: application
 # to the chart and its templates, including the app version.
 # Versions are expected to follow Semantic Versioning (https://semver.org/)
 
-version: 1.2.6-rc11
+version: 1.2.6-rc12
+# version: 1.2.6-rc12 - TMFOP012 dataresource-operator 0.2.0 (provider role), off by default
 # version: 1.2.6-rc11 - TMFOP012 dataresource-operator 0.1.0 (scaffold), off by default
 # version: 1.2.6-rc10 - oda-crds 1.4.0 - DataResourceConfig v1alpha1 CRD (ADR-010)
 # version: 1.2.6-rc9 - issue 656 - operator charts carry the oda.tmforum.org operator labels read by Canvas Portal v2
@@ -122,7 +123,7 @@ dependencies:
     repository: 'file://../dependency-management-keycloak-authz'
     condition: dependency-management-keycloak-authz.enabled
   - name: dataresource-operator
-    version: "0.1.0"
+    version: "0.2.0"
     repository: 'file://../dataresource-operator'
     condition: dataresource-operator.enabled
   - name: secretsmanagement-operator

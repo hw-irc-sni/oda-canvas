@@ -1,5 +1,5 @@
 # TMFOP012 Data Resource Management operator. Build from this folder:
-#   docker build -t tmforumodacanvas/dataresource-operator:0.1.0-ai-knowledge .
+#   docker build -t tmforumodacanvas/dataresource-operator:0.2.0-ai-knowledge .
 FROM python:3.12.16-alpine3.23
 
 WORKDIR /src

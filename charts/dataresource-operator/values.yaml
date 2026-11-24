@@ -2,7 +2,7 @@
 # (ADR-010): mirrors what a provider component serves, and binds consumer components to it.
 
 image: tmforumodacanvas/dataresource-operator
-version: 0.1.0
+version: 0.2.0
 # A prerelease image (tag <version>-<prereleaseSuffix>) is pulled with prereleasePullPolicy. For an image built
 # locally and kind-loaded: --set prereleaseSuffix=ai-knowledge --set prereleasePullPolicy=IfNotPresent
 prereleaseSuffix:
@@ -15,6 +15,15 @@ loglevel: '20'
 pollIntervalSeconds: 60
 # Default namespace of provider components (providerRef.namespace overrides it)
 componentNamespace: components
+
+# Change events from provider hubs (for example TMFC060 /hub): the operator listens on listenerPort and registers
+# <callbackBase>/providers/<namespace>/<name> on each provider. An event only makes the operator poll that provider
+# earlier; its payload is never used. Disabled: polling only.
+events:
+  enabled: true
+  listenerPort: 8081
+  # Empty: http://<release>-dataresource-op.<namespace>.svc.cluster.local:<listenerPort> (the chart's Service)
+  callbackBase: ""
 
 keycloak:
   # Keycloak base URL. It must be the host provider components expect as token issuer (Keycloak sets iss from the

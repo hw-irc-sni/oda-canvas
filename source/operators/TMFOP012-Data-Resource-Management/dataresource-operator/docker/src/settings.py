@@ -32,6 +32,8 @@ class Settings:
         poll_interval: Seconds between polls of a provider component (role provider).
         component_namespace: Default namespace of provider components (``providerRef.namespace`` overrides it).
         componentname_label: Label linking a resource to its ODA Component.
+        listener_port: Port of the HTTP listener for provider hub events.
+        callback_base: The listener's in-cluster base URL, registered on provider hubs; empty: polling only.
     """
 
     keycloak_url: str = "http://canvas-keycloak-headless.canvas.svc.cluster.local:8083/auth"
@@ -41,6 +43,10 @@ class Settings:
     component_namespace: str = "components"
     componentname_label: str = "oda.tmforum.org/componentName"
     http_timeout: float = 30.0
+    # The HTTP listener for provider hub events, and its in-cluster base URL as registered on provider hubs (empty:
+    # no hub registration, polling only)
+    listener_port: int = 8081
+    callback_base: str = ""
 
     @classmethod
     def from_env(cls, env=None) -> "Settings":
@@ -54,4 +60,6 @@ class Settings:
             component_namespace=env.get("COMPONENT_NAMESPACE", d.component_namespace),
             componentname_label=env.get("COMPONENTNAME_LABEL", d.componentname_label),
             http_timeout=float(env.get("HTTP_TIMEOUT_SECONDS", d.http_timeout)),
+            listener_port=int(env.get("LISTENER_PORT", d.listener_port)),
+            callback_base=env.get("CALLBACK_BASE", d.callback_base).rstrip("/"),
         )
