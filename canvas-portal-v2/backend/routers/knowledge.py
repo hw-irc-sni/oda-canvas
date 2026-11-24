@@ -39,6 +39,11 @@ BODY_METHODS = {"POST", "PUT", "PATCH"}
 FORWARDED_REQUEST_HEADERS = ("accept", "content-type", "if-match", "if-none-match")
 FORWARDED_RESPONSE_HEADERS = (
     "content-type", "content-disposition", "etag", "last-modified", "x-total-count", "x-result-count")
+# Operations whose body may use KNOWLEDGE_MAX_UPLOAD_BYTES instead of KNOWLEDGE_MAX_BODY_BYTES.
+UPLOAD_OPERATIONS = {"createKnowledgeDocument"}
+# Document content is whatever a knowledge-editor uploaded, HTML included: served from the portal's origin it must
+# never render, so it is always a sandboxed download.
+DOWNLOAD_OPERATIONS = {"retrieveKnowledgeDocumentContent"}
 # Characters kept as they are in a forwarded path segment (RFC 3986 pchar), so CURIEs such as tio:Region stay readable.
 SEGMENT_SAFE = "-._~:@!$&'()*+,;="
 
@@ -108,6 +113,16 @@ async def _limited(request: Request, limit: int) -> AsyncIterator[bytes]:
             yield chunk
 
 
+def _attachment(disposition: Optional[str]) -> str:
+    """Content-Disposition: attachment, keeping the component's filename parameters (and nothing else)."""
+    params = []
+    for part in (disposition or "").split(";")[1:]:
+        name = part.split("=", 1)[0].strip().lower()
+        if name in ("filename", "filename*") and "\r" not in part and "\n" not in part:
+            params.append(part.strip())
+    return "; ".join(["attachment", *params])
+
+
 def _failure(instance: KnowledgeInstance, operation_id: str, reason: str, message: str) -> CanvasPortalError:
     logger.warning("Knowledge instance %s %s: %s", instance.name, operation_id, reason)
     return CanvasPortalError(message, 502)
@@ -137,6 +152,7 @@ async def proxy(instance_name: str, path: str, request: Request, caller: Caller 
 
     headers = {name: request.headers[name] for name in FORWARDED_REQUEST_HEADERS if name in request.headers}
     headers["authorization"] = f"Bearer {caller.token}"
+    limit = settings.KNOWLEDGE_MAX_UPLOAD_BYTES if operation.operation_id in UPLOAD_OPERATIONS else settings.KNOWLEDGE_MAX_BODY_BYTES
     content = None
     # A request without Content-Length or Transfer-Encoding has no body (a validation run, for example); it is
     # forwarded without one rather than as an empty chunked stream.
@@ -146,10 +162,10 @@ async def proxy(instance_name: str, path: str, request: Request, caller: Caller 
         if declared is not None:
             if not declared.isdigit():
                 raise CanvasPortalError("Invalid Content-Length", 400)
-            if int(declared) > settings.KNOWLEDGE_MAX_BODY_BYTES:
+            if int(declared) > limit:
                 raise _too_large()
             headers["content-length"] = declared
-        content = _limited(request, settings.KNOWLEDGE_MAX_BODY_BYTES)
+        content = _limited(request, limit)
 
     client = httpx.AsyncClient(transport=transport, timeout=settings.KNOWLEDGE_TIMEOUT_SECONDS, follow_redirects=False)
     upstream = client.build_request(
@@ -177,4 +193,8 @@ async def proxy(instance_name: str, path: str, request: Request, caller: Caller 
         await client.aclose()
 
     passed = {name: response.headers[name] for name in FORWARDED_RESPONSE_HEADERS if name in response.headers}
+    passed["x-content-type-options"] = "nosniff"
+    if operation.operation_id in DOWNLOAD_OPERATIONS and 200 <= status < 300:
+        passed["content-disposition"] = _attachment(response.headers.get("content-disposition"))
+        passed["content-security-policy"] = "sandbox"
     return StreamingResponse(response.aiter_bytes(), status_code=status, headers=passed, background=BackgroundTask(close))

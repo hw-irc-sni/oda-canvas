@@ -63,6 +63,24 @@ server {
         chunked_transfer_encoding on;
     }
 
+    # The Knowledge proxy (TMFC060 instances): document uploads up to KNOWLEDGE_MAX_UPLOAD_SIZE, streamed both ways.
+    # The backend enforces the real caps (KNOWLEDGE_MAX_UPLOAD_BYTES, KNOWLEDGE_MAX_BODY_BYTES); this only lets
+    # uploads larger than nginx's 1 MB default reach it, without buffering them first.
+    location ~ ^/api/(knowledge/.*)$ {
+        proxy_pass $backend_upstream/api/$1$is_args$args;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size ${KNOWLEDGE_MAX_UPLOAD_SIZE};
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_connect_timeout 30s;
+        proxy_send_timeout    10m;
+        proxy_read_timeout    10m;
+    }
+
     location ~ ^/api/(.*)$ {
         proxy_pass $backend_upstream/api/$1$is_args$args;
         proxy_http_version 1.1;

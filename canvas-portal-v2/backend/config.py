@@ -91,6 +91,8 @@ class Settings(BaseSettings):
     KNOWLEDGE_CANVAS_SYSTEM_ROLE: str = "canvasRole"
     # Proxy limits: the largest request body forwarded, and the upstream timeout (recommend may call an LLM).
     KNOWLEDGE_MAX_BODY_BYTES: int = 10 * 1024 * 1024
+    # Document uploads (multipart): the component's 50 MiB documents plus 1 MiB for the multipart envelope.
+    KNOWLEDGE_MAX_UPLOAD_BYTES: int = 51 * 1024 * 1024
     KNOWLEDGE_TIMEOUT_SECONDS: float = 60.0
 
     @property
