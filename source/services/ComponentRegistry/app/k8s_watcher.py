@@ -130,9 +130,19 @@ class WatchResourceChangesThread(Thread):
                 self._search_namespace = namespaces[0]
 
     def run(self):
+        from kubernetes.dynamic.exceptions import ResourceNotFoundError
+
+        missing_reported = False
         while True:
             try:
                 self.run_inner()
+            except ResourceNotFoundError:
+                # The kind's CRD isn't installed (for example DataResourceConfig): wait for it quietly
+                if not missing_reported:
+                    print(f"{self._kind} is not served by the cluster; checking again every 60s")
+                    missing_reported = True
+                time.sleep(60)
+                self._dyn_client.resources.invalidate_cache()
             except Exception as e:
                 print(
                     f"Exception in WatchResourceChangesThread for {self._kind}: {e}. Restarting watch..."

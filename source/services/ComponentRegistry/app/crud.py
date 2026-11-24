@@ -30,8 +30,14 @@ def create_resource(db: Session, resource: dict, base_url: str) -> models.Resour
     db.add(db_resource)
     db.commit()
     db.refresh(db_resource)
-    # Handle resourceRelationship separately
-    for rel in relationships:
+    store_relationships(db, resource_id, relationships)
+    return db_resource
+
+
+def store_relationships(db: Session, resource_id: str, relationships: list) -> None:
+    """Persist a resource's relationships in the relationship table, creating a placeholder for a related resource
+    that doesn't exist yet (it is filled when that resource is synced)."""
+    for rel in relationships or []:
         rel_type = rel.get("relationshipType")
         related_resource = rel.get("resource", {})
         related_resource_id = related_resource.get("id")
@@ -59,7 +65,6 @@ def create_resource(db: Session, resource: dict, base_url: str) -> models.Resour
         )
         db.add(db_rel)
     db.commit()
-    return db_resource
 
 
 def get_resource(db: Session, id: str, base_url: str = "") -> Optional[models.Resource]:
@@ -140,10 +145,19 @@ def update_resource(
     resource_data = {
         k: v for k, v in resource_update.items() if k not in ["id", "href"]
     }
+    # Relationships live in the relationship table (get_resource reads them from there): an update that carries
+    # resourceRelationship replaces the resource's rows, so changed relationships are not shadowed by old ones
+    relationships = resource_data.pop("resourceRelationship", None)
 
     db_resource.data = resource_data
     db_resource.resource_version = resource_version
     db.commit()
+    if relationships is not None:
+        db.query(models.ResourceRelationship).filter(
+            models.ResourceRelationship.resource_id == id
+        ).delete()
+        db.commit()
+        store_relationships(db, id, relationships)
     db.refresh(db_resource)
     return db_resource
 
