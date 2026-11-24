@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 import httpx
 from pydantic import BaseModel
-from auth.middleware import get_current_user
+from auth.middleware import get_current_user, is_admin
 from auth.models import AuthUser
 from config import Settings, get_settings
 from utils.cache import security_status_cache
@@ -25,6 +25,7 @@ async def get_me(user: AuthUser = Depends(get_current_user)):
         "username": user.username,
         "email": user.email,
         "groups": user.groups,
+        "isAdmin": is_admin(user),
         "authenticated": True,
     }
 
