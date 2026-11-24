@@ -20,6 +20,7 @@ subdirectory per implementation.
 | `TMFOP009-Model-as-a-Service/` | README only | Model-as-a-Service | Planned |
 | `TMFOP010-Disruption-Budget-Management/` | `pdb-management/` | Pod Disruption Budget management | **Go/kubebuilder** |
 | `TMFOP011-Carbon-Management/` | `carbon-management/src/main.py` | Carbon-aware scaling (KEDA) | Python |
+| `TMFOP012-Data-Resource-Management/` | `dataresource-operator/docker/src/dataResourceOperator.py` | DataResourceConfig with provider `odaComponent`: provider mirroring and consumer bindings | Python/KOPF |
 
 The operators are deployed by Helm charts in `charts/` (for example `component-operator`, `api-operator-istio`,
 `identityconfig-operator-keycloak`, `pdb-management-operator`), mostly through the `canvas-oda` umbrella chart.

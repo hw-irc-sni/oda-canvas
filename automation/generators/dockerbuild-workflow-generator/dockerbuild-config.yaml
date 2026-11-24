@@ -101,6 +101,20 @@ dependentapi-simple-operator:
   # default is "linux/amd64,linux/arm64"
   #platforms: linux/amd64,linux/arm64
 
+dataresource-operator:
+  displayName: Dataresource-Operator
+  fileName: dataresource-operator
+
+  valuesYamlFile: charts/canvas-oda/values.yaml
+  valuesPathImage: .dataresource-operator.image
+  valuesPathVersion: .dataresource-operator.version
+  valuesPathPrereleaseSuffix: .dataresource-operator.prereleaseSuffix
+
+  paths:
+    - source/operators/TMFOP012-Data-Resource-Management/dataresource-operator/docker/**/*
+  buildContext: source/operators/TMFOP012-Data-Resource-Management/dataresource-operator/docker
+  testDockerfile: source/operators/TMFOP012-Data-Resource-Management/dataresource-operator/docker/DockerfileTest
+
 dependency-management-keycloak-authz:
   displayName: Dependency-Management-Keycloak-Authz
   fileName: dependency-management-keycloak-authz

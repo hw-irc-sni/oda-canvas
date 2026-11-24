@@ -1,0 +1,19 @@
+@startuml
+title TMFOP012 consumer role
+participant "Consumer DataResourceConfig" as CCR
+participant "TMFOP012" as Op
+participant "Keycloak" as KC
+participant "TMFC060 TMFxxx API" as API
+participant "Binding Secret" as Sec
+participant "DependentAPI" as Dep
+Op -> CCR : watch (provider odaComponent, role consumer)
+Op -> Op : resolve the provider by componentId or componentName
+Op -> API : use knowledgeId, or POST /knowledge from create{...}
+Op -> KC : map knowledge-viewer (+ knowledge-editor for readWrite)\nto service-account-<consumer>
+Op -> Sec : apiUrl, queryUrl, mcpUrl, kbId, providerComponent, qdrantCollection (ownerRef to the CR)
+Op -> Dep : apiType mcp, the provider's knowledgemcp ExposedAPI (ownerRef to the CR)
+Op -> CCR : status.bindings[], conditions
+== delete ==
+Op -> KC : unmap the granted roles
+note right of Op : Secret and DependentAPI go with their ownerRef;\nthe knowledge-base is kept
+@enduml

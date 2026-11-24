@@ -1,0 +1,8 @@
+apiVersion: v2
+name: dataresource-operator
+description: TMFOP012 Data Resource Management operator (DataResourceConfig provider odaComponent)
+type: application
+version: 0.1.0
+# version: 0.1.0 - scaffold: kopf operator for DataResourceConfig provider odaComponent with stub handlers, RBAC and
+#                  the Keycloak client setup Job (issue hw-irc-sni/oda-canvas#62)
+appVersion: "0.1.0"

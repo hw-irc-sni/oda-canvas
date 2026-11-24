@@ -16,7 +16,8 @@ type: application
 # to the chart and its templates, including the app version.
 # Versions are expected to follow Semantic Versioning (https://semver.org/)
 
-version: 1.2.6-rc10
+version: 1.2.6-rc11
+# version: 1.2.6-rc11 - TMFOP012 dataresource-operator 0.1.0 (scaffold), off by default
 # version: 1.2.6-rc10 - oda-crds 1.4.0 - DataResourceConfig v1alpha1 CRD (ADR-010)
 # version: 1.2.6-rc9 - issue 656 - operator charts carry the oda.tmforum.org operator labels read by Canvas Portal v2
 # version: 1.2.6-rc8 - issue 650 - Kong API operator creates the ServiceMonitor for prometheus/openmetrics ExposedAPIs again
@@ -120,6 +121,10 @@ dependencies:
     version: "0.2.2"
     repository: 'file://../dependency-management-keycloak-authz'
     condition: dependency-management-keycloak-authz.enabled
+  - name: dataresource-operator
+    version: "0.1.0"
+    repository: 'file://../dataresource-operator'
+    condition: dataresource-operator.enabled
   - name: secretsmanagement-operator
     version: "1.0.3"
     repository: 'file://../secretsmanagement-operator'

@@ -1,0 +1,43 @@
+name: TMFOP012 Data Resource Management operator tests
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'source/operators/TMFOP012-Data-Resource-Management/**'
+      - 'charts/dataresource-operator/**'
+      - '.github/workflows/tmfop012-unit-tests.yml'
+  push:
+    branches:
+      - ai-knowledge
+    paths:
+      - 'source/operators/TMFOP012-Data-Resource-Management/**'
+      - 'charts/dataresource-operator/**'
+      - '.github/workflows/tmfop012-unit-tests.yml'
+  workflow_dispatch:
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: source/operators/TMFOP012-Data-Resource-Management/dataresource-operator/docker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: pip install -r requirements.txt -r requirementsTest.txt
+      - name: pytest
+        run: python -m pytest -q tests
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: 'v3.17.2'
+      - name: helm lint
+        run: |
+          helm lint charts/dataresource-operator
+          helm template dro charts/dataresource-operator -n canvas > /dev/null

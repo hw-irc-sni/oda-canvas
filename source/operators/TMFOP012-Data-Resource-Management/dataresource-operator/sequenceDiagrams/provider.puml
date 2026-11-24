@@ -1,0 +1,15 @@
+@startuml
+title TMFOP012 provider role
+participant "Provider DataResourceConfig\n(rendered by the TMFC060 chart)" as PCR
+participant "TMFOP012" as Op
+participant "Keycloak" as KC
+participant "TMFC060 TMFxxx API" as API
+Op -> PCR : watch (provider odaComponent, role provider)
+Op -> KC : map the provider's canvasSystemRole to the operator's service account
+Op -> KC : client-credentials token (role + provider client in aud)
+Op -> API : GET /knowledge, GET /knowledgeSpecification
+Op -> API : POST /hub
+Op -> PCR : status.providedResources[], conditions, phase
+API --> Op : change events
+Op -> PCR : status refreshed
+@enduml

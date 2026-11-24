@@ -1,0 +1,96 @@
+{{- if .Values.keycloak.setup.enabled }}
+# Keycloak client of the operator (spike S4, hw-irc-sni/oda-canvas#61). The setup Job runs once per release
+# revision and is not a Helm hook, so an install does not wait for Keycloak to come up; it retries until it does.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "dataresource-operator.name" . }}-kc-setup
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "dataresource-operator.name" . }}-kc-setup
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [{{ .Values.oidc.secretName | quote }}]
+    verbs: [get, update, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "dataresource-operator.name" . }}-kc-setup
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "dataresource-operator.name" . }}-kc-setup
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "dataresource-operator.name" . }}-kc-setup
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "dataresource-operator.name" . }}-kc-setup-{{ .Release.Revision }}
+  labels:
+    app: {{ include "dataresource-operator.name" . }}-kc-setup
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: {{ .Values.keycloak.setup.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "dataresource-operator.name" . }}-kc-setup
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "dataresource-operator.name" . }}-kc-setup
+      {{- include "dataresource-operator.pullSecrets" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+      containers:
+      - name: kc-setup
+        image: {{ include "dataresource-operator.image" . }}
+        imagePullPolicy: {{ include "dataresource-operator.imagePullPolicy" . }}
+        command: ["python", "/src/kc_setup.py", "setup"]
+        env:
+          {{- include "dataresource-operator.setupEnv" . | nindent 10 }}
+        securityContext:
+          {{- include "dataresource-operator.securityContext" . | nindent 10 }}
+---
+# Removes the client and the Secret before the release is deleted; never fails the uninstall
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "dataresource-operator.name" . }}-kc-teardown
+  annotations:
+    helm.sh/hook: pre-delete
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 120
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "dataresource-operator.name" . }}-kc-setup
+      {{- include "dataresource-operator.pullSecrets" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+      containers:
+      - name: kc-teardown
+        image: {{ include "dataresource-operator.image" . }}
+        imagePullPolicy: {{ include "dataresource-operator.imagePullPolicy" . }}
+        command: ["python", "/src/kc_setup.py", "teardown"]
+        env:
+          {{- include "dataresource-operator.setupEnv" . | nindent 10 }}
+        securityContext:
+          {{- include "dataresource-operator.securityContext" . | nindent 10 }}
+{{- end }}

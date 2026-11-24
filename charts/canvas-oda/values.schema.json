@@ -51,6 +51,16 @@
           }
         },
         "required": ["enabled"]
+      },
+      "dataresource-operator": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": ["enabled"]
       }
     },
     "allOf": [
