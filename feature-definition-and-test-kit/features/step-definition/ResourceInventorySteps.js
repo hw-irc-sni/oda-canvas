@@ -295,3 +295,26 @@ Then('the {string} resource in the Resource Inventory API has a {string} relatio
     `'${resourceId}' has ${related.length} '${relationshipType}' relationships to '${category}' resources (${related.join(', ')}), expected ${expectedCount}`);
   console.log(`✅ ${related.length} '${relationshipType}' relationships to '${category}' resources`);
 });
+
+/**
+ * Step: Then the '<resourceId>' resource in the Resource Inventory API has a '<relationshipType>' relationship to
+ * <count> '<category>' resources with the characteristic '<name>'
+ *
+ * Used by UC018-F001 to count a component's data stores (they have a 'type' characteristic), whatever
+ * knowledge-bases (content entries, with 'kind' instead) earlier scenarios left on it.
+ */
+Then('the {string} resource in the Resource Inventory API has a {string} relationship to {int} {string} resources with the characteristic {string}', async function (resourceId, relationshipType, expectedCount, category, characteristicName) {
+  console.log(`\n=== Checking '${relationshipType}' relationships of '${resourceId}' to resources with '${characteristicName}' ===`);
+  const resource = await resourceInventoryUtilsTMF639.findResource(resourceId);
+  assert.ok(resource, `Resource '${resourceId}' not found in the Resource Inventory`);
+  const related = [];
+  for (const id of relatedResourceIds(resource, relationshipType)) {
+    const target = await resourceInventoryUtilsTMF639.findResource(id);
+    if (target && target.category === category && characteristicValue(target, characteristicName) !== undefined) {
+      related.push(id);
+    }
+  }
+  assert.strictEqual(related.length, expectedCount,
+    `'${resourceId}' has ${related.length} '${relationshipType}' relationships to '${category}' resources with '${characteristicName}' (${related.join(', ')}), expected ${expectedCount}`);
+  console.log(`✅ ${related.length} '${relationshipType}' relationships to '${category}' resources with '${characteristicName}'`);
+});

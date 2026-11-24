@@ -357,10 +357,18 @@ class KubernetesResourceService {
             );
             return response.body.items || [];
         } catch (error) {
-            if (error.response && error.response.statusCode === 404) {
+            const statusCode = error.response && error.response.statusCode;
+            // 404: no DataResourceConfig CRD; 403: no RBAC for it (an older chart). Either way the inventory
+            // works without the DataResource category. Only the status is logged, never the request (its
+            // Authorization header holds the service account token).
+            if (statusCode === 404 || statusCode === 403) {
+                if (statusCode === 403) {
+                    logger.warn('DataResourceConfigs not readable (403): the DataResource category is empty; ' +
+                        'grant list on dataresourceconfigs.oda.tmforum.org');
+                }
                 return [];
             }
-            logger.error('Error fetching DataResourceConfigs:', error);
+            logger.error(`Error fetching DataResourceConfigs: ${statusCode || ''} ${error.message || error}`);
             throw error;
         }
     }

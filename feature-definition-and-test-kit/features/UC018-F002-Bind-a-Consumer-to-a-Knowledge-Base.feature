@@ -16,7 +16,7 @@
 # dataresource-operator.enabled=true, and the TMFC060 images, which the knowledgemanagement-v1 test chart (a wrapper of
 # the TMFC060 chart) runs. Both are built locally until they are published, so the scenarios keep @SkipTest in CI.
 # They pass on a kind canvas installed with the operator enabled and the images loaded (hw-irc-sni/oda-canvas#64):
-#   npm start -- --tags @UC018-F002
+# run a copy of this file without the @SkipTest tags (the Before hooks skip tagged scenarios whatever --tags says).
 
 @UC018 @UC018-F002
 Feature: UC018-F002 Bind a Consumer to a Knowledge Base

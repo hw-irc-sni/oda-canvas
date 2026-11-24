@@ -142,6 +142,9 @@ describe('DataResource projection (ADR-011)', () => {
     list.withArgs('oda.tmforum.org', 'v1alpha1', 'components', 'dataresourceconfigs')
       .rejects({ response: { statusCode: 404 } });
     expect(await service.getDataResourceConfigs('components')).to.deep.equal([]);
+    list.withArgs('oda.tmforum.org', 'v1alpha1', 'components', 'dataresourceconfigs')
+      .rejects({ response: { statusCode: 403 } });
+    expect(await service.getDataResourceConfigs('components')).to.deep.equal([]);
   });
 });
 

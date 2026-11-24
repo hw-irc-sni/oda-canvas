@@ -10,9 +10,10 @@
 # The component declares its data resources in a provider DataResourceConfig. The Resource
 # Inventory projects them as 'DataResource' resources (ADR-011).
 #
-# @SkipTest: these scenarios need the DataResourceConfig CRD and the Resource Inventory
-# projection of data resources. Remove the tag when they are delivered
-# (hw-irc-sni/oda-canvas#60 and #65).
+# The scenarios need the Resource Inventory 1.2.0 image and the TMFC060 images, which the
+# knowledgemanagement-v1 test chart (a wrapper of the TMFC060 chart) runs. They are built locally until they are
+# published, so the scenarios keep @SkipTest in CI. They pass on a kind canvas with the images loaded
+# (hw-irc-sni/oda-canvas#65): run a copy of this file without the @SkipTest tags.
 
 @UC018 @UC018-F001
 Feature: UC018-F001 Publish Data Resources in Resource Inventory
@@ -36,4 +37,4 @@ Feature: UC018-F001 Publish Data Resources in Resource Inventory
     @UC018-F001-002 @SkipTest
     Scenario: The component is identified and linked to its data resources
         Then the 'ctk-knowledgemanagement' resource in the Resource Inventory API has the characteristic 'componentId' with value 'TMFC060'
-        And the 'ctk-knowledgemanagement' resource in the Resource Inventory API has a 'provides' relationship to 2 'DataResource' resources
+        And the 'ctk-knowledgemanagement' resource in the Resource Inventory API has a 'provides' relationship to 2 'DataResource' resources with the characteristic 'type'
