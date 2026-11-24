@@ -14,6 +14,19 @@ on:
       - '.github/workflows/tmfc060-unit-tests.yml'
   workflow_dispatch:
 jobs:
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: 'v3.17.2'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install PyYAML==6.0.2
+      # helm lint, renders with their expected content, and values the chart must refuse (no cluster needed)
+      - run: source/components/TMFC060-KnowledgeManagement/chart/tests/check.sh
   unit-tests:
     runs-on: ubuntu-latest
     strategy:

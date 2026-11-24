@@ -99,6 +99,11 @@ class Settings(BaseSettings):
     internal_port: int = 8081
     internal_token_file: str | None = None
 
+    # Prometheus metrics (the component's metrics management API): their own listener, serving /{component_name}/metrics
+    # (0 picks a free port, a negative port turns the listener off)
+    metrics_host: str = "0.0.0.0"
+    metrics_port: int = 4000
+
     # Event-driven ingestion from TMF providers (#46): canvas-info (TMFOP005's record of resolved dependentAPIs), an
     # override map (kind or dependency name -> provider API URL, JSON), the externally reachable base of this API for
     # callbacks (the ExposedAPI URL; no registration without it), the re-check interval and the coalescing window

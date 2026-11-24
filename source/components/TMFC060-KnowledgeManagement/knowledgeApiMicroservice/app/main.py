@@ -6,7 +6,8 @@ from contextlib import asynccontextmanager
 from http import HTTPStatus
 
 from fastapi import APIRouter, FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from qdrant_client import AsyncQdrantClient
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -23,6 +24,7 @@ from .ontology.registry import Registry
 from .kb import router as kb_router
 from .event_sources import Batcher, Registrar
 from .internal import InternalServer
+from .metrics import Metrics, MetricsMiddleware, MetricsServer
 from .validation import load_body_validators
 
 
@@ -39,6 +41,19 @@ from .routers import hub, processes, specifications, terms
 from .store import get_store
 from .errors import ApiError
 from .health import is_ready, run_checks
+
+
+def published_oas(app: FastAPI, base: str, oas_path: str, title: str) -> None:
+    """The OAS file at {base}/openapi.yaml (the ExposedAPI specification URL) and Swagger UI at {base}/docs (its
+    developerUI), both without a token."""
+
+    @app.get(f"{base}/openapi.yaml", include_in_schema=False)
+    async def oas() -> FileResponse:
+        return FileResponse(oas_path, media_type="application/yaml")
+
+    @app.get(f"{base}/docs", include_in_schema=False)
+    async def docs() -> HTMLResponse:
+        return get_swagger_ui_html(openapi_url=f"{base}/openapi.yaml", title=title)
 
 
 def create_app(settings: Settings | None = None, token_validator: TokenValidator | None = None) -> FastAPI:
@@ -65,6 +80,7 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
                         asyncio.create_task(app.state.registrar.run_periodically())]
         app.state.internal = InternalServer(app)
         await app.state.internal.start()
+        await app.state.metrics_server.start()
         app.state.relay = Relay(settings, app.state.sessions)
         await app.state.relay.start()
         app.state.models = ModelResolver(settings)
@@ -88,11 +104,17 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
             await app.state.models.aclose()
             await app.state.relay.stop()
             await app.state.internal.stop()
+            await app.state.metrics_server.stop()
             await app.state.qdrant.close()
             await engine.dispose()
 
-    app = FastAPI(title="Knowledge Management", version="5.0.0", lifespan=lifespan)
+    # The OAS files are the API description: FastAPI's generated /openapi.json and /docs are off (see published_oas)
+    app = FastAPI(title="Knowledge Management", version="5.0.0", lifespan=lifespan,
+                  openapi_url=None, docs_url=None, redoc_url=None)
     app.state.settings = settings
+    app.state.metrics = Metrics()
+    app.state.metrics_server = MetricsServer(app.state.metrics, settings)
+    app.add_middleware(MetricsMiddleware, metrics=app.state.metrics)
     app.state.operations = {**load_operations(settings.oas_path, settings.base_path),
                             **load_operations(settings.process_oas_path, settings.process_base_path)}
     app.state.token_validator = token_validator or (TokenValidator(settings) if settings.auth_enabled else None)
@@ -146,6 +168,8 @@ def create_app(settings: Settings | None = None, token_validator: TokenValidator
     api.include_router(kb_router.router)
     app.include_router(api)
     app.include_router(processes.router, prefix=settings.process_base_path)
+    published_oas(app, settings.base_path, settings.oas_path, "Knowledge Management")
+    published_oas(app, settings.process_base_path, settings.process_oas_path, "Process Management (TMF701 subset)")
     app.state.api_router = api
     return app
 

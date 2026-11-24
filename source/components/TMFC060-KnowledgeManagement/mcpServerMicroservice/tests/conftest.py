@@ -1,4 +1,8 @@
 """The real knowledge API (dev-only dependency) on Postgres, with token validation, behind the MCP server."""
+import os
+
+# Every test app picks a free port for its metrics listener instead of 4000
+os.environ.setdefault("METRICS_PORT", "0")
 import asyncio
 import json
 import socket

@@ -1,6 +1,7 @@
 # TMFC060 Knowledge Management chart values.
-# Minimal for now: the image names and versions that the generated docker build workflows read
-# (automation/generators/dockerbuild-workflow-generator). The chart itself is built in PHASE 3 (#51).
+
+# The three images. The generated docker build workflows read image, version and prereleaseSuffix
+# (automation/generators/dockerbuild-workflow-generator), so keep these keys where they are.
 knowledgeApi:
   image: tmforumodacanvas/tmfc060-knowledge-api
   version: 0.1.0
@@ -13,3 +14,111 @@ mcpServer:
   image: tmforumodacanvas/tmfc060-mcp-server
   version: 0.1.0
   prereleaseSuffix: ai-knowledge
+
+component:
+  id: TMFC060
+  # The Component is named <release>-<name>; the API serves /<release>-<name>/tmf-api/..., and tokens must carry
+  # that name in their audience (the Keycloak client that TMFOP003 creates for the Component).
+  name: knowledgemanagement
+  functionalBlock: IntelligenceManagement
+  publicationDate: 2026-11-24T00:00:00.000Z
+  version: "0.1.0"
+  description: "TMFC060 Knowledge Management: knowledge-bases (vector and graph) and a governed, federated ontology."
+  # Specification URLs of the exposed APIs. Empty means the OAS the API itself serves, at its in-cluster Service URL
+  # (<base>/openapi.yaml). TMFOP005 matches DependentAPIs by exact URL, so consumers must use the same value.
+  knowledgeApiSpecification: ""
+  processFlowApiSpecification: ""
+  mcpSpecification: https://modelcontextprotocol.io/specification/2025-06-18
+  maintainers: []
+  owners: []
+
+security:
+  # The real name of the Canvas system role on the Component's Keycloak client
+  canvasSystemRole: canvasRole
+  # Static roles (securityFunction.componentRole). TMFOP003 creates them as client roles; the API guards each
+  # endpoint with the x-required-roles of the OAS.
+  componentRole:
+  - name: knowledge-viewer
+    description: Read knowledge-bases, search, query and recommend
+  - name: knowledge-editor
+    description: Change knowledge-bases, upload documents and start ingestion
+  - name: ontology-editor
+    description: Create and propose ontology modules and mappings
+  - name: ontology-reviewer
+    description: Review ontology proposals and comment on them
+  - name: ontology-approver
+    description: Rule ontology proposals, publish and deprecate modules
+
+# Optional dependent APIs (coreFunction.dependentAPIs). Each one is rendered only when enabled: the Component
+# operator counts every DependentAPI towards the Component's deployment status, so an unresolved one would hold a
+# plain install back. TMFOP005 resolves a DependentAPI to the ExposedAPI with exactly the same specification URL.
+# The five ingestion sources keep their names (tmf639 ... tmf921): TMFOP005 records the name as dependencyName in
+# canvas-info, which is how the API finds each provider's hub (knowledge-base source kind = dependency name).
+# Their events are declared as eventNotification.subscribedEvents too, for a future Event Management operator.
+dependentAPIs:
+  tmf639:
+    enabled: false
+    id: TMF639
+    description: Resource Inventory, an ingestion source
+    specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF639_Resource_Inventory/5.0.0/swagger/TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml
+    events: [ResourceCreateEvent, ResourceAttributeValueChangeEvent, ResourceStateChangeEvent, ResourceDeleteEvent]
+  tmf638:
+    enabled: false
+    id: TMF638
+    description: Service Inventory, an ingestion source
+    specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF638_Service_Inventory/5.0.0/swagger/TMF638-Service_Inventory_Management-v5.0.0.oas.yaml
+    events: [ServiceCreateEvent, ServiceAttributeValueChangeEvent, ServiceStateChangeEvent, ServiceDeleteEvent]
+  tmf642:
+    enabled: false
+    id: TMF642
+    description: Alarm Management, an ingestion source
+    # The v5 file in the Open API Table is v5.0.1
+    specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF642_Alarm/5.0.0/swagger/TMF642_Alarm_v5.0.1.oas.yaml
+    events: [AlarmCreateEvent, AlarmAttributeValueChangeEvent, AlarmStateChangeEvent, AlarmDeleteEvent]
+  tmf628:
+    enabled: false
+    id: TMF628
+    description: Performance Management, an ingestion source
+    # No v5 in the Open API Table: the v4 specification of the tmforum-apis repository
+    specification: https://raw.githubusercontent.com/tmforum-apis/TMF628_Performance/master/TMF628-Performance-v4.0.0.swagger.json
+    events: [MeasurementCollectionJobCreateEvent, MeasurementCollectionJobAttributeValueChangeEvent, MeasurementCollectionJobFilesReadyEvent]
+  tmf921:
+    enabled: false
+    id: TMF921
+    description: Intent Management, an ingestion source
+    specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF921_Intent/5.0.0/swagger/TMF921_Intent_Management_v5.0.0.oas.yaml
+    events: [IntentCreateEvent, IntentAttributeValueChangeEvent, IntentStatusChangeEvent, IntentDeleteEvent, IntentReportCreateEvent]
+  aimanagement:
+    enabled: false
+    id: TMF915
+    description: AI Management
+    # No v5 in the Open API Table: its v4
+    specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF915_AI_Management/4.0.0/swagger/TMF915_AI_Management_API_v4.0.0_swagger.json
+  policymanagement:
+    enabled: false
+    id: TMF723
+    description: Policy Management
+    # No public specification found: set one to enable it
+    specification: ""
+  eventmanagement:
+    enabled: false
+    id: TMF688
+    description: Event Management
+    # No v5 in the Open API Table: the v4 specification of the tmforum-apis repository
+    specification: https://raw.githubusercontent.com/tmforum-apis/TMF688-Event/master/TMF688-Event-v4.0.0.swagger.json
+  partymanagement:
+    enabled: false
+    id: TMF632
+    description: Party Management
+    specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF632_Party/5.0.0/swagger/TMF632-Party_Management-v5.0.0.oas.yaml
+  partyrolemanagement:
+    enabled: false
+    id: TMF669
+    description: Party Role Management
+    specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF669_Party_Role/5.0.0/swagger/TMF669-Party_Role_Management-v5.0.0.oas.yaml
+
+# Ports of the knowledge API container (the Component's ExposedAPIs point at them)
+ports:
+  api: 8080
+  metrics: 4000
+  mcp: 8080

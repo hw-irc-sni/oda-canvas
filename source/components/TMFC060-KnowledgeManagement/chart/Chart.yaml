@@ -1,0 +1,7 @@
+apiVersion: v2
+name: knowledgemanagement
+description: TMFC060 Knowledge Management ODA Component - knowledge-bases (vector and graph) and a governed, federated ontology
+type: application
+# version: 0.1.0 - first version: the Component CR (exposed APIs, metrics, static roles, optional dependent APIs)
+version: 0.1.0
+appVersion: "0.1.0"

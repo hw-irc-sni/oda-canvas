@@ -16,6 +16,21 @@ curl localhost:8080/ready    # readiness: 503 unless the store, Postgres and Qdr
 
 The API is mounted under `/{COMPONENT_NAME}/tmf-api/knowledgeManagement/v5`.
 
+Each API serves its OAS file and Swagger UI without a token. These URLs are the ExposedAPI specification and developerUI in the chart:
+
+- `/{COMPONENT_NAME}/tmf-api/knowledgeManagement/v5/openapi.yaml` and `…/docs`
+- `/{COMPONENT_NAME}/tmf-api/process/v5/openapi.yaml` and `…/docs` (TMF701 subset)
+
+FastAPI's generated `/openapi.json` and `/docs` are off, because the OAS files are the API description.
+
+Prometheus metrics have their own listener, `METRICS_PORT` (4000), at `/{COMPONENT_NAME}/metrics`: the component's `metrics` management API. They include:
+
+- `tmfc060_http_requests_total` (method, route template, status)
+- `tmfc060_http_request_duration_seconds` (method, route template)
+- process and Python metrics
+
+Route templates keep ids out of the labels.
+
 ## Settings (environment variables)
 
 | Variable | Default | Meaning |
@@ -48,6 +63,7 @@ The API is mounted under `/{COMPONENT_NAME}/tmf-api/knowledgeManagement/v5`.
 | `EVENT_RETRY_DELAYS` | `10,60,300,900,1800` | Seconds before each retry of an event delivery |
 | `EVENT_DELIVERY_TIMEOUT` / `EVENT_POLL_INTERVAL` / `EVENT_RETENTION_DAYS` | `10` / `1` / `7` | Delivery call timeout, outbox poll interval, days finished deliveries are kept |
 | `EVENT_HREF_BASE` | | Base URL that makes the hrefs in events absolute |
+| `METRICS_PORT` / `METRICS_HOST` | `4000` / `0.0.0.0` | Listener of the Prometheus metrics (`/{COMPONENT_NAME}/metrics`); 0 picks a free port, a negative port turns it off |
 | `INTERNAL_PORT` / `INTERNAL_HOST` | `8081` / `0.0.0.0` | Listener of the internal API for the pipeline workers |
 | `INTERNAL_TOKEN_FILE` | | File (a Secret key) with the workers' service token; no token, no internal listener |
 | `CANVAS_INFO_URL` / `EVENT_SOURCE_URLS` | `http://info.canvas.svc.cluster.local` / `{}` | Where provider URLs come from, and overrides |

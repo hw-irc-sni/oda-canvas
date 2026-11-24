@@ -1,4 +1,8 @@
 """Fixtures: real Postgres and Qdrant in containers (testcontainers), and a temporary pyoxigraph store."""
+import os
+
+# Every test app picks a free port for its metrics listener instead of 4000
+os.environ.setdefault("METRICS_PORT", "0")
 import pytest
 from docker.types import Ulimit
 from testcontainers.core.container import DockerContainer
