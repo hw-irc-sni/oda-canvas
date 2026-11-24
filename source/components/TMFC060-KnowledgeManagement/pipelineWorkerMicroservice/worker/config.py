@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     worker_poll_interval: float = 2.0
     worker_shutdown_grace: float = 30.0
     worker_request_timeout: float = 30.0
+    # Calls to the API's model route (chat and embeddings): longer than its MODEL_CALL_TIMEOUT (120 s)
+    worker_model_timeout: float = 180.0
     worker_health_host: str = "0.0.0.0"
     worker_health_port: int = 8082
     log_level: str = "INFO"

@@ -165,6 +165,8 @@ dependentAPIs:
 #   {name, kind: git, url, ref, credentialSecret, shapes}  credentialSecret: a Secret with username and password
 #                                                          (a read-only token), for a private repository
 #   {name, kind: secretMount, secretName, path, shapes}    the repository's files in a Secret, mounted read-only
+#                                                          (items: [{key, path}] lays the flat Secret keys out
+#                                                          in the repository's folders)
 # shapes: [{id, path}] turns a file or folder of .ttl in the repository into a SHACL shapes module.
 # values-fto-demo.yaml is an example with the private tfo repository.
 ontologySources: []
@@ -285,7 +287,7 @@ keycloak:
 # Model routes of the API (the workers call models through the API). The ModelGatewayService route is #55.
 models:
   agentgateway:
-    # For example http://agentgateway.canvas.svc.cluster.local:8080/v1
+    # For example http://agentgateway.canvas.svc.cluster.local/v1 (the Canvas agentgateway Service, port 80)
     url: ""
     chatModel: ""
     embeddingModel: ""

@@ -1036,6 +1036,28 @@
               },
               "shapes": {
                 "$ref": "#/definitions/shapes"
+              },
+              "items": {
+                "description": "Secret keys can't contain '/': items maps each key to its path in the repository (subfolders)",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "key",
+                    "path"
+                  ],
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "pattern": "^[-._a-zA-Z0-9]+$"
+                    },
+                    "path": {
+                      "type": "string",
+                      "pattern": "^[^/](.*[^/])?$"
+                    }
+                  }
+                }
               }
             }
           }

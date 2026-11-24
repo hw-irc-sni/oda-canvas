@@ -189,6 +189,9 @@ expect "a secretMount source is mounted under the mount root" \
 expect "the API restarts when the sources change" \
   'one("StatefulSet", "km-kmapi")["spec"]["template"]["metadata"]["annotations"]["checksum/ontology-sources"] != "'"$(render | python3 -c 'import sys,yaml; print([d for d in yaml.safe_load_all(sys.stdin) if d and d["kind"]=="StatefulSet" and d["metadata"]["name"]=="km-kmapi"][0]["spec"]["template"]["metadata"]["annotations"]["checksum/ontology-sources"])')"'"' \
   -f "$CHART/values-fto-demo.yaml"
+expect "secretMount items lay the flat Secret keys out in folders" \
+  'next(v for v in pod("StatefulSet", "km-kmapi")["volumes"] if v["name"] == "ontology-local")["secret"]["items"] == [{"key": "modules.json", "path": "modules.json"}, {"key": "core.ttl", "path": "foundational/core.ttl"}]' \
+  --set-json 'ontologySources=[{"name":"local","kind":"secretMount","secretName":"onto","items":[{"key":"modules.json","path":"modules.json"},{"key":"core.ttl","path":"foundational/core.ttl"}]}]'
 refuse "unknown source kind" "ontologySources.0" --set-json 'ontologySources=[{"name":"x","kind":"svn","url":"https://x"}]'
 refuse "git source without a URL" "ontologySources.0" --set-json 'ontologySources=[{"name":"x","kind":"git"}]'
 refuse "git source over http" "ontologySources.0" --set-json 'ontologySources=[{"name":"x","kind":"git","url":"http://example.org/r.git"}]'

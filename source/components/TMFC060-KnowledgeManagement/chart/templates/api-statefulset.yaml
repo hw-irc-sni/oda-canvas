@@ -156,6 +156,11 @@ spec:
       - name: {{ printf "ontology-%s" .name }}
         secret:
           secretName: {{ .secretName }}
+          {{- with .items }}
+          # Secret keys are flat: items lays them out as the repository's folders
+          items:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
       {{- end }}
       {{- end }}
       {{- if $qdrantKey }}

@@ -42,8 +42,11 @@ class Token:
 
 class InternalClient:
     def __init__(self, base_url: str, token_file: str, worker: str, timeout: float = 30.0,
-                 transport: httpx.AsyncBaseTransport | None = None):
+                 transport: httpx.AsyncBaseTransport | None = None, model_timeout: float = 180.0):
         self.worker = worker
+        # Model calls wait for the API's model route (its MODEL_CALL_TIMEOUT, 120 s by default, and a failover),
+        # so they get a longer timeout than the other internal calls
+        self.model_timeout = model_timeout
         self.token = Token(token_file)
         self.http = httpx.AsyncClient(base_url=base_url.rstrip("/"), timeout=timeout, transport=transport)
 
@@ -86,7 +89,7 @@ class InternalClient:
     async def chat(self, messages: list[dict], **options) -> str:
         """A chat completion through the API's model route (KM-FX-02). Raises ModelUnavailable or ModelRefused."""
         response = await self.http.post("/internal/models/chat", json={"messages": messages, **options},
-                                        headers=self.headers())
+                                        headers=self.headers(), timeout=self.model_timeout)
         if response.status_code == 400:
             raise ModelRefused(response.json().get("message", "refused"))
         if response.status_code in (502, 503):
@@ -128,7 +131,8 @@ class InternalClient:
         response.raise_for_status()
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
-        response = await self.http.post("/internal/models/embeddings", json={"input": texts}, headers=self.headers())
+        response = await self.http.post("/internal/models/embeddings", json={"input": texts}, headers=self.headers(),
+                                        timeout=self.model_timeout)
         if response.status_code == 400:
             raise ModelRefused(response.json().get("message", "refused"))
         if response.status_code in (502, 503):

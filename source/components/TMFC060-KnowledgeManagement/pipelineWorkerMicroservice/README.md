@@ -132,6 +132,7 @@ containers, and three OpenAI-compatible stub model servers run on sockets, one p
 | `WORKER_POLL_INTERVAL` | `2` | Seconds between claims when nothing is due |
 | `WORKER_SHUTDOWN_GRACE` | `30` | Seconds in-flight tasks get on SIGTERM |
 | `WORKER_REQUEST_TIMEOUT` | `30` | Seconds per internal API call |
+| `WORKER_MODEL_TIMEOUT` | `180` | Seconds per model call (chat, embeddings) through the API, which may take up to its `MODEL_CALL_TIMEOUT` (120 s) plus a failover |
 | `WORKER_HEALTH_HOST` / `WORKER_HEALTH_PORT` | `0.0.0.0` / `8082` | The probe server |
 | `LOG_LEVEL` | `INFO` | Log level |
 | `CHUNK_MAX_TOKENS` / `CHUNK_OVERLAP_TOKENS` | `400` / `60` | KM-FX-01 chunk size and overlap (tokens ≈ characters / 4) |

@@ -93,7 +93,7 @@ Each source is a repository in FTO layout (`modules.json`, `catalog.json`), sync
 | Kind | Values | Mounted as |
 |---|---|---|
 | `git` | `name`, `url` (https), `ref` (default `main`), optional `credentialSecret`, optional `shapes` | The credential Secret (keys `username`, `password` = a read-only token) is mounted at `/etc/tmfc060/git/<credentialSecret>/` and reaches git through `GIT_ASKPASS`, never the URL |
-| `secretMount` | `name`, `secretName`, optional `path`, optional `shapes` | The Secret holding the repository's files is mounted at `/etc/tmfc060/ontologies/<name>/`. Secrets hold at most 1 MiB |
+| `secretMount` | `name`, `secretName`, optional `path`, optional `shapes` | The Secret holding the repository's files is mounted at `/etc/tmfc060/ontologies/<name>/`. Secret keys can't contain `/`, so `items: [{key, path}]` lays them out in the repository's folders. Secrets hold at most 1 MiB |
 
 `shapes: [{id, path}]` turns a file or folder of `.ttl` in the repository into a `specKind: shapes` module. The chart renders the sources into the ConfigMap `<release>-km-ontology-sources`, which the API reads as `ONTOLOGY_SOURCES`. A change to the sources restarts the API.
 
@@ -138,6 +138,17 @@ The Dependency Management operator (TMFOP005) resolves a DependentAPI to the Exp
 ```bash
 helm install km . -n components --set dependentAPIs.tmf639.enabled=true --set dependentAPIs.tmf921.enabled=true
 ```
+
+## Running on kind
+
+[`tests/kind/run.sh`](tests/kind/run.sh) installs a release on a kind Canvas and waits for the Component to be `Complete`. It then runs [`tests/kind/scenario.py`](tests/kind/scenario.py) through the gateway, with a temporary Keycloak user holding the five roles:
+
+- the ExposedAPIs, both without and with a token
+- the Keycloak client roles
+- the MCP `initialize` and `tools/list`
+- the PHASE 2 pipeline: a runbook and a TMF921 intent through KM-FX-01 to 06 into the graph, Qdrant and search, with the model route given as helm arguments
+
+It cleans up after itself. The component [README](../README.md) has the full install steps.
 
 ## Checks
 
