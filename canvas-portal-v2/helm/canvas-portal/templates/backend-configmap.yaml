@@ -8,6 +8,7 @@ metadata:
 {{- $conformance := .Values.backend.conformance | default dict }}
 {{- $canvasBDD := $conformance.canvasBDD | default dict }}
 {{- $canvasBDDEnv := $canvasBDD.env | default dict }}
+{{- $knowledge := .Values.backend.knowledge | default dict }}
 data:
   APP_ENV: {{ .Values.backend.env.APP_ENV | quote }}
   LOG_LEVEL: {{ .Values.backend.env.LOG_LEVEL | quote }}
@@ -38,6 +39,16 @@ data:
   AGENTGATEWAY_KEYS_PATH: {{ ((.Values.backend.aiGateways | default dict).keysPath | default "/llm-keys") | quote }}
   AGENTGATEWAY_POD_SELECTOR: {{ ((.Values.backend.aiGateways | default dict).podSelector | default "app.kubernetes.io/name=agentgateway-standalone") | quote }}
   OBSERVABILITY_PROVIDERS_JSON: {{ ((.Values.backend.observability).providers | default list) | toJson | quote }}
+  KNOWLEDGE_DISCOVERY: {{ $knowledge.discovery | default "ri" | quote }}
+  RESOURCE_INVENTORY_URL: {{ $knowledge.resourceInventoryUrl | default "http://resource-inventory.canvas.svc.cluster.local/tmf-api/resourceInventoryManagement/v5" | quote }}
+  KNOWLEDGE_URL_MODE: {{ $knowledge.urlMode | default "service" | quote }}
+  KNOWLEDGE_INSTANCES_JSON: {{ $knowledge.instances | default list | toJson | quote }}
+  KNOWLEDGE_CACHE_TTL_SECONDS: {{ ternary $knowledge.cacheTtlSeconds 30 (hasKey $knowledge "cacheTtlSeconds") | int | quote }}
+  KNOWLEDGE_STALE_TTL_SECONDS: {{ ternary $knowledge.staleTtlSeconds 600 (hasKey $knowledge "staleTtlSeconds") | int | quote }}
+  KNOWLEDGE_CANVAS_SYSTEM_ROLE: {{ $knowledge.canvasSystemRole | default "canvasRole" | quote }}
+  KNOWLEDGE_MAX_BODY_BYTES: {{ $knowledge.maxBodyBytes | default 10485760 | int64 | quote }}
+  KNOWLEDGE_MAX_UPLOAD_BYTES: {{ include "canvas-portal.knowledge.maxUploadBytes" . | quote }}
+  KNOWLEDGE_TIMEOUT_SECONDS: {{ $knowledge.timeoutSeconds | default 60 | quote }}
   REGISTRY_CENTER_URL: {{ ((.Values.backend.registryCenter | default dict).url | default "") | quote }}
   REGISTRY_CENTER_PAGE_URL: {{ ((.Values.backend.registryCenter | default dict).pageUrl | default "") | quote }}
   EXTERNAL_REGISTRY_CATALOG_PATH: {{ printf "%s/external-registries.json" .Values.backend.persistence.mountPath | quote }}

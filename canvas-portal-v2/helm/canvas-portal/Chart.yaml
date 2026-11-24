@@ -2,8 +2,9 @@ apiVersion: v2
 name: canvas-portal
 description: A Helm which Deploys the Canvas Portal frontend and backend
 type: application
+# version: 0.1.4 - add backend.knowledge (TMFC060 Knowledge Management instances behind the AI > Knowledge page); the frontend nginx upload limit follows backend.knowledge.maxUploadBytes
 # version: 0.1.3 - add backend.aiGateways.configNamespace and rbac.agentgatewayConfigAccess, for changing models
 # version: 0.1.2 - add backend.aiGateways.llmUrl, for testing models from the AI Gateways page
 # version: 0.1.1 - add AI Gateways config (backend.aiGateways, AGENTGATEWAY_API_KEY)
-version: 0.1.3
+version: 0.1.4
 appVersion: "v1"

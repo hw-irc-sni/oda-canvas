@@ -18,6 +18,7 @@ A web management portal for an ODA Canvas. It is the successor to the Spring Boo
 - **Conformance** (admins only): run the Canvas BDD tests from the repo, view logs, and download the cucumber and HTML reports.
 - **Model gateway:** create, edit and delete `ModelGatewayService` resources, and proxy chat requests through them.
 - **Registries:** list agents and skills from the in-cluster OpenAN Registry Center and from external registries added by admins.
+- **Knowledge** (backend): the TMFC060 Knowledge Management instances of the Canvas, the user's capabilities on each, and a proxy to their knowledge-base and ontology APIs. See [Knowledge](#knowledge).
 - **Cluster overview and observability:** a cluster summary, plus Grafana and Prometheus links if configured.
 - **Authentication:** Keycloak or Entra ID (`IDM_PROVIDER`). The backend validates the JWT and the browser keeps a refresh cookie.
 
@@ -267,6 +268,101 @@ Things to know when operating this:
 - **Lockouts.** Registry Center bans a client for 5 minutes after 5 failed logins. After a rejection, the portal stops calling that registry for 5 minutes, including for connection tests. To retry sooner, save the registry with new credentials. Saving it with the same ones doesn't lift the lockout.
 - **Freshness.** Results from external registries are cached for 30 seconds. **Refresh** skips the cache for admins only. A registry that fails or doesn't answer within about 6 seconds shows as a warning without affecting the others.
 - **Limits.** Each call to an external registry has a 5-second overall limit and a 10 MB response limit. Compressed responses are refused.
+
+## Knowledge
+
+The AI > Knowledge page works with the **TMFC060 Knowledge Management** instances of the Canvas, the knowledge-bases
+and the federated ontology they serve (`source/components/TMFC060-KnowledgeManagement`). The backend lists them,
+tells the page what the user may do on each, and forwards the page's calls to them.
+
+### Discovery
+
+With `backend.knowledge.discovery: ri` (the default), the backend asks TMF639 Resource Inventory
+(`backend.knowledge.resourceInventoryUrl`) for every ODAComponent whose `componentId` is TMFC060, and for the `API`
+resources each one exposes:
+
+| API | How it is recognised |
+|---|---|
+| TMFxxx Knowledge Management | apiType `openapi`, apiName `knowledgemanagement` |
+| TMF701 Process Flow (ingestion jobs) | apiType `openapi`, apiName `processflow` |
+| MCP | apiType `mcp` |
+
+An instance is identified by its **component name**, which is also its Keycloak client id. Instances that aren't
+deployed yet, or have no TMFxxx API, are listed with `available: false`.
+
+The gateway URL Resource Inventory reports often doesn't resolve inside the cluster (on kind it is the ingress
+LoadBalancer address `127.0.0.1`). So with `urlMode: service` (the default), the backend calls each API's Service
+directly, at `http://<implementation>.<namespace>.svc.cluster.local:<port><path>`. This needs Resource Inventory 1.2.1
+or later, which reports `port` and `path`. With older versions the backend falls back to the gateway URL. TMFC060
+checks every call's token and roles itself, so calling the Service bypasses only gateway-level policies, such as rate
+limits. Use `urlMode: gateway` where the reported URL resolves inside the cluster.
+
+The list is cached for `cacheTtlSeconds` (30). If Resource Inventory fails, the last good list is served, marked
+`stale`, for up to `staleTtlSeconds` (600). After that the call fails with 502. With `discovery: static`, only
+`backend.knowledge.instances` are listed: `{name, label, namespace, apiUrl, processUrl, mcpUrl}`, with `name` and
+`apiUrl` required and the URLs used as given. Values from Resource Inventory and from `instances` are validated before
+they become URLs, and a malformed entry is skipped with a warning.
+
+### Roles and capabilities
+
+TMFC060 has five roles on its client: `knowledge-viewer`, `knowledge-editor`, `ontology-editor`, `ontology-reviewer`
+and `ontology-approver`. A portal login token carries them in `resource_access["<instance>"]`, as long as the user
+holds one of them. Grant them in Keycloak, on the instance's client in the Canvas realm.
+
+- **`GET /api/knowledge/instances`** returns each instance with the user's `capabilities`:
+  - `roles`
+  - `operations`, from operationId to allowed
+  - the lifecycle `transitions` the user may make on knowledge-bases and ontology modules
+  - the `reviewKinds` they may post
+
+  These come from the roles in the token and from the `x-required-roles`, `x-lifecycle` and `x-review-kinds`
+  extensions of the OAS **the instance itself serves**. The OAS is fetched from `<apiUrl>/openapi.yaml` and
+  `<processUrl>/openapi.yaml`, capped at 2 MB and cached for 5 minutes. The page hides what the capabilities don't
+  allow. The client role named by `backend.knowledge.canvasSystemRole` (`canvasRole` by default, as the component's
+  `CANVAS_SYSTEM_ROLE`) counts as the OAS's symbolic `canvasSystemRole`.
+- **`/api/knowledge/{instance}/{path}`** forwards a call to the instance's TMFxxx or TMF701 API, with the **user's own
+  bearer token**. Only operations of the instance's OAS are forwarded. Listeners, hubs, event sources and schemas
+  aren't, and anything else is a 404 without calling the instance.
+  - **No role:** a user with no role on the instance gets a 403 from the portal.
+  - **Otherwise the component decides,** and its 403, like every other 4xx except 401, is passed through with its body.
+  - **Failures:** an upstream 401, redirect, 5xx, timeout or unreachable instance becomes a **502**, with no upstream
+    detail. The page treats a 401 as an expired portal session.
+  - **Headers:** only `Authorization`, `Accept`, `Content-Type`, `If-Match` and `If-None-Match` are forwarded, and
+    only `Content-Type`, `Content-Disposition`, `ETag`, `Last-Modified`, `X-Total-Count` and `X-Result-Count` are
+    returned.
+
+The portal logs users in through the `canvas-keycloak` Service, so its tokens name that Service as issuer. The TMFC060
+chart accepts it by default (`keycloak.issuerBaseUrls`). If the portal's `KEYCLOAK_URL` differs, add the portal's realm
+URL to the TMFC060 chart's `keycloak.extraIssuers`.
+
+### Uploads and downloads
+
+- **Streaming:** request and response bodies stream through the backend, and through the frontend nginx for
+  `/api/knowledge/`, without buffering.
+- **Caps:** a document upload may be up to `maxUploadBytes` (51 MiB: the component's 50 MiB documents plus the
+  multipart envelope). Every other body may be up to `maxBodyBytes` (10 MB). Above the cap the answer is 413, before
+  the body is read when its length is declared, and while streaming otherwise. The chart sets the frontend nginx
+  `client_max_body_size` for `/api/knowledge/` to `maxUploadBytes`.
+- **Downloads:** document content is always served as a download (`Content-Disposition: attachment`) with
+  `Content-Security-Policy: sandbox`, because knowledge-editors can upload HTML. Every proxied response carries
+  `X-Content-Type-Options: nosniff`.
+
+### Configuration
+
+| Value (`backend.knowledge.`) | Backend setting | Default |
+|---|---|---|
+| `discovery` | `KNOWLEDGE_DISCOVERY` | `ri` (`ri` or `static`) |
+| `resourceInventoryUrl` | `RESOURCE_INVENTORY_URL` | `http://resource-inventory.canvas.svc.cluster.local/tmf-api/resourceInventoryManagement/v5` |
+| `urlMode` | `KNOWLEDGE_URL_MODE` | `service` (`service` or `gateway`) |
+| `instances` | `KNOWLEDGE_INSTANCES_JSON` | `[]` |
+| `cacheTtlSeconds`, `staleTtlSeconds` | `KNOWLEDGE_CACHE_TTL_SECONDS`, `KNOWLEDGE_STALE_TTL_SECONDS` | `30`, `600` |
+| `canvasSystemRole` | `KNOWLEDGE_CANVAS_SYSTEM_ROLE` | `canvasRole` |
+| `maxBodyBytes` | `KNOWLEDGE_MAX_BODY_BYTES` | `10485760` |
+| `maxUploadBytes` | `KNOWLEDGE_MAX_UPLOAD_BYTES`, and the frontend's `KNOWLEDGE_MAX_UPLOAD_SIZE` | `53477376` |
+| `timeoutSeconds` | `KNOWLEDGE_TIMEOUT_SECONDS` | `60` |
+
+The backend needs no extra Kubernetes permissions for this: it reads Resource Inventory over HTTP and calls the
+instances with the user's token.
 
 ## Local development
 

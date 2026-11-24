@@ -190,6 +190,34 @@ backend:
     #     url: https://grafana.example.com
     #   - provider: prometheus
     #     url: https://prometheus.example.com
+  # TMFC060 Knowledge Management instances behind the AI > Knowledge page (canvas-portal-v2/README.md#knowledge).
+  knowledge:
+    # ri: every ODAComponent with componentId TMFC060 in TMF639 Resource Inventory. static: only `instances`.
+    discovery: ri
+    resourceInventoryUrl: http://resource-inventory.canvas.svc.cluster.local/tmf-api/resourceInventoryManagement/v5
+    # service: call each API's in-cluster Service (http://<implementation>.<namespace>.svc.cluster.local:<port><path>,
+    # Resource Inventory 1.2.1 or later). gateway: call the gateway URL Resource Inventory reports, for Canvases where
+    # it resolves inside the cluster.
+    urlMode: service
+    # With discovery: static. URLs are used as given.
+    instances: []
+    # - name: kmk-knowledgemanagement        # the component name, which is also its Keycloak client id
+    #   label: Knowledge (lab)
+    #   namespace: components
+    #   apiUrl: http://kmk-kmapi.components.svc.cluster.local:8080/kmk-knowledgemanagement/tmf-api/knowledgeManagement/v5
+    #   processUrl: http://kmk-kmapi.components.svc.cluster.local:8080/kmk-knowledgemanagement/tmf-api/process/v5
+    #   mcpUrl: http://kmk-kmmcp.components.svc.cluster.local:8080/kmk-knowledgemanagement/mcp
+    # How long the instance list is cached, and how long the last good list is served while Resource Inventory fails.
+    cacheTtlSeconds: 30
+    staleTtlSeconds: 600
+    # The instance client role that counts as the OAS's canvasSystemRole (the component's CANVAS_SYSTEM_ROLE).
+    canvasSystemRole: canvasRole
+    # The largest request body the proxy forwards, and the largest document upload (the component's 50 MiB plus the
+    # multipart envelope). maxUploadBytes is also the frontend nginx client_max_body_size for /api/knowledge/.
+    maxBodyBytes: 10485760
+    maxUploadBytes: 53477376
+    # Upstream timeout; recommend may call an LLM.
+    timeoutSeconds: 60
   # OpenAN Registry Center backing the AI Registries > Agents section.
   # Leave empty when OpenAN is not installed. Pair with secretEnv.REGISTRY_CENTER_TOKEN.
   registryCenter:
