@@ -76,6 +76,18 @@ class Settings(BaseSettings):
     REGISTRY_CREDENTIALS_SECRET: str = ""
     REGISTRY_CREDENTIALS_NAMESPACE: str = ""
 
+    # TMFC060 Knowledge Management instances behind the AI > Knowledge page. "ri" discovers them in
+    # TMF639 Resource Inventory; "static" uses KNOWLEDGE_INSTANCES_JSON only. KNOWLEDGE_URL_MODE "service"
+    # calls each API's in-cluster Service (the gateway URL may not resolve in the cluster, spike S2);
+    # "gateway" calls the URL Resource Inventory reports.
+    KNOWLEDGE_DISCOVERY: Literal["ri", "static"] = "ri"
+    KNOWLEDGE_INSTANCES_JSON: str = "[]"
+    KNOWLEDGE_URL_MODE: Literal["service", "gateway"] = "service"
+    RESOURCE_INVENTORY_URL: str = "http://resource-inventory.canvas.svc.cluster.local/tmf-api/resourceInventoryManagement/v5"
+    KNOWLEDGE_CACHE_TTL_SECONDS: int = 30
+    # How long the last good instance list is served, marked stale, while Resource Inventory fails.
+    KNOWLEDGE_STALE_TTL_SECONDS: int = 600
+
     @property
     def allowed_chart_sources(self) -> list[str]:
         import json

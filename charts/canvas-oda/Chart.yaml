@@ -16,7 +16,8 @@ type: application
 # to the chart and its templates, including the app version.
 # Versions are expected to follow Semantic Versioning (https://semver.org/)
 
-version: 1.2.6-rc16
+version: 1.2.6-rc17
+# version: 1.2.6-rc17 - Resource Inventory 1.2.1: port and path characteristics on API resources (Canvas Portal Knowledge discovery)
 # version: 1.2.6-rc16 - TMFOP013 agentgateway-mcp-operator 0.1.0 (MCP ExposedAPIs registered with agentgateway), off by default
 # version: 1.2.6-rc15 - Component Registry 0.2.0: DataResource category (ADR-011)
 # version: 1.2.6-rc14 - Resource Inventory 1.2.0: DataResource category and componentId (ADR-011)
@@ -157,7 +158,7 @@ dependencies:
     repository: 'file://../canvas-info-service'
     condition: canvas-info-service.enabled
   - name: resource-inventory
-    version: "1.2.0"
+    version: "1.2.1"
     repository: 'file://../resource-inventory'
     condition: resource-inventory.enabled
   - name: pdb-management-operator

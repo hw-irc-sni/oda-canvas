@@ -275,6 +275,14 @@ class KubernetesResourceService {
                 value: spec.implementation
             }
         ];
+        // Port and path of the implementation Service, so in-cluster clients can call it without the gateway,
+        // whose published url may not resolve inside the cluster (spike S2)
+        if (spec.port !== undefined && spec.port !== null) {
+            characteristics.push({ '@type': 'Characteristic', name: 'port', value: spec.port });
+        }
+        if (spec.path) {
+            characteristics.push({ '@type': 'Characteristic', name: 'path', value: spec.path });
+        }
 
 		// Format was changed from array to flattened key-value pairs
         // // Add specification characteristic if spec.specification exists and is an array

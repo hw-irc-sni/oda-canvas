@@ -37,6 +37,11 @@ The TMF639 Resource Inventory service wraps the Kubernetes API to provide TMF-co
 - Component namespace mapped to resource place
 
 ### ExposedAPIs → TMF639 Resources  
+- Characteristics `namespace`, `apiName`, `apiType`, `url` (the gateway URL from `status.apiStatus.url`),
+  `implementation` (the Service name), `port` and `path` (`spec.port` and `spec.path`, from 1.2.1), `specification`
+  and `apiDocs`. In-cluster clients such as the Canvas Portal build
+  `http://<implementation>.<namespace>.svc.cluster.local:<port><path>` from them, because the gateway URL may not
+  resolve inside the cluster
 - API specification mapped to resource characteristics
 - API status mapped to resource operational state
 - API configuration mapped to resource properties
