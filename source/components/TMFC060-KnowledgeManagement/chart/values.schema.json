@@ -141,6 +141,28 @@
           "type": "object"
         }
       }
+    },
+    "shapes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "path"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^/].*$"
+          }
+        }
+      }
     }
   },
   "required": [
@@ -943,6 +965,90 @@
               }
             }
           }
+        }
+      }
+    },
+    "ontologySources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "kind"
+        ],
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "kind",
+              "url"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+                "maxLength": 40
+              },
+              "kind": {
+                "const": "git"
+              },
+              "url": {
+                "type": "string",
+                "pattern": "^https://\\S+$"
+              },
+              "ref": {
+                "type": "string",
+                "minLength": 1
+              },
+              "credentialSecret": {
+                "type": "string",
+                "pattern": "^[a-z0-9]([-.a-z0-9]*[a-z0-9])?$"
+              },
+              "shapes": {
+                "$ref": "#/definitions/shapes"
+              }
+            }
+          },
+          {
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "kind",
+              "secretName"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+                "maxLength": 40
+              },
+              "kind": {
+                "const": "secretMount"
+              },
+              "secretName": {
+                "type": "string",
+                "pattern": "^[a-z0-9]([-.a-z0-9]*[a-z0-9])?$"
+              },
+              "path": {
+                "type": "string",
+                "pattern": "^[^/]*$|^[^/].*[^/]$"
+              },
+              "shapes": {
+                "$ref": "#/definitions/shapes"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "ontologySync": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "intervalSeconds": {
+          "type": "integer",
+          "minimum": 60
         }
       }
     }

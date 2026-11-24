@@ -166,3 +166,27 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- $name := .Values.modelResolver.modelGatewayService.name -}}
 {{- if contains "/" $name -}}{{ first (splitList "/" $name) }}{{- else -}}{{ .Release.Namespace }}{{- end -}}
 {{- end -}}
+
+{{/* ONTOLOGY_SOURCES for the API: the values' ontologySources in the API's JSON form; fails on duplicate names */}}
+{{- define "km.ontologySourcesJson" -}}
+{{- $out := list -}}
+{{- $seen := dict -}}
+{{- range .Values.ontologySources -}}
+{{- if hasKey $seen .name -}}{{- fail (printf "ontologySources: the name %s is used twice" .name) -}}{{- end -}}
+{{- $_ := set $seen .name true -}}
+{{- $item := dict "name" .name -}}
+{{- if eq .kind "git" -}}
+{{- $git := dict "url" .url "ref" (.ref | default "main") -}}
+{{- with .credentialSecret }}{{ $_ := set $git "secretRef" . }}{{ end -}}
+{{- $_ := set $item "git" $git -}}
+{{- else -}}
+{{- $path := printf "/etc/tmfc060/ontologies/%s" .name -}}
+{{- with .path }}{{ $path = printf "%s/%s" $path . }}{{ end -}}
+{{- $_ := set $item "mount" (dict "path" $path) -}}
+{{- end -}}
+{{- with .shapes }}{{ $_ := set $item "shapes" . }}{{ end -}}
+{{- $out = append $out $item -}}
+{{- end -}}
+{{- toJson $out -}}
+{{- end -}}
+{{- define "km.ontologySourcesConfigMap" -}}{{ include "km.name" (dict "root" . "suffix" "km-ontology-sources") }}{{- end -}}

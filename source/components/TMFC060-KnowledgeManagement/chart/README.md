@@ -84,6 +84,27 @@ Qdrant keeps files open for every collection segment, and the API creates one co
 
 The subchart needs `helm dependency build` (the repository is `https://qdrant.github.io/qdrant-helm`) before `helm install` from a checkout; `tests/check.sh` runs it when `charts/` is empty.
 
+## Ontology sources
+
+**No ontology content ships in the images or in this chart** (licensing decision). Ontology modules come from the federation repositories in `ontologySources`, or are uploaded through the API. A default install has `ontologySources: []`, so zero modules.
+
+Each source is a repository in FTO layout (`modules.json`, `catalog.json`), synced at startup and every `ontologySync.intervalSeconds` (default 900):
+
+| Kind | Values | Mounted as |
+|---|---|---|
+| `git` | `name`, `url` (https), `ref` (default `main`), optional `credentialSecret`, optional `shapes` | The credential Secret (keys `username`, `password` = a read-only token) is mounted at `/etc/tmfc060/git/<credentialSecret>/` and reaches git through `GIT_ASKPASS`, never the URL |
+| `secretMount` | `name`, `secretName`, optional `path`, optional `shapes` | The Secret holding the repository's files is mounted at `/etc/tmfc060/ontologies/<name>/`. Secrets hold at most 1 MiB |
+
+`shapes: [{id, path}]` turns a file or folder of `.ttl` in the repository into a `specKind: shapes` module. The chart renders the sources into the ConfigMap `<release>-km-ontology-sources`, which the API reads as `ONTOLOGY_SOURCES`. A change to the sources restarts the API.
+
+`values-fto-demo.yaml` loads the FTO federation from the private `hw-irc-sni/tfo` repository:
+
+```bash
+kubectl create secret generic tfo-git -n components \
+  --from-literal=username=x-access-token --from-literal=password=<read-only token>
+helm install km . -n components -f values-fto-demo.yaml
+```
+
 ## Data resources (provider DataResourceConfig)
 
 The chart declares the component's stores to the Canvas as a provider `DataResourceConfig` (`oda.tmforum.org/v1alpha1`, ADR-010), named like the Component:

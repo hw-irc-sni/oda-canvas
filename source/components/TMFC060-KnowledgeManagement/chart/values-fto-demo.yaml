@@ -1,0 +1,17 @@
+# Demo values: the API syncs the FTO federation from the private hw-irc-sni/tfo repository.
+# Nothing of that repository is in this chart or in the images: the API clones it at runtime (licensing decision).
+#
+# Create the credential Secret first, with a read-only token of an account that can read the repository:
+#   kubectl create secret generic tfo-git -n components \
+#     --from-literal=username=x-access-token --from-literal=password=<token>
+# Then:
+#   helm install km . -n components -f values-fto-demo.yaml
+ontologySources:
+- name: fto
+  kind: git
+  url: https://github.com/hw-irc-sni/tfo.git
+  ref: main
+  credentialSecret: tfo-git
+  shapes:
+  - id: tio-shacl-ext
+    path: implementation/tio-shacl-ext/rdf

@@ -159,6 +159,18 @@ dependentAPIs:
     description: Party Role Management
     specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF669_Party_Role/5.0.0/swagger/TMF669-Party_Role_Management-v5.0.0.oas.yaml
 
+# Ontology sources: federation repositories in FTO layout (modules.json, catalog.json), synced into ontology modules at
+# startup and every ontologySync.intervalSeconds. No ontology content ships in the images or the chart: modules come
+# from these sources (or are uploaded through the API). Each item is one of
+#   {name, kind: git, url, ref, credentialSecret, shapes}  credentialSecret: a Secret with username and password
+#                                                          (a read-only token), for a private repository
+#   {name, kind: secretMount, secretName, path, shapes}    the repository's files in a Secret, mounted read-only
+# shapes: [{id, path}] turns a file or folder of .ttl in the repository into a SHACL shapes module.
+# values-fto-demo.yaml is an example with the private tfo repository.
+ontologySources: []
+ontologySync:
+  intervalSeconds: 900
+
 # Provider DataResourceConfig (ADR-010): declares the component's stores to the Canvas. It is rendered when the Canvas
 # has the oda.tmforum.org/v1alpha1 DataResourceConfig CRD (Phase 4), or when enabled is true, so the chart also
 # installs on a Canvas without it. The stores are declared, not their knowledge-bases: the Data Resource Management

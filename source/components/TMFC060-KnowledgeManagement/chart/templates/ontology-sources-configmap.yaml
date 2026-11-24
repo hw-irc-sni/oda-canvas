@@ -1,0 +1,11 @@
+{{- if .Values.ontologySources }}
+# The API's ONTOLOGY_SOURCES (federation repositories it syncs into ontology modules)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "km.ontologySourcesConfigMap" . }}
+  labels:
+    {{- include "km.labels" . | nindent 4 }}
+data:
+  sources.json: {{ include "km.ontologySourcesJson" . | quote }}
+{{- end }}

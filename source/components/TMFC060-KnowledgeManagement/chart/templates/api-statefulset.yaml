@@ -33,10 +33,12 @@ spec:
       labels:
         {{- include "km.labels" . | nindent 8 }}
         app.kubernetes.io/component: api
-      {{- with $v.podAnnotations }}
       annotations:
+        # A change of the ontology sources restarts the API, which syncs them at startup
+        checksum/ontology-sources: {{ include "km.ontologySourcesJson" . | sha256sum | trunc 16 }}
+        {{- with $v.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "km.apiServiceAccount" . }}
       securityContext:
@@ -96,6 +98,12 @@ spec:
         - {name: EVENT_CALLBACK_ALLOWED_HOSTS, value: {{ join "," .Values.events.callbackAllowedHosts | quote }}}
         - {name: CANVAS_INFO_URL, value: {{ .Values.events.canvasInfoUrl | quote }}}
         - {name: EVENT_HREF_BASE, value: {{ .Values.events.hrefBase | quote }}}
+        - {name: ONTOLOGY_SYNC_INTERVAL, value: {{ .Values.ontologySync.intervalSeconds | quote }}}
+        {{- if .Values.ontologySources }}
+        - name: ONTOLOGY_SOURCES
+          valueFrom:
+            configMapKeyRef: {name: {{ include "km.ontologySourcesConfigMap" . }}, key: sources.json}
+        {{- end }}
         - {name: LOG_LEVEL, value: {{ $v.logLevel | quote }}}
         {{- with $v.extraEnv }}
         {{- toYaml . | nindent 8 }}
@@ -121,6 +129,13 @@ spec:
         {{- if $qdrantKey }}
         - {name: qdrant-key, mountPath: /etc/tmfc060/qdrant, readOnly: true}
         {{- end }}
+        {{- range .Values.ontologySources }}
+        {{- if and (eq .kind "git") .credentialSecret }}
+        - {name: {{ printf "git-%s" .name }}, mountPath: {{ printf "/etc/tmfc060/git/%s" .credentialSecret }}, readOnly: true}
+        {{- else if eq .kind "secretMount" }}
+        - {name: {{ printf "ontology-%s" .name }}, mountPath: {{ printf "/etc/tmfc060/ontologies/%s" .name }}, readOnly: true}
+        {{- end }}
+        {{- end }}
         {{- if and .Values.models.openaiCompatible.baseUrl .Values.models.openaiCompatible.apiKeySecret }}
         - {name: openai-key, mountPath: /etc/tmfc060/openai, readOnly: true}
         {{- end }}
@@ -131,6 +146,18 @@ spec:
         secret:
           secretName: {{ include "km.tokenSecret" . }}
           items: [{key: token, path: token}]
+      {{- range .Values.ontologySources }}
+      {{- if and (eq .kind "git") .credentialSecret }}
+      - name: {{ printf "git-%s" .name }}
+        secret:
+          secretName: {{ .credentialSecret }}
+          items: [{key: username, path: username}, {key: password, path: password}]
+      {{- else if eq .kind "secretMount" }}
+      - name: {{ printf "ontology-%s" .name }}
+        secret:
+          secretName: {{ .secretName }}
+      {{- end }}
+      {{- end }}
       {{- if $qdrantKey }}
       - name: qdrant-key
         secret:

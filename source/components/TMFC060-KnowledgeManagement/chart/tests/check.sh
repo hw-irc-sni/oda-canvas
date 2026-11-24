@@ -176,5 +176,25 @@ refuse "an exposedAPI the Component lacks" "providedDataResources.0.exposedAPI" 
 refuse "topK above the API limit" "topK" --set dataResourceConfig.providedDataResources[0].retrieval.topK=500
 refuse "no provided data resources" "providedDataResources" --set-json 'dataResourceConfig.providedDataResources=[]'
 
+# Ontology sources (#57)
+mounts='{m["mountPath"]: m["name"] for m in pod("StatefulSet", "km-kmapi")["containers"][0]["volumeMounts"]}'
+expect "no ontology sources by default" \
+  '"ONTOLOGY_SOURCES" not in env("StatefulSet", "km-kmapi") and not [d for d in kind("ConfigMap") if d["metadata"]["name"] == "km-km-ontology-sources"] and env("StatefulSet", "km-kmapi")["ONTOLOGY_SYNC_INTERVAL"] == "900"'
+expect "the fto demo: a git source with its credential Secret" \
+  '__import__("json").loads(one("ConfigMap", "km-km-ontology-sources")["data"]["sources.json"]) == [{"name": "fto", "git": {"url": "https://github.com/hw-irc-sni/tfo.git", "ref": "main", "secretRef": "tfo-git"}, "shapes": [{"id": "tio-shacl-ext", "path": "implementation/tio-shacl-ext/rdf"}]}] and env("StatefulSet", "km-kmapi")["ONTOLOGY_SOURCES"] == {"configMapKeyRef": {"name": "km-km-ontology-sources", "key": "sources.json"}} and '"$mounts"'.get("/etc/tmfc060/git/tfo-git") == "git-fto"' \
+  -f "$CHART/values-fto-demo.yaml"
+expect "a secretMount source is mounted under the mount root" \
+  '__import__("json").loads(one("ConfigMap", "km-km-ontology-sources")["data"]["sources.json"]) == [{"name": "local", "mount": {"path": "/etc/tmfc060/ontologies/local/repo"}}] and '"$mounts"'.get("/etc/tmfc060/ontologies/local") == "ontology-local"' \
+  --set-json 'ontologySources=[{"name":"local","kind":"secretMount","secretName":"onto","path":"repo"}]'
+expect "the API restarts when the sources change" \
+  'one("StatefulSet", "km-kmapi")["spec"]["template"]["metadata"]["annotations"]["checksum/ontology-sources"] != "'"$(render | python3 -c 'import sys,yaml; print([d for d in yaml.safe_load_all(sys.stdin) if d and d["kind"]=="StatefulSet" and d["metadata"]["name"]=="km-kmapi"][0]["spec"]["template"]["metadata"]["annotations"]["checksum/ontology-sources"])')"'"' \
+  -f "$CHART/values-fto-demo.yaml"
+refuse "unknown source kind" "ontologySources.0" --set-json 'ontologySources=[{"name":"x","kind":"svn","url":"https://x"}]'
+refuse "git source without a URL" "ontologySources.0" --set-json 'ontologySources=[{"name":"x","kind":"git"}]'
+refuse "git source over http" "ontologySources.0" --set-json 'ontologySources=[{"name":"x","kind":"git","url":"http://example.org/r.git"}]'
+refuse "secretMount without a Secret" "ontologySources.0" --set-json 'ontologySources=[{"name":"x","kind":"secretMount"}]'
+refuse "duplicate source names" "used twice" --set-json 'ontologySources=[{"name":"x","kind":"git","url":"https://a"},{"name":"x","kind":"git","url":"https://b"}]'
+refuse "sync more often than every minute" "intervalSeconds" --set ontologySync.intervalSeconds=5
+
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all chart checks passed"
