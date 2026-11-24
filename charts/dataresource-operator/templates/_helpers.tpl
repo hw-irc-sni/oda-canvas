@@ -52,6 +52,8 @@ seccompProfile:
     secretKeyRef:
       name: {{ .Values.keycloak.adminSecret }}
       key: {{ .Values.keycloak.adminPasswordKey }}
+      # Optional: without it the setup Job fails with a clear message and the teardown exits without blocking
+      optional: true
 - name: OPERATOR_CLIENT_ID
   value: {{ .Values.oidc.clientId | quote }}
 - name: OIDC_SECRET_NAME
