@@ -17,8 +17,8 @@ The reference implementation is the TMFC060 Knowledge Management component. Its 
   | `knowledge-viewer` | Read knowledge-bases, search, query and recommend |
   | `knowledge-editor` | Change knowledge-bases, upload documents and start ingestion |
   | `ontology-editor` | Create and propose ontology modules and mappings |
-  | `ontology-reviewer` | Review proposals and comment on them |
-  | `ontology-approver` | Rule proposals, publish and deprecate modules |
+  | `ontology-reviewer` | Review proposals and comment on them; list knowledge-bases and start their review |
+  | `ontology-approver` | Rule proposals, publish and deprecate modules and knowledge-bases; list knowledge-bases |
 
 - The component authorises every call against these roles, whether it comes from the Canvas Portal, an agent over MCP, or another component.
 - An LLM and an embedding model are reachable through the Canvas model access path, or through a configured OpenAI-compatible endpoint.
