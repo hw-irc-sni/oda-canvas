@@ -8,6 +8,7 @@ import { useKnowledge } from '../KnowledgeContext'
 import { LIFECYCLE_STATUSES, Muted, NeutralTag, QueryError, StatusTag, formatDate } from '../shared'
 import { SOURCE_LABELS, baseName, hasVectors, mayEdit } from './bases'
 import DeleteBaseModal from './DeleteBaseModal'
+import KnowledgeBaseDrawer from './KnowledgeBaseDrawer'
 import KnowledgeBaseForm from './KnowledgeBaseForm'
 
 const count = (value: number | undefined) => (value === undefined ? '—' : value.toLocaleString())
@@ -19,6 +20,7 @@ export default function KnowledgeBaseList() {
   const [text, setText] = useState('')
   const [editing, setEditing] = useState<Knowledge | 'new'>()
   const [deleting, setDeleting] = useState<Knowledge>()
+  const [selected, setSelected] = useState<string>()
   const bases = query.data ?? []
   const shown = useMemo(() => {
     const needle = text.trim().toLowerCase()
@@ -145,6 +147,20 @@ export default function KnowledgeBaseList() {
         scroll={{ x: 1160 }}
         pagination={{ pageSize: 20, hideOnSinglePage: true }}
         locale={{ emptyText: bases.length === 0 ? 'No knowledge-base yet.' : 'No knowledge-base matches.' }}
+        onRow={(kb) => ({
+          onClick: () => setSelected(kb.id),
+          onKeyDown: (e) => {
+            if (e.key === 'Enter') setSelected(kb.id)
+          },
+          tabIndex: 0,
+          style: { cursor: 'pointer' },
+        })}
+      />
+      <KnowledgeBaseDrawer
+        base={bases.find((kb) => kb.id === selected)}
+        onClose={() => setSelected(undefined)}
+        onEdit={setEditing}
+        onDelete={setDeleting}
       />
       {editing && <KnowledgeBaseForm base={editing === 'new' ? undefined : editing} onClose={() => setEditing(undefined)} />}
       {deleting && <DeleteBaseModal base={deleting} onClose={() => setDeleting(undefined)} />}

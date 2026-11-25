@@ -39,6 +39,13 @@ export interface KnowledgeInstance {
   /** Null when the instance is unavailable or its API description can't be read (see capabilitiesError). */
   capabilities: Capabilities | null
   capabilitiesError: string | null
+  /** The active model route of the component; null when it can't be read. */
+  modelRoute?: ModelRoute | null
+}
+
+export interface ModelRoute {
+  status: 'up' | 'down' | 'unknown' | 'not-configured'
+  route: string | null
 }
 
 export interface KnowledgeInstanceList {
@@ -902,6 +909,11 @@ function key(instance: string, scope: Scope, ...rest: unknown[]) {
   return ['knowledge-api', instance, scope, ...rest]
 }
 
+/** Every query about the knowledge-bases of an instance, for invalidation. */
+export function knowledgeScopeKey(instance: string) {
+  return key(instance, 'knowledge')
+}
+
 /** Retry the portal's 5xx and network errors, never a 4xx: the component has decided. */
 function retry(failureCount: number, error: unknown): boolean {
   const status = knowledgeErrorStatus(error)
@@ -920,6 +932,8 @@ function useInstanceQuery<T>(queryKey: unknown[], queryFn: () => Promise<T>, opt
     queryFn,
     retry,
     enabled,
+    // Several people work on the same items: opening one shows its current state, not the last one seen here.
+    staleTime: 0,
     refetchInterval: typeof refetchInterval === 'function' ? (query) => refetchInterval(query.state.data as T | undefined) : refetchInterval,
   })
 }
@@ -1028,6 +1042,7 @@ export function useMappingsOf(instance: string, ids: string[]) {
       queryKey: key(instance, 'specification', 'item', id, 'mapping'),
       queryFn: () => fetchMappings(instance, id),
       retry,
+      staleTime: 0,
     })),
   })
 }
