@@ -311,7 +311,8 @@ knowledge-bases); the review rules from `x-review-kinds` of `ReviewItem`.
 - A ruling `agreed` runs validation first and is refused (409) unless it conforms
   (`GOVERNANCE_REQUIRE_VALIDATION`, default true).
 - Modules imported by the federation sync are governed by their repository: 409.
-- Every transition is recorded in `state_transition` and published as a StateChange event, and written back to RDF:
+- Every transition is recorded in `state_transition`, listed by `GET /knowledgeSpecification/{id}/transition` (the
+  module's and its mappings', with the review item that made it), and published as a StateChange event, and written back to RDF:
   `fto:linkStatus` and `owl:deprecated` on the module's `owl:Ontology` node; `adms:status` and, per ruling, a
   `prov:Activity` in the governance graph `urn:tmfc060:governance`.
 
@@ -403,7 +404,7 @@ accepted issuer and contain `COMPONENT_NAME` in `aud`. The caller's roles are
 | Read knowledge-bases (list, get, graph GET, query, search, recommend and feedback, documents, `/hub`) | `knowledge-viewer`, `knowledge-editor`, `canvasSystemRole` |
 | Change knowledge-bases (create, graph PUT/POST/DELETE, document upload/delete, ingest) | `knowledge-editor`, `canvasSystemRole` |
 | Patch a knowledge-base (lifecycle transitions per `x-lifecycle` of `Knowledge`) | `knowledge-editor`, `ontology-reviewer`, `ontology-approver`, `canvasSystemRole` |
-| Read the ontology (modules, content, mappings, reviews, validation, `/knowledgeTerm`) | all five component roles, `canvasSystemRole` |
+| Read the ontology (modules, content, mappings, reviews, transitions, validation, `/knowledgeTerm`) | all five component roles, `canvasSystemRole` |
 | Author modules, content and mappings | `ontology-editor` |
 | Review: comment, run validation | `ontology-reviewer` (editor and approver may also run validation) |
 | Rule | `ontology-approver` |

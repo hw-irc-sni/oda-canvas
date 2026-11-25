@@ -130,6 +130,7 @@ Sub-resources:
 * `/knowledgeSpecification/{id}/content`: the module in Turtle.
 * `/knowledgeSpecification/{id}/mapping`: bridge statements, each with subject, predicate, object, status (agreed or proposed), confidence (high, medium or low) and rationale. This is FTO's reified `bridge:mapping`.
 * `/knowledgeSpecification/{id}/review`: proposals, review comments, and rulings with approver and date.
+* `/knowledgeSpecification/{id}/transition`: the lifecycle history of the module and its mappings (from, to, actor, date, and the review item that made the transition, if any).
 * `/knowledgeSpecification/{id}/validation`: the structural check results and the SHACL report.
 * `/knowledgeTerm?iri=|q=`: describe, search and layer-chain lookups, equivalent to the FTO MCP tools `fto_describe`, `fto_search` and `fto_layer_of`. It is a separate path so that it cannot collide with a module id under `/knowledgeSpecification/{id}`.
 
@@ -333,7 +334,7 @@ Every operation of the API lists the roles allowed to call it in an `x-required-
 |---|---|
 | Read knowledge-bases: list, get, graph GET, query, search, recommend and its feedback, documents, `/hub` | `knowledge-viewer`, `knowledge-editor`, `canvasSystemRole` |
 | Change knowledge-bases: create, patch, delete, graph PUT/POST/DELETE, document upload and delete, ingest | `knowledge-editor`, `canvasSystemRole` |
-| Read the ontology: modules, content, mappings, review history, validation report, `/knowledgeTerm` | all five component roles and `canvasSystemRole` |
+| Read the ontology: modules, content, mappings, review history, transition history, validation report, `/knowledgeTerm` | all five component roles and `canvasSystemRole` |
 | Author: create a module, change its fields or content, create or change mappings | `ontology-editor` |
 | Review: comment, run validation | `ontology-reviewer` (editors and approvers may also run validation) |
 | Rule: rulings | `ontology-approver` |

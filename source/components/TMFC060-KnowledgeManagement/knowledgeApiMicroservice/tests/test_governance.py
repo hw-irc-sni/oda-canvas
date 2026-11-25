@@ -154,6 +154,78 @@ async def test_rejected_returns_to_draft_and_keeps_the_history(api):
     assert [(i["kind"], i.get("ruling")) for i in items] == [("proposal", None), ("ruling", "rejected")]
 
 
+async def transitions(api, url, role="knowledge-viewer", **params):
+    response = await api.get(f"{url}/transition", headers=auth(role), params=params)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+async def test_the_transition_history_lists_every_transition(api):
+    url = await new_module(api)
+    assert await transitions(api, url) == []
+    proposal = (await review(api, url, EDITOR, kind="proposal")).json()["id"]
+    await move(api, url, "inReview", REVIEWER)
+    await review(api, url, REVIEWER, kind="comment", text="not a transition")
+    ruling = (await review(api, url, APPROVER, kind="ruling", ruling="rejected")).json()["id"]
+    await move(api, url, "draft", EDITOR)
+    items = await transitions(api, url)
+    assert [(i["from"], i["to"], i.get("reviewItem")) for i in items] == [
+        ("draft", "proposed", proposal), ("proposed", "inReview", None), ("inReview", "rejected", ruling),
+        ("rejected", "draft", None)]
+    assert all(i["target"] == {"kind": "module", "id": "mod"} and i["actor"] == "alice" and i["date"].endswith("Z")
+               and i["id"] for i in items)
+    assert [i["to"] for i in await transitions(api, url, offset=1, limit=2)] == ["inReview", "rejected"]
+    assert set((await transitions(api, url, fields="to"))[0]) == {"id", "to"}
+
+
+async def test_the_transition_history_covers_mappings_and_edit_resets(api):
+    module = await new_module(api)
+    base = f"{api.base}/knowledgeSpecification"
+    for mid in ("br", "br-2"):
+        assert (await api.post(base, json={"id": mid, "name": mid, "iri": f"https://example.org/{mid}", "specKind": "bridge",
+                                           "source": {"kind": "upload"}}, headers=auth(EDITOR))).status_code == 201
+        assert (await api.post(f"{base}/{mid}/mapping", headers=auth(EDITOR), json={
+            "id": "m-1", "subject": "https://example.org/mod#A", "predicate": "skos:closeMatch",
+            "object": "https://example.org/mod#B"})).status_code == 201
+    target = {"kind": "mapping", "id": "m-1"}
+    assert (await review(api, f"{base}/br", EDITOR, kind="proposal", target=target)).status_code == 201
+    await move(api, f"{base}/br/mapping/m-1", "inReview", REVIEWER)
+    assert (await review(api, f"{base}/br", APPROVER, kind="ruling", ruling="agreed", target=target)).status_code == 201
+    assert (await api.patch(f"{base}/br/mapping/m-1", json={"rationale": "x"}, headers=auth(EDITOR))).status_code == 200
+    items = await transitions(api, f"{base}/br")
+    assert [(i["from"], i["to"]) for i in items] == [("draft", "proposed"), ("proposed", "inReview"),
+                                                     ("inReview", "agreed"), ("agreed", "draft")]
+    assert all(i["target"] == target for i in items)
+    assert await transitions(api, f"{base}/br-2") == [] and await transitions(api, module) == []  # no other module's
+
+
+async def test_the_transition_history_starts_with_the_current_module_and_mapping(api):
+    url = await new_module(api)
+    await review(api, url, EDITOR, kind="proposal")
+    assert (await api.delete(url, headers=auth(APPROVER))).status_code == 204
+    assert (await api.get(f"{url}/transition", headers=auth())).status_code == 404
+    url = await new_module(api)
+    assert await transitions(api, url) == []  # not the history of the deleted module with the same id
+    bridge = f"{api.base}/knowledgeSpecification/br"
+    assert (await api.post(f"{api.base}/knowledgeSpecification", json={
+        "id": "br", "name": "br", "iri": "https://example.org/br", "specKind": "bridge", "source": {"kind": "upload"}},
+        headers=auth(EDITOR))).status_code == 201
+    mapping = {"id": "m-1", "subject": "https://example.org/mod#A", "predicate": "skos:closeMatch",
+               "object": "https://example.org/mod#B"}
+    for _ in range(2):
+        assert (await api.post(f"{bridge}/mapping", json=mapping, headers=auth(EDITOR))).status_code == 201
+        assert await transitions(api, bridge) == []
+        await review(api, bridge, EDITOR, kind="proposal", target={"kind": "mapping", "id": "m-1"})
+        assert len(await transitions(api, bridge)) == 1
+        assert (await api.delete(f"{bridge}/mapping/m-1", headers=auth(APPROVER))).status_code == 204
+        assert len(await transitions(api, bridge)) >= 1  # a deleted mapping's history stays until its id is used again
+
+
+async def test_the_transition_history_needs_a_reading_role(api):
+    url = await new_module(api)
+    assert (await api.get(f"{url}/transition", headers=auth("unknown-role"))).status_code == 403
+
+
 async def test_validation_gate_blocks_agreed(api):
     url = await new_module(api, content=BAD)  # declares another ontology IRI: catalogIntegrity error
     await review(api, url, EDITOR, kind="proposal")

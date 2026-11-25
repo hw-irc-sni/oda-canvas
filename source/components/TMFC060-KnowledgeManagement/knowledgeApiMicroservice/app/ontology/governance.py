@@ -19,10 +19,10 @@ from pathlib import Path
 
 import yaml
 from pyoxigraph import Literal, NamedNode, Quad
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
 from ..auth import Principal
-from ..db.models import ReviewItem, StateTransition
+from ..db.models import Mapping, ReviewItem, StateTransition
 from ..errors import ApiError
 from ..events import Event
 from ..graphstore import GOVERNANCE_GRAPH, module_graph
@@ -252,6 +252,32 @@ class Governance:
         items = (await self.session.scalars(select(ReviewItem).where(ReviewItem.specification_id == module_id)
                                             .order_by(ReviewItem.created))).all()
         return [self.present(i) for i in items]
+
+    async def list_transitions(self, module_id: str) -> list[dict]:
+        """The transitions of the module and of its mappings. The audit trail outlives a deleted module or mapping,
+        so rows older than the current one (another one that had its id) are left out."""
+        row = await self.registry.get_row(module_id)
+        prefix = f"{module_id}/"
+        rows = (await self.session.scalars(select(StateTransition).where(
+            StateTransition.at >= row.created,
+            or_(and_(StateTransition.target_kind == "module", StateTransition.target_id == module_id),
+                and_(StateTransition.target_kind == "mapping",
+                     StateTransition.target_id.startswith(prefix, autoescape=True))))
+            .order_by(StateTransition.id))).all()
+        mappings = {m.id: m.created for m in (await self.session.scalars(select(Mapping).where(
+            Mapping.specification_id == module_id))).all()}
+        out = []
+        for t in rows:
+            target_id = t.target_id
+            if t.target_kind == "mapping":
+                target_id = t.target_id[len(prefix):]
+                if target_id in mappings and t.at < mappings[target_id]:
+                    continue
+            item = {"id": str(t.id), "target": {"kind": t.target_kind, "id": target_id}, "from": t.from_state,
+                    "to": t.to_state, "actor": t.actor, "reviewItem": t.review_item_id,
+                    "date": t.at.isoformat().replace("+00:00", "Z")}
+            out.append({k: v for k, v in item.items() if v is not None})
+        return out
 
     @staticmethod
     def present(item: ReviewItem) -> dict:

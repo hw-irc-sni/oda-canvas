@@ -492,6 +492,8 @@ ONTOLOGY_ROUTES = [
     ("createKnowledgeSpecificationReview", "ontology-reviewer", "POST", "knowledgeSpecification/mod/review",
      b'{"kind": "comment", "target": {"kind": "module", "id": "mod"}, "text": "ok"}', "application/json",
      f"{SPEC}/mod/review", 201, b'{"id": "r1"}', "application/json"),
+    ("listKnowledgeSpecificationTransition", "knowledge-viewer", "GET", "knowledgeSpecification/mod/transition?limit=5", None,
+     None, f"{SPEC}/mod/transition?limit=5", 200, b"[]", "application/json"),
     ("retrieveKnowledgeSpecificationValidation", "knowledge-viewer", "GET", "knowledgeSpecification/mod/validation", None,
      None, f"{SPEC}/mod/validation", 200, b'{"conforms": true}', "application/json"),
     ("runKnowledgeSpecificationValidation", "ontology-editor", "POST", "knowledgeSpecification/mod/validation", None, None,

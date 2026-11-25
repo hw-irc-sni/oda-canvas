@@ -1631,6 +1631,48 @@ paths:
           $ref: '#/components/responses/500'
         default:
           $ref: '#/components/responses/Error'
+  '/knowledgeSpecification/{id}/transition':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: listKnowledgeSpecificationTransition
+      summary: Lists the lifecycle history of a module
+      description: >-
+        Lists the lifecycle transitions of the module and of its mappings, oldest first: those made by a review item (a proposal or a ruling), by a PATCH of `lifecycleStatus`, and by editing an agreed or published mapping, which takes it back to `draft`.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LifecycleTransition'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
   '/knowledgeSpecification/{id}/validation':
     parameters:
       - $ref: '#/components/parameters/Id'
@@ -3839,6 +3881,31 @@ components:
             - rejected
         linkStatus:
           $ref: '#/components/schemas/LinkStatusType'
+    LifecycleTransition:
+      type: object
+      description: A lifecycle transition of a module or of one of its mappings, as it happened.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        target:
+          $ref: '#/components/schemas/ReviewTarget'
+        from:
+          $ref: '#/components/schemas/GovernedLifecycleStatusType'
+        to:
+          $ref: '#/components/schemas/GovernedLifecycleStatusType'
+        actor:
+          type: string
+          readOnly: true
+          description: Who made the transition, from the token.
+        reviewItem:
+          type: string
+          readOnly: true
+          description: The id of the proposal or ruling that made the transition, if one did.
+        date:
+          type: string
+          format: date-time
+          readOnly: true
     ValidationMessage:
       type: object
       required:

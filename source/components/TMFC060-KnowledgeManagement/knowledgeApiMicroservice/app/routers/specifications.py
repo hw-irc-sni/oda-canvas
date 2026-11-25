@@ -162,6 +162,12 @@ async def create_review(id: str, request: Request, s: AsyncSession = Depends(ses
     return JSONResponse(item, status_code=201)
 
 
+@router.get("/knowledgeSpecification/{id}/transition")
+async def list_transitions(id: str, request: Request, s: AsyncSession = Depends(session),
+                           _: Principal = Depends(require_operation("listKnowledgeSpecificationTransition"))):
+    return list_response(request, await governance_for(request, s).list_transitions(id))
+
+
 @router.get("/knowledgeSpecification/{id}/validation")
 async def retrieve_validation(id: str, request: Request, s: AsyncSession = Depends(session),
                               _: Principal = Depends(require_operation("retrieveKnowledgeSpecificationValidation"))):
