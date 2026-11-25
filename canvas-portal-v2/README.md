@@ -275,6 +275,19 @@ The AI > Knowledge page works with the **TMFC060 Knowledge Management** instance
 and the federated ontology they serve (`source/components/TMFC060-KnowledgeManagement`). The backend lists them,
 tells the page what the user may do on each, and forwards the page's calls to them.
 
+### The page
+
+The instance picker in the header remembers the last choice in the browser. Each part shows only what the user's roles
+on the instance allow; the component checks every call again.
+
+| Section | Views |
+|---|---|
+| **Knowledge-Base** | The knowledge-bases (create, edit, delete). Each one's details: overview with statistics, active model route and lifecycle; documents; sources and ingestion; jobs (TMF701); pipeline proposals; search and recommendations; graph explorer with RDF import and export; SPARQL console |
+| **Federated Ontology** | Modules (graph by layer, table, register, edit), terms (search, describe, layer chain), mappings of bridge modules, reviews (propose, review, rule, history), validation (modules and documents), federation peers |
+
+Roles combine. A reviewer or an approver can list knowledge-bases and move them through their lifecycle, but reads
+their content only with `knowledge-viewer` as well.
+
 ### Discovery
 
 With `backend.knowledge.discovery: ri` (the default), the backend asks TMF639 Resource Inventory
@@ -315,14 +328,14 @@ holds one of them. Grant them in Keycloak, on the instance's client in the Canva
   - the lifecycle `transitions` the user may make on knowledge-bases and ontology modules
   - the `reviewKinds` they may post
 
-  It also returns the instance's active `modelRoute` (`status` and route name only), which the portal reads from the
-  component's `/health` (cached for 30 s; null when it can't be read, or for a user with no role).
-
   These come from the roles in the token and from the `x-required-roles`, `x-lifecycle` and `x-review-kinds`
   extensions of the OAS **the instance itself serves**. The OAS is fetched from `<apiUrl>/openapi.yaml` and
   `<processUrl>/openapi.yaml`, capped at 2 MB and cached for 5 minutes. The page hides what the capabilities don't
   allow. The client role named by `backend.knowledge.canvasSystemRole` (`canvasRole` by default, as the component's
   `CANVAS_SYSTEM_ROLE`) counts as the OAS's symbolic `canvasSystemRole`.
+
+  Each instance also has its active `modelRoute` (`status` and route name only), which the portal reads from the
+  component's `/health` (cached for 30 s; null when it can't be read, or for a user with no role).
 - **`/api/knowledge/{instance}/{path}`** forwards a call to the instance's TMFxxx or TMF701 API, with the **user's own
   bearer token**. Only operations of the instance's OAS are forwarded. Listeners, hubs, event sources and schemas
   aren't, and anything else is a 404 without calling the instance.
@@ -331,7 +344,8 @@ holds one of them. Grant them in Keycloak, on the instance's client in the Canva
   - **Failures:** an upstream 401, redirect, 5xx, timeout or unreachable instance becomes a **502**, with no upstream
     detail. The page treats a 401 as an expired portal session.
   - **Headers:** only `Authorization`, `Accept`, `Content-Type`, `If-Match` and `If-None-Match` are forwarded, and
-    only `Content-Type`, `Content-Disposition`, `ETag`, `Last-Modified`, `X-Total-Count` and `X-Result-Count` are
+    only `Content-Type`, `Content-Disposition`, `ETag`, `Last-Modified`, `X-Total-Count`, `X-Result-Count`,
+    `X-Search-Mode` and `X-Result-Truncated` are
     returned.
 
 The portal logs users in through the `canvas-keycloak` Service, so its tokens name that Service as issuer. The TMFC060

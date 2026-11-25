@@ -86,6 +86,7 @@ export default function KnowledgePage() {
     title: 'Knowledge',
     description: 'Knowledge-base and federated ontology',
     icon: <BrainOutlined />,
+    hideWipBadge: true,
   }
 
   if (query.isLoading) {

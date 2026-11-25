@@ -5,11 +5,14 @@ import { useKnowledge } from '../KnowledgeContext'
 import { StatusTag } from '../shared'
 import { baseName } from './bases'
 import DocumentsTab from './DocumentsTab'
+import GraphTab from './GraphTab'
 import JobsTab from './JobsTab'
 import { useBaseProcesses } from './jobs'
 import OverviewTab from './OverviewTab'
 import ProposalsTab from './ProposalsTab'
+import SearchTab from './SearchTab'
 import SourcesTab from './SourcesTab'
+import SparqlTab from './SparqlTab'
 
 interface KnowledgeBaseDrawerProps {
   base: Knowledge | undefined
@@ -41,6 +44,7 @@ export default function KnowledgeBaseDrawer({ base, onClose, onEdit, onDelete }:
 function Details({ listed, onEdit, onDelete }: Pick<KnowledgeBaseDrawerProps, 'onEdit' | 'onDelete'> & { listed: Knowledge }) {
   const { instance, can } = useKnowledge()
   const [tab, setTab] = useState('overview')
+  const [target, setTarget] = useState<{ iri: string }>()
   const query = useKnowledgeBase(instance, listed.id, { enabled: can('retrieveKnowledge') })
   // The list may have been refreshed after the knowledge-base was read on its own.
   const base = query.data && (query.data.lastUpdate ?? '') >= (listed.lastUpdate ?? '') ? query.data : listed
@@ -66,6 +70,31 @@ function Details({ listed, onEdit, onDelete }: Pick<KnowledgeBaseDrawerProps, 'o
     },
     { key: 'jobs', label: jobs.running ? 'Jobs (running)' : 'Jobs', show: can('listProcess'), content: <JobsTab base={base} jobs={jobs} /> },
     { key: 'proposals', label: 'Proposals', show: can('listKnowledgeProposal'), content: <ProposalsTab base={base} /> },
+    {
+      key: 'search',
+      label: 'Search',
+      show: can('searchKnowledge') || can('recommendFromKnowledge'),
+      content: (
+        <SearchTab
+          base={base}
+          onOpenEntity={
+            can('queryKnowledge')
+              ? (iri) => {
+                  setTarget({ iri })
+                  setTab('graph')
+                }
+              : undefined
+          }
+        />
+      ),
+    },
+    {
+      key: 'graph',
+      label: 'Graph',
+      show: can('queryKnowledge') || can('retrieveKnowledgeGraph'),
+      content: <GraphTab base={base} target={target} />,
+    },
+    { key: 'sparql', label: 'SPARQL', show: can('queryKnowledge'), content: <SparqlTab base={base} /> },
   ]
   return (
     <Tabs
