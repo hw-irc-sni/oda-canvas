@@ -20,6 +20,8 @@ interface SectionedPageProps {
   icon: React.ReactNode
   sections: PageSection[]
   hideWipBadge?: boolean
+  /** Shown at the end of the page header. */
+  headerActions?: React.ReactNode
   /** Shown between the page header and the sections. */
   banner?: React.ReactNode
 }
@@ -47,7 +49,7 @@ function WipBadge() {
 }
 
 /** Page header followed by one stacked card per section. */
-export default function SectionedPage({ title, description, icon, sections, hideWipBadge, banner }: SectionedPageProps) {
+export default function SectionedPage({ title, description, icon, sections, hideWipBadge, headerActions, banner }: SectionedPageProps) {
   return (
     <div style={{ padding: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -72,7 +74,14 @@ export default function SectionedPage({ title, description, icon, sections, hide
             <p style={{ fontSize: 12, color: colors.textMuted, margin: '2px 0 0' }}>{description}</p>
           </div>
         </div>
-        {!hideWipBadge && <WipBadge />}
+        {headerActions ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {headerActions}
+            {!hideWipBadge && <WipBadge />}
+          </div>
+        ) : (
+          !hideWipBadge && <WipBadge />
+        )}
       </div>
 
       {banner && <div style={{ marginBottom: 16 }}>{banner}</div>}
