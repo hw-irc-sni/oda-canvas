@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import axios, { type AxiosProgressEvent } from 'axios'
 import apiClient from './client'
 
@@ -367,6 +367,18 @@ export interface ReviewItem {
   linkStatus?: LinkStatus
   author?: string
   approver?: string
+  date?: string
+}
+
+/** A lifecycle transition as it happened. */
+export interface TransitionRecord {
+  id: string
+  target?: ReviewTarget
+  from?: LifecycleStatus
+  to?: LifecycleStatus
+  actor?: string
+  /** The proposal or ruling that made the transition, if one did. */
+  reviewItem?: string
   date?: string
 }
 
@@ -809,6 +821,11 @@ export function createReview(instance: string, { id, input }: { id: string; inpu
   return postJson(url(instance, 'knowledgeSpecification', id, 'review'), input)
 }
 
+/** listKnowledgeSpecificationTransition: the lifecycle history of the module and its mappings, oldest first. */
+export function fetchTransitions(instance: string, id: string): Promise<TransitionRecord[]> {
+  return getJson(url(instance, 'knowledgeSpecification', id, 'transition'))
+}
+
 /** retrieveKnowledgeSpecificationValidation: the last report (404 before the first run). */
 export function fetchValidation(instance: string, id: string): Promise<ValidationReport> {
   return getJson(url(instance, 'knowledgeSpecification', id, 'validation'))
@@ -998,6 +1015,21 @@ export function useMapping(instance: string, id: string, mappingId: string, opti
 
 export function useReviews(instance: string, id: string, options?: { enabled?: boolean }) {
   return useInstanceQuery(key(instance, 'specification', 'item', id, 'review'), () => fetchReviews(instance, id), options)
+}
+
+export function useTransitions(instance: string, id: string, options?: { enabled?: boolean }) {
+  return useInstanceQuery(key(instance, 'specification', 'item', id, 'transition'), () => fetchTransitions(instance, id), options)
+}
+
+/** The mappings of several bridge modules, in their order. */
+export function useMappingsOf(instance: string, ids: string[]) {
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: key(instance, 'specification', 'item', id, 'mapping'),
+      queryFn: () => fetchMappings(instance, id),
+      retry,
+    })),
+  })
 }
 
 /** Null before the first validation run. */

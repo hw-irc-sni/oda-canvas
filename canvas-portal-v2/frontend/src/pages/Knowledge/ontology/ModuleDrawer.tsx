@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Descriptions, Drawer, Space, Spin, Tabs } from 'antd'
+import { AuditOutlined } from '@ant-design/icons'
 import { useModuleContent, type KnowledgeSpecification } from '@/api/knowledge'
 import { useKnowledge } from '../KnowledgeContext'
 import { CodeBlock, LayerTag, LinkStatusTag, Muted, NeutralTag, QueryError, StatusTag, formatDate } from '../shared'
@@ -11,9 +12,11 @@ interface ModuleDrawerProps {
   modules: KnowledgeSpecification[]
   onClose: () => void
   onSelect: (id: string) => void
+  /** Opens the module in the review queue. */
+  onReview?: (id: string) => void
 }
 
-export default function ModuleDrawer({ module, modules, onClose, onSelect }: ModuleDrawerProps) {
+export default function ModuleDrawer({ module, modules, onClose, onSelect, onReview }: ModuleDrawerProps) {
   return (
     <Drawer
       open={!!module}
@@ -27,7 +30,16 @@ export default function ModuleDrawer({ module, modules, onClose, onSelect }: Mod
           </Space>
         )
       }
-      extra={module && <ModuleActions key={module.id} module={module} modules={modules} onDeleted={onClose} />}
+      extra={
+        module && (
+          <Space size={8}>
+            {onReview && !isFederated(module) && (
+              <Button size="small" icon={<AuditOutlined />} onClick={() => onReview(module.id)}>Review</Button>
+            )}
+            <ModuleActions key={module.id} module={module} modules={modules} onDeleted={onClose} />
+          </Space>
+        )
+      }
     >
       {/* Keyed, so that opening another module starts on its overview. */}
       {module && <ModuleDetails key={module.id} module={module} modules={modules} onSelect={onSelect} />}
@@ -35,7 +47,7 @@ export default function ModuleDrawer({ module, modules, onClose, onSelect }: Mod
   )
 }
 
-function ModuleDetails({ module, modules, onSelect }: Omit<ModuleDrawerProps, 'onClose' | 'module'> & { module: KnowledgeSpecification }) {
+function ModuleDetails({ module, modules, onSelect }: Pick<ModuleDrawerProps, 'modules' | 'onSelect'> & { module: KnowledgeSpecification }) {
   const { can } = useKnowledge()
   const [tab, setTab] = useState('overview')
   const ref = useRef<HTMLDivElement>(null)

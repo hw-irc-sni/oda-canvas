@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { Alert, Tabs } from 'antd'
 import { colors } from '@/theme'
 import { useKnowledge } from './KnowledgeContext'
@@ -12,9 +12,18 @@ export interface SectionTab {
 }
 
 /** The tabs of a section that the user may read. */
-export default function SectionTabs({ tabs, denied }: { tabs: SectionTab[]; denied: string }) {
+export default function SectionTabs({
+  tabs,
+  denied,
+  active,
+  onChange,
+}: {
+  tabs: SectionTab[]
+  denied: string
+  active: string | undefined
+  onChange: (key: string) => void
+}) {
   const { can } = useKnowledge()
-  const [active, setActive] = useState<string>()
   const visible = tabs.filter((tab) => can(tab.operation))
 
   if (tabs.length > 0 && visible.length === 0) return <Alert type="info" showIcon message={denied} />
@@ -37,7 +46,7 @@ export default function SectionTabs({ tabs, denied }: { tabs: SectionTab[]; deni
   return (
     <Tabs
       activeKey={visible.some((tab) => tab.key === active) ? active : visible[0].key}
-      onChange={setActive}
+      onChange={onChange}
       items={visible.map((tab) => ({ key: tab.key, label: tab.label, children: tab.content }))}
     />
   )

@@ -60,7 +60,7 @@ const columns: ColumnsType<KnowledgeSpecification> = [
 ]
 
 /** The ontology modules, as a graph by layer or as a table. */
-export default function ModuleRegistry() {
+export default function ModuleRegistry({ onReview }: { onReview?: (id: string) => void }) {
   const { instance, can } = useKnowledge()
   const query = useModules(instance)
   const [view, setView] = useState<'graph' | 'table'>('graph')
@@ -185,6 +185,13 @@ export default function ModuleRegistry() {
         modules={modules}
         onClose={() => setSelected(undefined)}
         onSelect={setSelected}
+        onReview={
+          onReview &&
+          ((id) => {
+            setSelected(undefined)
+            onReview(id)
+          })
+        }
       />
       <ModuleUpload
         open={registering}
