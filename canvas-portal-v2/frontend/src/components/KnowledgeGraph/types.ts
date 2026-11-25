@@ -10,6 +10,8 @@ export interface KnowledgeGraphNode {
   caption?: string
   /** Dashed outline, for something not (yet) agreed. */
   tentative?: boolean
+  /** Marks a problem with it. */
+  flag?: 'error' | 'warning'
 }
 
 export interface KnowledgeGraphEdge {
