@@ -1,0 +1,338 @@
+# TMFC060 Knowledge Management chart values.
+
+# The three workloads. The generated docker build workflows read image, version and prereleaseSuffix
+# (automation/generators/dockerbuild-workflow-generator), so keep these keys where they are.
+knowledgeApi:
+  image: tmforumodacanvas/tmfc060-knowledge-api
+  version: 0.1.0
+  prereleaseSuffix: ai-knowledge
+  # The image tag; empty means <version>-<prereleaseSuffix> (or <version> without a suffix)
+  tag: ""
+  pullPolicy: IfNotPresent
+  # The pyoxigraph (RocksDB) store. The API is a StatefulSet with exactly one replica: the store has one writer.
+  store:
+    size: 5Gi
+    storageClass: ""
+  logLevel: INFO
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {memory: 2Gi}
+  extraEnv: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+pipelineWorker:
+  image: tmforumodacanvas/tmfc060-pipeline-worker
+  version: 0.1.0
+  prereleaseSuffix: ai-knowledge
+  tag: ""
+  pullPolicy: IfNotPresent
+  replicas: 1
+  # Tasks each worker runs at the same time
+  concurrency: 2
+  logLevel: INFO
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {memory: 2Gi}
+  extraEnv: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+mcpServer:
+  image: tmforumodacanvas/tmfc060-mcp-server
+  version: 0.1.0
+  prereleaseSuffix: ai-knowledge
+  tag: ""
+  pullPolicy: IfNotPresent
+  replicas: 1
+  logLevel: INFO
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {memory: 512Mi}
+  extraEnv: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+component:
+  id: TMFC060
+  # The Component is named <release>-<name>; the API serves /<release>-<name>/tmf-api/..., and tokens must carry
+  # that name in their audience (the Keycloak client that TMFOP003 creates for the Component).
+  name: knowledgemanagement
+  functionalBlock: IntelligenceManagement
+  publicationDate: 2026-11-24T00:00:00.000Z
+  version: "0.1.0"
+  description: "TMFC060 Knowledge Management: knowledge-bases (vector and graph) and a governed, federated ontology."
+  # Specification URLs of the exposed APIs. Empty means the OAS the API itself serves, at its in-cluster Service URL
+  # (<base>/openapi.yaml). TMFOP005 matches DependentAPIs by exact URL, so consumers must use the same value.
+  knowledgeApiSpecification: ""
+  processFlowApiSpecification: ""
+  mcpSpecification: https://modelcontextprotocol.io/specification/2025-06-18
+  maintainers: []
+  owners: []
+
+security:
+  # The real name of the Canvas system role on the Component's Keycloak client
+  canvasSystemRole: canvasRole
+  # Static roles (securityFunction.componentRole). TMFOP003 creates them as client roles; the API guards each
+  # endpoint with the x-required-roles of the OAS.
+  componentRole:
+  - name: knowledge-viewer
+    description: Read knowledge-bases, search, query and recommend
+  - name: knowledge-editor
+    description: Change knowledge-bases, upload documents and start ingestion
+  - name: ontology-editor
+    description: Create and propose ontology modules and mappings
+  - name: ontology-reviewer
+    description: Review ontology proposals and comment on them
+  - name: ontology-approver
+    description: Rule ontology proposals, publish and deprecate modules
+
+# Optional dependent APIs (coreFunction.dependentAPIs). Each one is rendered only when enabled: the Component
+# operator counts every DependentAPI towards the Component's deployment status, so an unresolved one would hold a
+# plain install back. TMFOP005 resolves a DependentAPI to the ExposedAPI with exactly the same specification URL.
+# The five ingestion sources keep their names (tmf639 ... tmf921): TMFOP005 records the name as dependencyName in
+# canvas-info, which is how the API finds each provider's hub (knowledge-base source kind = dependency name).
+# Their events are declared as eventNotification.subscribedEvents too, for a future Event Management operator.
+dependentAPIs:
+  tmf639:
+    enabled: false
+    id: TMF639
+    description: Resource Inventory, an ingestion source
+    specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF639_Resource_Inventory/5.0.0/swagger/TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml
+    events: [ResourceCreateEvent, ResourceAttributeValueChangeEvent, ResourceStateChangeEvent, ResourceDeleteEvent]
+  tmf638:
+    enabled: false
+    id: TMF638
+    description: Service Inventory, an ingestion source
+    specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF638_Service_Inventory/5.0.0/swagger/TMF638-Service_Inventory_Management-v5.0.0.oas.yaml
+    events: [ServiceCreateEvent, ServiceAttributeValueChangeEvent, ServiceStateChangeEvent, ServiceDeleteEvent]
+  tmf642:
+    enabled: false
+    id: TMF642
+    description: Alarm Management, an ingestion source
+    # The v5 file in the Open API Table is v5.0.1
+    specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF642_Alarm/5.0.0/swagger/TMF642_Alarm_v5.0.1.oas.yaml
+    events: [AlarmCreateEvent, AlarmAttributeValueChangeEvent, AlarmStateChangeEvent, AlarmDeleteEvent]
+  tmf628:
+    enabled: false
+    id: TMF628
+    description: Performance Management, an ingestion source
+    # No v5 in the Open API Table: the v4 specification of the tmforum-apis repository
+    specification: https://raw.githubusercontent.com/tmforum-apis/TMF628_Performance/master/TMF628-Performance-v4.0.0.swagger.json
+    events: [MeasurementCollectionJobCreateEvent, MeasurementCollectionJobAttributeValueChangeEvent, MeasurementCollectionJobFilesReadyEvent]
+  tmf921:
+    enabled: false
+    id: TMF921
+    description: Intent Management, an ingestion source
+    specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF921_Intent/5.0.0/swagger/TMF921_Intent_Management_v5.0.0.oas.yaml
+    events: [IntentCreateEvent, IntentAttributeValueChangeEvent, IntentStatusChangeEvent, IntentDeleteEvent, IntentReportCreateEvent]
+  aimanagement:
+    enabled: false
+    id: TMF915
+    description: AI Management
+    # No v5 in the Open API Table: its v4
+    specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF915_AI_Management/4.0.0/swagger/TMF915_AI_Management_API_v4.0.0_swagger.json
+  policymanagement:
+    enabled: false
+    id: TMF723
+    description: Policy Management
+    # No public specification found: set one to enable it
+    specification: ""
+  eventmanagement:
+    enabled: false
+    id: TMF688
+    description: Event Management
+    # No v5 in the Open API Table: the v4 specification of the tmforum-apis repository
+    specification: https://raw.githubusercontent.com/tmforum-apis/TMF688-Event/master/TMF688-Event-v4.0.0.swagger.json
+  partymanagement:
+    enabled: false
+    id: TMF632
+    description: Party Management
+    specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF632_Party/5.0.0/swagger/TMF632-Party_Management-v5.0.0.oas.yaml
+  partyrolemanagement:
+    enabled: false
+    id: TMF669
+    description: Party Role Management
+    specification: https://tmf-open-api-table-documents.s3.eu-west-1.amazonaws.com/OpenApiTable/TMF669_Party_Role/5.0.0/swagger/TMF669-Party_Role_Management-v5.0.0.oas.yaml
+
+# Ontology sources: federation repositories in FTO layout (modules.json, catalog.json), synced into ontology modules at
+# startup and every ontologySync.intervalSeconds. No ontology content ships in the images or the chart: modules come
+# from these sources (or are uploaded through the API). Each item is one of
+#   {name, kind: git, url, ref, credentialSecret, shapes}  credentialSecret: a Secret with username and password
+#                                                          (a read-only token), for a private repository
+#   {name, kind: secretMount, secretName, path, shapes}    the repository's files in a Secret, mounted read-only
+#                                                          (items: [{key, path}] lays the flat Secret keys out
+#                                                          in the repository's folders)
+# shapes: [{id, path}] turns a file or folder of .ttl in the repository into a SHACL shapes module.
+# values-fto-demo.yaml is an example with the private tfo repository.
+ontologySources: []
+ontologySync:
+  intervalSeconds: 900
+
+# Provider DataResourceConfig (ADR-010): declares the component's stores to the Canvas. It is rendered when the Canvas
+# has the oda.tmforum.org/v1alpha1 DataResourceConfig CRD (Phase 4), or when enabled is true, so the chart also
+# installs on a Canvas without it. The stores are declared, not their knowledge-bases: the Data Resource Management
+# operator mirrors those into the CR's status.
+dataResourceConfig:
+  enabled: false
+  providedDataResources:
+  - name: knowledge-vectors
+    type: vectorStore
+    description: Hybrid dense and sparse vector store, one collection per knowledge-base
+    engine: qdrant
+    exposedAPI: knowledgemanagement
+    mcpAPI: knowledgemcp
+    retrieval:
+      topK: 8
+      scoreThreshold: 0.3
+      hybrid: true
+  - name: knowledge-graph
+    type: knowledgeGraph
+    description: RDF graph store, one named graph per knowledge-base and per ontology module
+    engine: pyoxigraph
+    exposedAPI: knowledgemanagement
+    mcpAPI: knowledgemcp
+
+# Ports of the containers and Services (the Component's ExposedAPIs point at api, metrics and mcp; the workers call
+# internal, which no ExposedAPI exposes)
+ports:
+  api: 8080
+  metrics: 4000
+  internal: 8081
+  mcp: 8080
+  workerHealth: 8082
+
+# PostgreSQL: by default a StatefulSet on the official image, in the chart. Its data PVC and its generated
+# credentials Secret (<release>-kmpg-credentials) are kept on helm uninstall, so a reinstall with the same release
+# name finds its data again (see README, "Removing the data").
+postgresql:
+  enabled: true
+  image: postgres:17.12-alpine
+  pullPolicy: IfNotPresent
+  database: tmfc060
+  username: tmfc060
+  # A Secret with the key "password" to use instead of the generated one
+  existingSecret: ""
+  persistence:
+    size: 8Gi
+    storageClass: ""
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 1Gi}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# An external PostgreSQL instead (only with postgresql.enabled=false)
+database:
+  external:
+    # A postgresql:// URL, or a Secret holding one (the Secret wins)
+    url: ""
+    existingSecret: ""
+    key: url
+
+# Qdrant: by default the official Qdrant chart (a subchart; everything under qdrant: except enabled is its values).
+# Its API key is generated into the Secret <release>-qdrant-apikey (key api-key), which the API reads. Its PVC is kept
+# on helm uninstall, like the other data (see README, "Removing the data").
+qdrant:
+  enabled: true
+  apiKey: true
+  image:
+    pullPolicy: IfNotPresent
+    # The image that runs as uid 1000: no root init container to chown the volume (fsGroup does it)
+    useUnprivilegedImage: true
+  containerSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 2000
+    allowPrivilegeEscalation: false
+    privileged: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+  podSecurityContext:
+    fsGroup: 3000
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  persistence:
+    size: 10Gi
+    # storageClassName: ""
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 2Gi}
+  additionalLabels:
+    oda.tmforum.org/componentId: TMFC060
+  podLabels:
+    oda.tmforum.org/componentId: TMFC060
+
+# An external Qdrant instead (only with qdrant.enabled=false)
+externalQdrant:
+  url: ""
+  # A Secret with its API key (optional)
+  apiKeySecret: ""
+  apiKeySecretKey: api-key
+
+# Token validation (spike S1): keys from the in-cluster JWKS of the Canvas Keycloak. A token's issuer must be the
+# realm URL under baseUrl or under one of issuerBaseUrls, or one of extraIssuers (for example a public URL).
+# Keycloak names the issuer after the URL a token was requested from: the Canvas Portal logs users in through the
+# canvas-keycloak Service, so its tokens name that Service, not the headless one.
+keycloak:
+  baseUrl: http://canvas-keycloak-headless.canvas.svc.cluster.local:8083/auth
+  realm: odari
+  issuerBaseUrls:
+  - http://canvas-keycloak.canvas.svc.cluster.local:8083/auth
+  extraIssuers: []
+
+# Model routes of the API (the workers call models through the API). The ModelGatewayService route is #55.
+models:
+  agentgateway:
+    # For example http://agentgateway.canvas.svc.cluster.local/v1 (the Canvas agentgateway Service, port 80)
+    url: ""
+    chatModel: ""
+    embeddingModel: ""
+  openaiCompatible:
+    baseUrl: ""
+    chatModel: ""
+    embeddingModel: ""
+    # A Secret with the API key, mounted as a file
+    apiKeySecret: ""
+    apiKeySecretKey: api-key
+  # Dimension of the dense vectors (the embedding model's)
+  embeddingDimension: 1024
+
+# Model route 1: a ModelGatewayService custom resource (oda.tmforum.org/v1alpha1), read through the Kubernetes API.
+# ODA components don't normally call the Kubernetes API, so this is opt-in: with enabled, the API gets its own
+# ServiceAccount token and RBAC to read the CRD (existence check), the ModelGatewayService and Services in its namespace.
+modelResolver:
+  modelGatewayService:
+    enabled: false
+    # "name" (in the release namespace) or "namespace/name"
+    name: ""
+    chatModel: ""
+    embeddingModel: ""
+
+# Event delivery and event-driven ingestion (#46)
+events:
+  # Externally reachable base URL of the knowledge API, for the callbacks of provider hubs; empty means no
+  # registrations on TMF providers
+  callbackBase: ""
+  # Callback hosts allowed even when they resolve to private addresses (glob patterns)
+  callbackAllowedHosts: ["*.svc.cluster.local"]
+  canvasInfoUrl: http://info.canvas.svc.cluster.local
+  # Base URL that makes the hrefs in events absolute
+  hrefBase: ""
+
+# Only the worker pods may reach the API's internal port (the service token stays the real guard). Needs a CNI that
+# enforces NetworkPolicies.
+networkPolicy:
+  enabled: false
+
+serviceAccount:
+  # Empty means <release>-km
+  name: ""
+  annotations: {}

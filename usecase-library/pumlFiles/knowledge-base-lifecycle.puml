@@ -1,0 +1,58 @@
+@startuml knowledge-base-lifecycle
+
+actor "Knowledge\nEditor" as Editor
+participant "Knowledge\nManagement\nComponent" as KM
+database "Graph\nStore" as Graph
+database "Vector\nStore" as Vector
+participant "Event Hub\nSubscribers" as Subscribers
+participant "Data Resource\nManagement\nOperator" as DRO
+entity "Provider\nDataResourceConfig" as PDRC
+participant "Resource\nInventory" as RI
+
+group Create a knowledge-base
+    Editor -> KM : POST /knowledge\n(name, storeKind, conformsTo, source, retrieval)
+    KM -> KM : validate token and role knowledge-editor
+    alt role missing
+        KM --> Editor : 403 Forbidden
+    else role present
+        KM -> Graph : create named graph for the knowledge-base
+        KM -> Vector : create collection (dense + sparse vectors)
+        KM --> Editor : 201 Created (knowledge)
+        KM -> Subscribers : KnowledgeCreateEvent
+    end
+end
+
+group Mirror into the Canvas
+    Subscribers -> DRO : KnowledgeCreateEvent\n(the operator is a hub subscriber)
+    DRO -> KM : GET /knowledge/{id}
+    DRO -> PDRC : update status.providedResources[]
+    RI -> PDRC : read on query
+    note right of RI
+        The knowledge-base appears as a
+        DataResource content entry,
+        providedBy the component and
+        isPartOf its stores (ADR-011)
+    end note
+end
+
+group Update a knowledge-base
+    Editor -> KM : PATCH /knowledge/{id}\n(description, conformsTo, retrieval)
+    KM -> KM : validate token and role knowledge-editor
+    KM --> Editor : 200 OK (knowledge)
+    KM -> Subscribers : KnowledgeAttributeValueChangeEvent
+    Subscribers -> DRO : event
+    DRO -> PDRC : refresh status.providedResources[]
+end
+
+group Delete a knowledge-base
+    Editor -> KM : DELETE /knowledge/{id}
+    KM -> KM : validate token and role knowledge-editor
+    KM -> Graph : drop named graph
+    KM -> Vector : drop collection
+    KM --> Editor : 204 No Content
+    KM -> Subscribers : KnowledgeDeleteEvent
+    Subscribers -> DRO : event
+    DRO -> PDRC : remove the entry from status.providedResources[]
+end
+
+@enduml

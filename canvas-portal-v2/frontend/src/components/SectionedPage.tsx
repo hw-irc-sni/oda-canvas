@@ -20,9 +20,16 @@ type SectionedPageProps = {
   /** Shown between the page header and the sections. */
   banner?: React.ReactNode
 } & (
-  | { title: string; description: string; icon: React.ReactNode; header?: never }
+  | {
+      title: string
+      description: string
+      icon: React.ReactNode
+      /** Shown at the end of the title row. */
+      headerActions?: React.ReactNode
+      header?: never
+    }
   /** A custom header shown in place of the default title row. */
-  | { header: React.ReactNode; title?: never; description?: never; icon?: never }
+  | { header: React.ReactNode; title?: never; description?: never; icon?: never; headerActions?: never }
 )
 
 function WipBadge() {
@@ -48,7 +55,7 @@ function WipBadge() {
 }
 
 /** Page header followed by one stacked card per section. */
-export default function SectionedPage({ title, description, icon, header, sections, hideWipBadge, banner }: SectionedPageProps) {
+export default function SectionedPage({ title, description, icon, header, sections, hideWipBadge, headerActions, banner }: SectionedPageProps) {
   return (
     // A custom header is a full-width card like the other inventory pages, so it needs no extra inset.
     <div style={{ padding: header ? 0 : 24 }}>
@@ -77,7 +84,14 @@ export default function SectionedPage({ title, description, icon, header, sectio
               <p style={{ fontSize: 12, color: colors.textMuted, margin: '2px 0 0' }}>{description}</p>
             </div>
           </div>
-          {!hideWipBadge && <WipBadge />}
+          {headerActions ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {headerActions}
+              {!hideWipBadge && <WipBadge />}
+            </div>
+          ) : (
+            !hideWipBadge && <WipBadge />
+          )}
         </div>
       )}
 

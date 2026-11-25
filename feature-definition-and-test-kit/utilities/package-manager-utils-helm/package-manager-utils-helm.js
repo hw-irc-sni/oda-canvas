@@ -1,6 +1,8 @@
 const execSync = require('child_process').execSync;
 const YAML = require('yaml')
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const { exec } = require('child_process');
 
 const testDataFolder = './testData/'
@@ -19,6 +21,44 @@ async function executeHelmCommand(command) {
 
 
 /**
+* Builds the dependencies of a chart before it is templated, installed or upgraded, for test charts that wrap another
+* chart (for example knowledgemanagement-v1, a wrapper of the TMFC060 chart). The file:// dependencies are built
+* first, recursively; an http(s) repository a missing dependency needs is added under a generated name. A chart
+* without dependencies is left alone. Built once per chart and test run.
+* @param    {String} chartDir   Path of the chart folder
+*/
+const builtCharts = new Set();
+function ensureDependencies(chartDir) {
+  const dir = path.resolve(chartDir);
+  if (builtCharts.has(dir)) return;
+  const chartFile = path.join(dir, 'Chart.yaml');
+  if (!fs.existsSync(chartFile)) return;
+  const dependencies = (YAML.parse(fs.readFileSync(chartFile, 'utf-8')) || {}).dependencies || [];
+  if (dependencies.length === 0) { builtCharts.add(dir); return; }
+  for (const dependency of dependencies) {
+    const repository = dependency.repository || '';
+    if (repository.startsWith('file://')) {
+      ensureDependencies(path.resolve(dir, repository.slice('file://'.length)));
+    }
+  }
+  const status = execSync('helm dependency list ' + JSON.stringify(dir), { encoding: 'utf-8' });
+  const missing = status.split('\n').slice(1).filter(line => line.trim() && !/\sok\s*$/.test(line));
+  if (missing.length > 0 || dependencies.some(d => (d.repository || '').startsWith('file://'))) {
+    for (const dependency of dependencies) {
+      const repository = dependency.repository || '';
+      if (/^https?:\/\//.test(repository)) {
+        const name = 'bdd-' + repository.replace(/^https?:\/\//, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/-+$/, '');
+        execSync('helm repo add ' + name + ' ' + repository + ' --force-update', { encoding: 'utf-8' });
+      }
+    }
+    console.log('helm dependency build ' + dir);
+    execSync('helm dependency build ' + JSON.stringify(dir), { encoding: 'utf-8' });
+  }
+  builtCharts.add(dir);
+}
+
+
+/**
 * Helper Function that gets the exposedAPIs/dependentAPIs from the given segment of a helm chart.
 * @param    {String} componentPackage      Helm chart folder name
 * @param    {String} releaseName           Helm release name
@@ -28,6 +68,7 @@ async function executeHelmCommand(command) {
 function getAPIsFromPackage(exposedOrDependent, componentPackage, releaseName, componentSegmentName) {
   try {
     // run the helm template command to generate the component envelope
+    ensureDependencies(testDataFolder + componentPackage);
     const output = execSync('helm template ' + releaseName + ' ' + testDataFolder + componentPackage, { encoding: 'utf-8' });  
       
     // parse the template
@@ -110,6 +151,7 @@ const packageManagerUtils = {
       }
     })
 
+    ensureDependencies(testDataFolder + componentPackage);
     if (found) {
       await executeHelmCommand('helm upgrade ' + releaseName + ' ' + testDataFolder + componentPackage + ' -n ' + namespace);   
     }
@@ -142,6 +184,7 @@ const packageManagerUtils = {
     }
 
     // upgrade the helm chart
+    ensureDependencies(testDataFolder + componentPackage);
     await executeHelmCommand('helm upgrade ' + releaseName + ' ' + testDataFolder + componentPackage + ' -n ' + namespace);   
   },
 
@@ -177,6 +220,7 @@ const packageManagerUtils = {
    * @param {string} namespace - The namespace of the release to upgrade.
    */
   upgradePackage: async function(componentPackage, releaseName, namespace) {
+    ensureDependencies(testDataFolder + componentPackage);
     await executeHelmCommand('helm upgrade ' + releaseName + ' ' + testDataFolder + componentPackage + ' -n ' + namespace);   
   },
 

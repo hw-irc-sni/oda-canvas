@@ -1,0 +1,8 @@
+apiVersion: v2
+name: agentgateway-mcp-operator
+description: TMFOP013 AI Gateway Management operator - registers the MCP ExposedAPIs of ODA Components with agentgateway
+type: application
+version: 0.1.0
+# version: 0.1.0 - first version: oda-<namespace>-<exposedapi> MCP targets in the agentgateway config, with the
+#                  caller's token forwarded (issue hw-irc-sni/oda-canvas#68)
+appVersion: "0.1.0"

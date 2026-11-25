@@ -85,3 +85,9 @@ app.kubernetes.io/component: backend
 {{- end -}}
 {{- $url -}}
 {{- end -}}
+
+{{/* The document upload cap of the Knowledge proxy, in bytes: the backend's KNOWLEDGE_MAX_UPLOAD_BYTES and the frontend
+nginx client_max_body_size for /api/knowledge/ */}}
+{{- define "canvas-portal.knowledge.maxUploadBytes" -}}
+{{- ((.Values.backend.knowledge | default dict).maxUploadBytes | default 53477376) | int64 -}}
+{{- end -}}

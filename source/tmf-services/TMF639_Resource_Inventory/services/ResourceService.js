@@ -15,6 +15,25 @@ const k8sService = new KubernetesResourceService();
  * limit Integer Requested number of resources to be provided in response (optional)
  * returns List
  **/
+const RESERVED_QUERY_PARAMS = ['namespace', 'filter', 'fields', 'offset', 'limit', 'sort'];
+
+/**
+ * Keeps the resources whose top-level attribute equals one of the comma-separated values of each query
+ * parameter (for example category=DataResource). Parameters naming no scalar attribute are ignored.
+ */
+function applyAttributeFilters(resources, params) {
+  const filters = Object.entries(params).filter(([name, value]) =>
+    !RESERVED_QUERY_PARAMS.includes(name) && typeof value === 'string' && value !== '');
+  return filters.reduce((items, [name, value]) => {
+    const wanted = value.split(',').map(v => v.trim());
+    return items.filter(resource => {
+      const actual = resource[name];
+      if (actual === undefined || (typeof actual === 'object' && actual !== null)) return true;
+      return wanted.includes(String(actual));
+    });
+  }, resources);
+}
+
 const listResource = (args, context /* fieldsoffsetlimit */) =>
   new Promise(
     async (resolve) => {
@@ -49,6 +68,10 @@ const listResource = (args, context /* fieldsoffsetlimit */) =>
             return;
           }
         }
+
+        // TMF630 attribute filters (?category=DataResource&resourceStatus=available): equality on top-level
+        // attributes, a comma separating alternatives
+        allResources = applyAttributeFilters(allResources, args.dynamic || {});
 
         // Apply pagination, fields, etc.
         const filteredResources = Service.applyQuery(allResources, args, context);
@@ -109,6 +132,7 @@ const retrieveResource = (args, context /* idfields */) =>
   );
 
 module.exports = {
+  applyAttributeFilters,
   listResource,
   retrieveResource,
 };

@@ -1,0 +1,15 @@
+# expect: accept
+# The MCP DependentAPI TMFOP012 creates for a data resource binding
+apiVersion: oda.tmforum.org/v1
+kind: DependentAPI
+metadata:
+  name: assurance-agent-knowledge-incident-kb
+  labels:
+    oda.tmforum.org/componentName: assurance-agent
+spec:
+  name: incident-kb
+  apiType: mcp
+  dependencyKind: data-resource
+  required: true
+  specification:
+    url: http://km-mcp.components.svc.cluster.local:8080/km-knowledgemanagement/mcp

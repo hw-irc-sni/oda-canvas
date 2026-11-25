@@ -24,6 +24,8 @@ There are several types of operator in the ODA Canvas. For each type of operator
 * [TMFOP009 Model-as-a-Service](./TMFOP009-Model-as-a-Service/README.md): Automates access to AI Models following responsible AI governance patterns.
 * [TMFOP010 Disruption Budget Management](./TMFOP010-Disruption-Budget-Management/README.md): Protects ODA Component availability during planned maintenance, upgrades, and cluster operations.
 * [TMFOP011 Carbon Management](./TMFOP011-Carbon-Management/README.md): Measures energy and carbon use by components and offers services for components to optimise their use.
+* [TMFOP012 Data Resource Management](./TMFOP012-Data-Resource-Management/README.md): Provisions the data resources (such as knowledge-bases) that ODA Components declare in a DataResourceConfig, when another ODA Component serves them.
+* [TMFOP013 AI Gateway Management](./TMFOP013-AI-Gateway-Management/README.md): Registers the MCP APIs that ODA Components expose with the Canvas AI gateway, so agents find their tools through one endpoint.
 * Cost control (planned): Measures license and cloud resource costs and enables components to optimize their costs.
 * Database Management (planned): Allow components to declare requirements for database-as-a-service for Relational, Key-Value, Document, Graph, Vector and other database types.
 

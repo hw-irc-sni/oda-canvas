@@ -93,6 +93,10 @@ class ResourceSyncer:
         self._repo_name = upstream_repo_name
         self._initialized = False
         self._resource_versions = {}  # resource_id -> version
+        # DataResourceConfig (namespace, name) -> the upstream DataResource ids it produced, and the ODA components
+        # whose relationships (provides, dependsOn) it affects
+        self._data_resource_ids = {}
+        self._data_resource_components = {}
 
     def initialize(self):
         """Fetch initial resource versions from upstream."""
@@ -131,6 +135,11 @@ class ResourceSyncer:
         print(
             f"[PID{os.getpid()}]: Callback received event for {kind} {namespace}:{name}: new version {rv} was ({old_rv})"
         )
+        if kind == "DataResourceConfig":
+            # One DataResourceConfig gives several DataResource entries (ADR-011); its own name may equal its
+            # component's, so it doesn't share the per-id version bookkeeping below
+            await self.sync_data_resources(namespace, name, deleted=rv is None)
+            return
         up_id = self.k8s_resource_to_upstream_id(kind, namespace, name)
         if rv == self._resource_versions.get(up_id, None):
             print(
@@ -153,10 +162,14 @@ class ResourceSyncer:
         up_res_id = f"{repo_name}:{res_id}"
         resource_data["id"] = up_res_id
         category = resource_data.get("category", None)
-        if (
-            category == "ODAComponent"
-        ):  # only maintain exposedBy relations in ExposedAPIs
-            resource_data.pop("resourceRelationship", None)
+        if category == "ODAComponent":
+            # API relations are kept on the APIs only (exposedBy); the data resource relations (provides,
+            # dependsOn, ADR-011) stay on the component, as in the Resource Inventory
+            resource_data["resourceRelationship"] = [
+                rr
+                for rr in resource_data.get("resourceRelationship", [])
+                if rr.get("relationshipType") in DATA_RELATIONSHIPS_OF_COMPONENTS
+            ]
         if "resourceRelationship" in resource_data:
             for rr in resource_data["resourceRelationship"]:
                 rel_id = rr.get("resource", {}).get("id", None)
@@ -166,6 +179,85 @@ class ResourceSyncer:
                     "href"
                 ] = f"{self._upstream_url}/resource/{up_rel_id}"
         return resource_data
+
+    async def sync_data_resources(self, namespace: str, drc_name: str, deleted: bool):
+        """Mirror the DataResource entries of one DataResourceConfig (ids <drc>.<item>, <drc>.<kind>.<id>) and
+        remove those that are gone; then re-sync the ODA components it affects, so their provides and dependsOn
+        follow (data resources first, so relationship targets exist)."""
+        key = (namespace, drc_name)
+        prefix = f"{drc_name}."
+        up_prefix = f"{self._repo_name}:{prefix}"
+        entries = []
+        if not deleted:
+            entries = [
+                e
+                for e in await self.fetch_data_resources(namespace)
+                if str(e.get("id", "")).startswith(prefix)
+            ]
+        components = set(self._data_resource_components.get(key, set()))
+        if not deleted:
+            components |= await self.components_of_drc(namespace, drc_name)
+        synced = set()
+        for entry in entries:
+            for rr in entry.get("resourceRelationship", []):
+                if rr.get("relationshipType") == "providedBy":
+                    components.add(rr.get("resource", {}).get("id"))
+            up_id = self.k8s_resource_to_upstream_id("DataResource", namespace, entry["id"])
+            data = self.patch_resource_data(dict(entry), self._repo_name)
+            await self.send_to_upstream(up_id, data)
+            self._resource_versions[up_id] = data.get("resourceVersion")
+            synced.add(up_id)
+        known = set(self._data_resource_ids.get(key, set()))
+        known |= {rid for rid in self._resource_versions if rid.startswith(up_prefix)}
+        for gone in sorted(known - synced):
+            try:
+                await self.delete_upstream(gone)
+            except RuntimeError as e:
+                if "404" not in str(e):
+                    print(f"Failed to delete {gone} upstream: {e}")
+            self._resource_versions.pop(gone, None)
+        self._data_resource_ids[key] = synced
+        self._data_resource_components[key] = {c for c in components if c}
+        for component in sorted(c for c in components if c):
+            await self.resync_component(namespace, component)
+
+    async def fetch_data_resources(self, namespace: str) -> list:
+        response = await auth_client.get(
+            f"{self._downstream_url}/resource",
+            params={"category": "DataResource", "namespace": namespace},
+            timeout=10,
+        )
+        response.raise_for_status()
+        return [r for r in response.json() if r.get("category") == "DataResource"]
+
+    async def components_of_drc(self, namespace: str, drc_name: str) -> set:
+        """The ODA components a DataResourceConfig names: its own (label or Component owner) and the providers of
+        its bindings."""
+        def read():
+            from kubernetes import client as k8s
+
+            try:
+                return k8s.CustomObjectsApi().get_namespaced_custom_object(
+                    "oda.tmforum.org", "v1alpha1", namespace, "dataresourceconfigs", drc_name
+                )
+            except Exception as e:
+                print(f"DataResourceConfig {namespace}:{drc_name} not read: {e.__class__.__name__}")
+                return None
+
+        drc = await asyncio.to_thread(read)
+        return components_named_by(drc)
+
+    async def resync_component(self, namespace: str, name: str):
+        """Send an ODA component's current resource upstream (its relationships changed with a data resource)."""
+        up_id = self.k8s_resource_to_upstream_id("Component", namespace, name)
+        try:
+            data = await self.fetch_from_downstream(name, namespace)
+        except RuntimeError as e:
+            print(f"Component {namespace}:{name} not re-synced: {e}")
+            return
+        if data.get("category") != "ODAComponent":
+            return
+        await self.send_to_upstream(up_id, self.patch_resource_data(data, self._repo_name))
 
     async def delete_upstream(self, resource_id: str):
         try:
@@ -254,6 +346,73 @@ class ResourceSyncer:
             print(f"Failed to send event to {self.callback_url}: {e}")
 
 
+def _characteristics(resource_data: dict) -> dict:
+    return {
+        c.get("name"): c.get("value")
+        for c in resource_data.get("resourceCharacteristic", []) or []
+    }
+
+
+def data_resources_by_component(resources) -> dict:
+    """For the web UI: per ODA component id, the DataResources it provides (stores first, then knowledge-bases and
+    modules, found through their providedBy) and the ones it depends on."""
+    by_id = {r.id: r for r in resources}
+    out = {}
+    for r in resources:
+        if r.data.get("category") != "DataResource":
+            continue
+        chars = _characteristics(r.data)
+        entry = {
+            "id": r.id,
+            "name": r.data.get("name", "-"),
+            "label": chars.get("type") or chars.get("kind") or "-",
+            "detail": chars.get("storeKind") or chars.get("layer") or chars.get("engine") or "",
+            "lifecycleStatus": chars.get("lifecycleStatus"),
+            "status": r.data.get("resourceStatus", "?"),
+            "store": "type" in chars,
+        }
+        for rel in r.data.get("resourceRelationship", []) or []:
+            if rel.get("relationshipType") == "providedBy":
+                comp = rel.get("resource", {}).get("id")
+                out.setdefault(comp, {"provides": [], "dependsOn": []})["provides"].append(entry)
+    for r in resources:
+        if r.data.get("category") != "ODAComponent":
+            continue
+        for rel in r.data.get("resourceRelationship", []) or []:
+            if rel.get("relationshipType") != "dependsOn":
+                continue
+            target = by_id.get(rel.get("resource", {}).get("id"))
+            if target is not None:
+                out.setdefault(r.id, {"provides": [], "dependsOn": []})["dependsOn"].append(
+                    {"id": target.id, "name": target.data.get("name", "-"),
+                     "status": target.data.get("resourceStatus", "?")})
+    for lists in out.values():
+        lists["provides"].sort(key=lambda e: (not e["store"], e["name"]))
+    return out
+
+
+# Relationship types an ODAComponent keeps in the registry (the API ones are kept on the APIs, as exposedBy)
+DATA_RELATIONSHIPS_OF_COMPONENTS = ("provides", "dependsOn")
+
+
+def components_named_by(drc) -> set:
+    """The ODA components a DataResourceConfig names: its componentName label (or Component owner) and the
+    providers of its status.bindings."""
+    if not drc:
+        return set()
+    meta = drc.get("metadata") or {}
+    names = set()
+    label = (meta.get("labels") or {}).get("oda.tmforum.org/componentName")
+    if label:
+        names.add(label)
+    else:
+        names |= {o.get("name") for o in meta.get("ownerReferences") or [] if o.get("kind") == "Component"}
+    for binding in (drc.get("status") or {}).get("bindings") or []:
+        if binding.get("providerComponent"):
+            names.add(binding["providerComponent"])
+    return {n for n in names if n}
+
+
 started_processes = []
 
 
@@ -283,6 +442,13 @@ def bgprocess_run():
         api_version="v1",
         group="oda.tmforum.org",
         kind="ExposedAPI",
+        namespaces=WATCHED_NAMESPACES,
+    )
+    # Data resources (ADR-010/ADR-011); the watch waits while the DataResourceConfig CRD isn't installed
+    k8sWatcher.add_watch(
+        api_version="v1alpha1",
+        group="oda.tmforum.org",
+        kind="DataResourceConfig",
         namespaces=WATCHED_NAMESPACES,
     )
     k8sWatcher.start()
@@ -1251,6 +1417,8 @@ async def dashboard(
                                     "status": resource_status,
                                 }
                             )
+    oda_component_data = data_resources_by_component(resources_with_data)
+
     namespaces = WATCHED_NAMESPACES_STR if CANVAS_RESOURCE_INVENTORY else "N/A"
     if not namespaces:
         namespaces = "ALL"
@@ -1264,6 +1432,7 @@ async def dashboard(
             "hubs": hubs,
             "relationships": relationships,
             "oda_component_apis": oda_component_apis,
+            "oda_component_data": oda_component_data,
             "current_user": current_user,
         },
     )

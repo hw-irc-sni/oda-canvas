@@ -1,0 +1,36 @@
+[project]
+name = "tmfc060-mcp-server"
+version = "0.1.0"
+description = "TMFC060 Knowledge Management reference implementation: the MCP server (FTO and knowledge-base tools)"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "mcp==1.30.0",
+    "httpx==0.28.1",
+    "pydantic-settings==2.16.3",
+    "uvicorn[standard]==0.54.0",
+    "rdflib==7.6.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+    "pytest-asyncio==1.5.0",
+    "testcontainers[postgres]==4.15.0",
+    # the real knowledge API, for tests only (never installed in the image)
+    "tmfc060-knowledge-api",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+tmfc060-knowledge-api = { path = "../knowledgeApiMicroservice", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+markers = ["integration: needs Docker (testcontainers)"]

@@ -1,0 +1,64 @@
+{{- if .Values.modelResolver.modelGatewayService.enabled }}
+{{- $sa := include "km.apiServiceAccount" . -}}
+{{- $clusterName := printf "%s-%s-mgs-crd" .Release.Namespace $sa | trunc 63 | trimSuffix "-" -}}
+{{- $ns := include "km.mgsNamespace" . -}}
+# The API checks that the ModelGatewayService CRD exists (that one CRD only)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $clusterName }}
+  labels:
+    {{- include "km.labels" . | nindent 4 }}
+rules:
+- apiGroups: [apiextensions.k8s.io]
+  resources: [customresourcedefinitions]
+  resourceNames: [modelgatewayservices.oda.tmforum.org]
+  verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $clusterName }}
+  labels:
+    {{- include "km.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $clusterName }}
+subjects:
+- kind: ServiceAccount
+  name: {{ $sa }}
+  namespace: {{ .Release.Namespace }}
+---
+# Read the ModelGatewayService, and Services for its endpoint when the resource names none
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $sa }}-mgs
+  namespace: {{ $ns }}
+  labels:
+    {{- include "km.labels" . | nindent 4 }}
+rules:
+- apiGroups: [oda.tmforum.org]
+  resources: [modelgatewayservices]
+  verbs: [get, list]
+- apiGroups: [""]
+  resources: [services]
+  verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $sa }}-mgs
+  namespace: {{ $ns }}
+  labels:
+    {{- include "km.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $sa }}-mgs
+subjects:
+- kind: ServiceAccount
+  name: {{ $sa }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}

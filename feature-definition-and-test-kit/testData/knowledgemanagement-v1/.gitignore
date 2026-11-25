@@ -1,0 +1,3 @@
+# Built by helm dependency build (package-manager-utils-helm)
+charts/
+Chart.lock

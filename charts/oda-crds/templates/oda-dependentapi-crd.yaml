@@ -44,7 +44,20 @@ spec:
                 type: string
                 enum:
                 - openapi
-                description: The type of API specification. Currently only OpenAPI (swagger) is supported.
+                - mcp
+                description: >
+                  The type of API specification: openapi (resolved by the Dependency Management operator) or mcp
+                  (for example the MCP API of a data resource binding, resolved by the operator that creates it).
+              dependencyKind:
+                type: string
+                enum:
+                - api
+                - data-resource
+                description: >
+                  What the dependency is for. api (the default when absent) is a dependent API declared by the
+                  component. data-resource is created by a data resource operator for a DataResourceConfig binding
+                  (ADR-010), owned by the DataResourceConfig and resolved by that operator, not by Dependency
+                  Management.
               selector:
                 type: object
                 description: key value pairs for filtering the dependent API search, e.g. 'releaseName:demo-b'.
@@ -127,7 +140,20 @@ spec:
                 type: string
                 enum:
                 - openapi
-                description: The type of API specification. Currently only OpenAPI (swagger) is supported.
+                - mcp
+                description: >
+                  The type of API specification: openapi (resolved by the Dependency Management operator) or mcp
+                  (for example the MCP API of a data resource binding, resolved by the operator that creates it).
+              dependencyKind:
+                type: string
+                enum:
+                - api
+                - data-resource
+                description: >
+                  What the dependency is for. api (the default when absent) is a dependent API declared by the
+                  component. data-resource is created by a data resource operator for a DataResourceConfig binding
+                  (ADR-010), owned by the DataResourceConfig and resolved by that operator, not by Dependency
+                  Management.
               selector:
                 type: object
                 description: key value pairs for filtering the dependent API search, e.g. 'releaseName:demo-b'.
@@ -207,7 +233,20 @@ spec:
                 type: string
                 enum:
                 - openapi
-                description: The type of API specification. Currently only OpenAPI (swagger) is supported.
+                - mcp
+                description: >
+                  The type of API specification: openapi (resolved by the Dependency Management operator) or mcp
+                  (for example the MCP API of a data resource binding, resolved by the operator that creates it).
+              dependencyKind:
+                type: string
+                enum:
+                - api
+                - data-resource
+                description: >
+                  What the dependency is for. api (the default when absent) is a dependent API declared by the
+                  component. data-resource is created by a data resource operator for a DataResourceConfig binding
+                  (ADR-010), owned by the DataResourceConfig and resolved by that operator, not by Dependency
+                  Management.
               selector:
                 type: object
                 description: key value pairs for filtering the dependent API search, e.g. 'releaseName:demo-b'.

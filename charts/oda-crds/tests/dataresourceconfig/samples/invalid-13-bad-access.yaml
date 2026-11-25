@@ -1,0 +1,11 @@
+# expect: reject: Unsupported value: "write"
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: invalid-13-bad-access
+spec:
+  provider: odaComponent
+  dependentDataResources:
+  - name: incident-kb
+    access: write
+    providerRef: {componentId: TMFC060, knowledgeId: kb-1}

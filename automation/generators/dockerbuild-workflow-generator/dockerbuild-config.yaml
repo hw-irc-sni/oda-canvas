@@ -101,6 +101,34 @@ dependentapi-simple-operator:
   # default is "linux/amd64,linux/arm64"
   #platforms: linux/amd64,linux/arm64
 
+agentgateway-mcp-operator:
+  displayName: Agentgateway-MCP-Operator
+  fileName: agentgateway-mcp-operator
+
+  valuesYamlFile: charts/canvas-oda/values.yaml
+  valuesPathImage: .agentgateway-mcp-operator.image
+  valuesPathVersion: .agentgateway-mcp-operator.version
+  valuesPathPrereleaseSuffix: .agentgateway-mcp-operator.prereleaseSuffix
+
+  paths:
+    - source/operators/TMFOP013-AI-Gateway-Management/agentgateway-mcp-operator/docker/**/*
+  buildContext: source/operators/TMFOP013-AI-Gateway-Management/agentgateway-mcp-operator/docker
+  testDockerfile: source/operators/TMFOP013-AI-Gateway-Management/agentgateway-mcp-operator/docker/DockerfileTest
+
+dataresource-operator:
+  displayName: Dataresource-Operator
+  fileName: dataresource-operator
+
+  valuesYamlFile: charts/canvas-oda/values.yaml
+  valuesPathImage: .dataresource-operator.image
+  valuesPathVersion: .dataresource-operator.version
+  valuesPathPrereleaseSuffix: .dataresource-operator.prereleaseSuffix
+
+  paths:
+    - source/operators/TMFOP012-Data-Resource-Management/dataresource-operator/docker/**/*
+  buildContext: source/operators/TMFOP012-Data-Resource-Management/dataresource-operator/docker
+  testDockerfile: source/operators/TMFOP012-Data-Resource-Management/dataresource-operator/docker/DockerfileTest
+
 dependency-management-keycloak-authz:
   displayName: Dependency-Management-Keycloak-Authz
   fileName: dependency-management-keycloak-authz
@@ -349,3 +377,42 @@ carbon-management-operator:
   buildDockerfile: source/operators/TMFOP011-Carbon-Management/carbon-management/Dockerfile
   # default is "linux/amd64,linux/arm64"
   #platforms: linux/amd64,linux/arm64
+
+tmfc060-knowledge-api:
+  displayName: TMFC060-Knowledge-API
+  fileName: tmfc060-knowledge-api
+
+  valuesYamlFile: source/components/TMFC060-KnowledgeManagement/chart/values.yaml
+  valuesPathImage: .knowledgeApi.image
+  valuesPathVersion: .knowledgeApi.version
+  valuesPathPrereleaseSuffix: .knowledgeApi.prereleaseSuffix
+
+  paths:
+    - source/components/TMFC060-KnowledgeManagement/knowledgeApiMicroservice/**/*
+  buildContext: source/components/TMFC060-KnowledgeManagement/knowledgeApiMicroservice
+
+tmfc060-pipeline-worker:
+  displayName: TMFC060-Pipeline-Worker
+  fileName: tmfc060-pipeline-worker
+
+  valuesYamlFile: source/components/TMFC060-KnowledgeManagement/chart/values.yaml
+  valuesPathImage: .pipelineWorker.image
+  valuesPathVersion: .pipelineWorker.version
+  valuesPathPrereleaseSuffix: .pipelineWorker.prereleaseSuffix
+
+  paths:
+    - source/components/TMFC060-KnowledgeManagement/pipelineWorkerMicroservice/**/*
+  buildContext: source/components/TMFC060-KnowledgeManagement/pipelineWorkerMicroservice
+
+tmfc060-mcp-server:
+  displayName: TMFC060-MCP-Server
+  fileName: tmfc060-mcp-server
+
+  valuesYamlFile: source/components/TMFC060-KnowledgeManagement/chart/values.yaml
+  valuesPathImage: .mcpServer.image
+  valuesPathVersion: .mcpServer.version
+  valuesPathPrereleaseSuffix: .mcpServer.prereleaseSuffix
+
+  paths:
+    - source/components/TMFC060-KnowledgeManagement/mcpServerMicroservice/**/*
+  buildContext: source/components/TMFC060-KnowledgeManagement/mcpServerMicroservice

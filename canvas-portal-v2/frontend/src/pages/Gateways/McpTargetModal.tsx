@@ -5,6 +5,9 @@ import { addMcpTarget, updateMcpTarget, type McpTarget, type McpTargetInput } fr
 import { colors } from '@/theme'
 import { errorDetail } from './errorDetail'
 
+// MCP servers the Canvas registers (TMFOP013) are named oda-<namespace>-<exposedapi>
+const MANAGED_PREFIX = 'oda-'
+
 const TRANSPORT_OPTIONS = [
   { value: 'mcp', label: 'Streamable HTTP (mcp)' },
   { value: 'sse', label: 'Server-Sent Events (sse)' },
@@ -128,7 +131,15 @@ export default function McpTargetModal({
             name="name"
             label="Name"
             extra={help('With more than one server, the gateway adds this name to every tool name, such as myserver_echo. Adding, removing or renaming a server can change the names clients use.')}
-            rules={[{ required: true, whitespace: true, message: 'Enter a name' }]}
+            rules={[
+              { required: true, whitespace: true, message: 'Enter a name' },
+              {
+                validator: (_, value?: string) =>
+                  value?.trim().startsWith(MANAGED_PREFIX)
+                    ? Promise.reject(new Error(`Names starting with "${MANAGED_PREFIX}" are reserved for the servers the Canvas registers`))
+                    : Promise.resolve(),
+              },
+            ]}
           >
             <Input autoComplete="off" />
           </Form.Item>

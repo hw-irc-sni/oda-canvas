@@ -268,6 +268,9 @@ export interface McpTarget {
   tokenSet: boolean
   policies: Record<string, unknown>
   revision: string
+  /** Registered by the Canvas (TMFOP013, oda-<namespace>-<exposedapi>): read-only here. */
+  managed?: boolean
+  managedBy?: string | null
 }
 
 export interface McpTargets {

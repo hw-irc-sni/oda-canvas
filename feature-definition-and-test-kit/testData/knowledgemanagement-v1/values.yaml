@@ -1,0 +1,3 @@
+# Values of the TMFC060 chart, under its name. The defaults are the chart's own; a scenario that needs others sets
+# them here.
+knowledgemanagement: {}

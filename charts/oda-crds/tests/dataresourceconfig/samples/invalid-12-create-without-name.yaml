@@ -1,0 +1,12 @@
+# expect: reject: create.name: Required value
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: invalid-12-create-without-name
+spec:
+  provider: odaComponent
+  dependentDataResources:
+  - name: incident-kb
+    providerRef:
+      componentId: TMFC060
+      create: {storeKind: hybrid}

@@ -216,6 +216,17 @@ const toolColumns = ({ configFor, onEdit, onRemove, removing, isLastTarget }: Ta
     render: (_, tool) => {
       const target = configFor(tool.name)
       if (!target) return null
+      if (target.managed) {
+        return (
+          <Tooltip
+            title={`${target.managedBy ?? 'The Canvas'} registers this server from a component's MCP API and removes it with the component, so it can't be changed here.`}
+          >
+            <Tag color="blue" aria-label={`${tool.name} is managed by the Canvas`}>
+              Managed by the Canvas
+            </Tag>
+          </Tooltip>
+        )
+      }
       return (
         <Space size={8}>
           <Button size="small" aria-label={`Edit ${tool.name}`} onClick={() => onEdit(target)}>

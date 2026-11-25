@@ -108,6 +108,44 @@ const identityManagerUtils = {
       // If there's an error (like 404), assume client doesn't exist
       return false;
     }
+  },
+
+  /**
+   * Function that returns the roles of one client that are assigned to the service account
+   * of another client, for example the roles a provider component granted to a consumer component
+   * @param    {String} consumerClientName   Client whose service account holds the roles
+   * @param    {String} providerClientName   Client that defines the roles
+   * @return   {Array}                       The names of the assigned roles (empty if none)
+   */
+  getClientRolesOfServiceAccount: async function(consumerClientName, providerClientName) {
+    const token = await identityManagerUtils.getToken(config.baseURL, config.user, config.password);
+    const headers = { Authorization: 'Bearer ' + token };
+    const findClient = async (clientName) => {
+      const res = await axios({
+        url: '/admin/realms/' + config.realm + '/clients',
+        baseURL: config.baseURL,
+        method: 'get',
+        headers: headers,
+        params: { clientId: clientName }
+      });
+      if (!res.data || res.data.length === 0) throw new Error(`Client '${clientName}' not found`);
+      return res.data[0].id;
+    };
+    const consumerId = await findClient(consumerClientName);
+    const providerId = await findClient(providerClientName);
+    const serviceAccount = await axios({
+      url: '/admin/realms/' + config.realm + '/clients/' + consumerId + '/service-account-user',
+      baseURL: config.baseURL,
+      method: 'get',
+      headers: headers
+    });
+    const roles = await axios({
+      url: '/admin/realms/' + config.realm + '/users/' + serviceAccount.data.id + '/role-mappings/clients/' + providerId,
+      baseURL: config.baseURL,
+      method: 'get',
+      headers: headers
+    });
+    return roles.data.map(({name}) => name);
   }
 }
 

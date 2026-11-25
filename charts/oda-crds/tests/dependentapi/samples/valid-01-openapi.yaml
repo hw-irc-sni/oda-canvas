@@ -1,0 +1,12 @@
+# expect: accept
+# An existing openapi DependentAPI, unchanged
+apiVersion: oda.tmforum.org/v1
+kind: DependentAPI
+metadata:
+  name: pc-productcatalogmanagement-party
+spec:
+  name: party
+  apiType: openapi
+  specification:
+    url: https://raw.githubusercontent.com/tmforum-apis/TMF632_PartyManagement/master/TMF632-Party-v4.0.0.swagger.json
+    version: v4.0.0

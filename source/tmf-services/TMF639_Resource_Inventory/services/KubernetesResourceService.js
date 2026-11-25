@@ -145,7 +145,7 @@ class KubernetesResourceService {
     /**
      * Convert Kubernetes Component to TMF639 Resource format
      */
-    convertComponentToResource(k8sComponent, relatedExposedAPIs = []) {
+    convertComponentToResource(k8sComponent, relatedExposedAPIs = [], dataRelationships = []) {
         const metadata = k8sComponent.metadata || {};
         const spec = k8sComponent.spec || {};
         const status = k8sComponent.status || {};
@@ -186,7 +186,16 @@ class KubernetesResourceService {
                     value: characteristicValue
                 });
             });
-        }        // Build related resources - ExposedAPIs that belong to this Component
+        }
+        // The component's catalog id under an unambiguous name (ADR-011); the 'id' characteristic stays
+        if (spec.componentMetadata && spec.componentMetadata.id !== undefined) {
+            characteristics.push({
+                '@type': 'Characteristic',
+                name: 'componentId',
+                value: spec.componentMetadata.id
+            });
+        }
+        // Build related resources - ExposedAPIs that belong to this Component
         const resourceRelationship = relatedExposedAPIs.map(api => ({
 			'@type': 'ResourceRelationship',
 			relationshipType: 'exposes',
@@ -197,6 +206,7 @@ class KubernetesResourceService {
 			    href: `/tmf-api/resourceInventoryManagement/v5/resource/${api.metadata.name}`,
 			}
         }));
+        resourceRelationship.push(...dataRelationships);
 
         return {
             id: metadata.name,
@@ -265,6 +275,14 @@ class KubernetesResourceService {
                 value: spec.implementation
             }
         ];
+        // Port and path of the implementation Service, so in-cluster clients can call it without the gateway,
+        // whose published url may not resolve inside the cluster (spike S2)
+        if (spec.port !== undefined && spec.port !== null) {
+            characteristics.push({ '@type': 'Characteristic', name: 'port', value: spec.port });
+        }
+        if (spec.path) {
+            characteristics.push({ '@type': 'Characteristic', name: 'path', value: spec.path });
+        }
 
 		// Format was changed from array to flattened key-value pairs
         // // Add specification characteristic if spec.specification exists and is an array
@@ -336,6 +354,205 @@ class KubernetesResourceService {
         };
     }
 
+    /**
+     * Get DataResourceConfigs (ADR-010) from Kubernetes; an empty list when the CRD isn't installed
+     */
+    async getDataResourceConfigs(namespace = null) {
+        try {
+            namespace = namespace || config.KUBERNETES_NAMESPACE;
+            const response = await this.customObjectsApi.listNamespacedCustomObject(
+                'oda.tmforum.org', 'v1alpha1', namespace, 'dataresourceconfigs'
+            );
+            return response.body.items || [];
+        } catch (error) {
+            const statusCode = error.response && error.response.statusCode;
+            // 404: no DataResourceConfig CRD; 403: no RBAC for it (an older chart). Either way the inventory
+            // works without the DataResource category. Only the status is logged, never the request (its
+            // Authorization header holds the service account token).
+            if (statusCode === 404 || statusCode === 403) {
+                if (statusCode === 403) {
+                    logger.warn('DataResourceConfigs not readable (403): the DataResource category is empty; ' +
+                        'grant list on dataresourceconfigs.oda.tmforum.org');
+                }
+                return [];
+            }
+            logger.error(`Error fetching DataResourceConfigs: ${statusCode || ''} ${error.message || error}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Project DataResourceConfigs into DataResource resources at two levels (ADR-011):
+     *  - store entries, from spec.providedDataResources[] (role provider) and Databricks dependentDataResources[]
+     *  - content entries (knowledge-bases, ontology modules), from status.providedResources[]
+     * and the relationships the ODAComponents get: provides (to what they serve) and dependsOn (to what they are
+     * bound to).
+     * @return {{resources: Array, componentRelationships: Object}} componentRelationships maps a component name to
+     *         the relationships to add to its ODAComponent resource
+     */
+    projectDataResources(dataResourceConfigs = []) {
+        const resources = [];
+        const componentRelationships = {};
+        const addToComponent = (component, relationshipType, targetId) => {
+            if (!component) return;
+            (componentRelationships[component] = componentRelationships[component] || [])
+                .push(this.relationship(relationshipType, targetId));
+        };
+        // provider component name -> its provider DataResourceConfig, for the consumers' bindings
+        const providerDrcByComponent = {};
+        for (const drc of dataResourceConfigs) {
+            const spec = drc.spec || {};
+            if (spec.provider === 'odaComponent' && spec.role === 'provider') {
+                providerDrcByComponent[this.componentOf(drc)] = drc;
+            }
+        }
+
+        for (const drc of dataResourceConfigs) {
+            const metadata = drc.metadata || {};
+            const spec = drc.spec || {};
+            const status = drc.status || {};
+            const component = this.componentOf(drc);
+            const role = spec.role || 'consumer';
+
+            if (spec.provider === 'odaComponent' && role === 'provider') {
+                const stores = (spec.providedDataResources || []).map(item => ({ item, id: `${metadata.name}.${item.name}` }));
+                const contents = (status.providedResources || []).map(entry => ({
+                    entry, id: `${metadata.name}.${entry.kind}.${entry.id}`, stores: this.storesOf(entry, stores)
+                }));
+                for (const { item, id } of stores) {
+                    const relationships = component ? [this.relationship('providedBy', component)] : [];
+                    contents.filter(c => c.stores.includes(id))
+                        .forEach(c => relationships.push(this.relationship('contains', c.id)));
+                    resources.push(this.dataResource(id, item.name, item.description, item.type, [
+                        ['type', item.type], ['engine', item.engine], ['namespace', metadata.namespace],
+                        ['dataResourceConfig', metadata.name], ['description', item.description]
+                    ], relationships, this.storeStatus(status), metadata));
+                    addToComponent(component, 'provides', id);
+                }
+                for (const { entry, id, stores: partOf } of contents) {
+                    const relationships = component ? [this.relationship('providedBy', component)] : [];
+                    partOf.forEach(storeId => relationships.push(this.relationship('isPartOf', storeId)));
+                    resources.push(this.dataResource(id, entry.name || entry.id, undefined, entry.kind, [
+                        ['kind', entry.kind], ['storeKind', entry.storeKind], ['layer', entry.layer],
+                        ['lifecycleStatus', entry.lifecycleStatus], ['namespace', metadata.namespace],
+                        ['href', entry.href]
+                    ], relationships, this.contentStatus(entry.lifecycleStatus), metadata));
+                    addToComponent(component, 'provides', id);
+                }
+            } else if (spec.provider === 'odaComponent') {
+                // consumer: dependsOn the bound knowledge-base, or the provider's store when none is bound
+                const items = spec.dependentDataResources || [];
+                for (const binding of status.bindings || []) {
+                    const providerDrc = providerDrcByComponent[binding.providerComponent];
+                    if (!providerDrc) continue;
+                    let target = null;
+                    if (binding.kbId) {
+                        target = `${providerDrc.metadata.name}.knowledge.${binding.kbId}`;
+                    } else {
+                        const wanted = (items.find(i => i.name === binding.name) || {}).type;
+                        const provided = (providerDrc.spec.providedDataResources || []);
+                        const store = provided.find(p => p.type === wanted) || provided[0];
+                        if (store) target = `${providerDrc.metadata.name}.${store.name}`;
+                    }
+                    if (target) addToComponent(component, 'dependsOn', target);
+                }
+            } else if (spec.provider === 'databricks') {
+                for (const item of spec.dependentDataResources || []) {
+                    const id = `${metadata.name}.${item.name}`;
+                    const type = item.type || (item.accessType === 'vector-search' ? 'vectorStore' : 'dataProduct');
+                    resources.push(this.dataResource(id, item.name, item.description, type, [
+                        ['type', type], ['engine', 'databricks'], ['namespace', metadata.namespace],
+                        ['dataResourceConfig', metadata.name], ['description', item.description],
+                        ['dataProductType', item.dataProductType], ['accessType', item.accessType]
+                    ], [], this.storeStatus(status), metadata));
+                    addToComponent(component, 'dependsOn', id);
+                }
+            }
+        }
+        return { resources, componentRelationships };
+    }
+
+    /** The ODA Component a DataResourceConfig belongs to: its componentName label, else a Component owner */
+    componentOf(drc) {
+        const metadata = drc.metadata || {};
+        const label = (metadata.labels || {})['oda.tmforum.org/componentName'];
+        if (label) return label;
+        const owner = (metadata.ownerReferences || []).find(o => o.kind === 'Component');
+        return owner ? owner.name : null;
+    }
+
+    /** The store entries a content entry is part of: a hybrid knowledge-base both stores, modules the graph */
+    storesOf(entry, stores) {
+        let wanted;
+        if (entry.kind === 'knowledgeSpecification' || entry.storeKind === 'graph') wanted = ['knowledgeGraph'];
+        else if (entry.storeKind === 'vector') wanted = ['vectorStore'];
+        else if (entry.storeKind === 'hybrid') wanted = ['vectorStore', 'knowledgeGraph'];
+        else wanted = entry.type ? [entry.type] : [];
+        return stores.filter(s => wanted.includes(s.item.type)).map(s => s.id);
+    }
+
+    relationship(relationshipType, targetId) {
+        return {
+            '@type': 'ResourceRelationship',
+            relationshipType,
+            id: `${relationshipType}_${targetId}`,
+            resource: {
+                '@type': 'ResourceRef',
+                id: targetId,
+                href: `/tmf-api/resourceInventoryManagement/v5/resource/${targetId}`
+            }
+        };
+    }
+
+    dataResource(id, name, description, specName, characteristics, relationships, state, drcMetadata) {
+        return {
+            id,
+            resourceVersion: drcMetadata.resourceVersion,
+            href: `/tmf-api/resourceInventoryManagement/v5/resource/${id}`,
+            '@type': 'LogicalResource',
+            '@baseType': 'Resource',
+            name,
+            description: description || `Data resource: ${name}`,
+            category: 'DataResource',
+            resourceSpecification: {
+                '@type': 'ResourceSpecificationRef',
+                id: 'DataResource',
+                name: specName || 'DataResource'
+            },
+            resourceCharacteristic: characteristics
+                .filter(([, value]) => value !== undefined && value !== null && value !== '')
+                .map(([cname, value]) => ({ '@type': 'Characteristic', name: cname, value })),
+            resourceStatus: state.resourceStatus,
+            operationalState: state.operationalState,
+            administrativeState: 'unlocked',
+            usageState: 'active',
+            startDate: drcMetadata.creationTimestamp,
+            resourceRelationship: relationships
+        };
+    }
+
+    /** Store entries follow the DataResourceConfig's Ready condition (Databricks: its phase) */
+    storeStatus(status = {}) {
+        const ready = (status.conditions || []).find(c => c.type === 'Ready');
+        const isReady = ready ? ready.status === 'True' : status.phase === 'Ready';
+        return isReady ? { resourceStatus: 'available', operationalState: 'enable' }
+            : { resourceStatus: 'standby', operationalState: 'disable' };
+    }
+
+    /** Content entries follow the item's lifecycleStatus */
+    contentStatus(lifecycleStatus) {
+        switch (lifecycleStatus) {
+            case 'published':
+                return { resourceStatus: 'available', operationalState: 'enable' };
+            case 'deprecated':
+                return { resourceStatus: 'suspended', operationalState: 'disable' };
+            case 'rejected':
+                return { resourceStatus: 'unknown', operationalState: 'disable' };
+            default:   // draft, proposed, inReview, agreed
+                return { resourceStatus: 'standby', operationalState: 'disable' };
+        }
+    }
+
     mapComponentStatusToResourceStatus(status) {
         const summary = status["summary/status"] || {};
         switch (summary.deployment_status) {
@@ -392,10 +609,15 @@ class KubernetesResourceService {
             const exposedApis = await this.getExposedAPIs(namespace);
             logger.info(`KubernetesResourceService: Found ${exposedApis.length} ExposedAPIs`);
 
-            // Convert Components to TMF639 Resources with related ExposedAPIs
+            // Project DataResourceConfigs into DataResource resources (ADR-011)
+            const dataResourceConfigs = await this.getDataResourceConfigs(namespace);
+            const { resources: dataResources, componentRelationships } = this.projectDataResources(dataResourceConfigs);
+
+            // Convert Components to TMF639 Resources with related ExposedAPIs and data resources
             const componentResources = components.map(component => {
                 const relatedExposedAPIs = this.findRelatedExposedAPIs(component.metadata.name, exposedApis);
-                return this.convertComponentToResource(component, relatedExposedAPIs);
+                return this.convertComponentToResource(component, relatedExposedAPIs,
+                    componentRelationships[component.metadata.name] || []);
             });
             
             // Convert ExposedAPIs to TMF639 Resources with related Component
@@ -405,7 +627,7 @@ class KubernetesResourceService {
             });
 
             // Combine all resources
-            const allResources = [...componentResources, ...exposedApiResources];
+            const allResources = [...componentResources, ...exposedApiResources, ...dataResources];
             logger.info(`KubernetesResourceService: Returning ${allResources.length} total resources`);
             
             return allResources;
@@ -431,7 +653,18 @@ class KubernetesResourceService {
                 // Get related ExposedAPIs for this Component
                 const exposedApis = await this.getExposedAPIs(namespace);
                 const relatedExposedAPIs = this.findRelatedExposedAPIs(component.metadata.name, exposedApis);
-                return this.convertComponentToResource(component, relatedExposedAPIs);
+                const { componentRelationships } = this.projectDataResources(await this.getDataResourceConfigs(namespace));
+                return this.convertComponentToResource(component, relatedExposedAPIs,
+                    componentRelationships[component.metadata.name] || []);
+            }
+
+            // A DataResource id is <dataresourceconfig>.<item> or <dataresourceconfig>.<kind>.<id> (ADR-011)
+            if (id.includes('.')) {
+                const { resources } = this.projectDataResources(await this.getDataResourceConfigs(namespace));
+                const dataResource = resources.find(r => r.id === id);
+                if (dataResource) {
+                    return dataResource;
+                }
             }
 
             // Try to find as ExposedAPI

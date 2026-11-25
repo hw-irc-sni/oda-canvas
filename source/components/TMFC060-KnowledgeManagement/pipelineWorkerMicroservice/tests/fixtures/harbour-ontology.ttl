@@ -1,0 +1,20 @@
+# A small assurance ontology for the end-to-end test, with the TMF Intent Common Model terms the intent uses.
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix as: <https://example.org/e2e/assurance#> .
+@prefix icm: <http://tio.models.tmforum.org/tio/v3.6.0/IntentCommonModel/> .
+
+<https://example.org/e2e/assurance> a owl:Ontology ; rdfs:label "E2E assurance" .
+
+as:Site a owl:Class ; rdfs:label "Site" .
+as:Cell a owl:Class ; rdfs:subClassOf as:Site ; rdfs:label "Cell" .
+as:Alarm a owl:Class ; rdfs:label "Alarm" .
+as:affects a owl:ObjectProperty ; rdfs:domain as:Alarm ; rdfs:range as:Cell ; rdfs:label "affects" .
+as:locatedAt a owl:ObjectProperty ; rdfs:range as:Site ; rdfs:label "located at" .
+as:severity a owl:DatatypeProperty ; rdfs:domain as:Alarm ; rdfs:range xsd:string ; rdfs:label "severity" .
+
+icm:Intent a owl:Class ; rdfs:label "Intent" .
+icm:DeliveryExpectation a owl:Class ; rdfs:label "Delivery expectation" .
+icm:hasExpectation a owl:ObjectProperty ; rdfs:label "has expectation" .
+icm:target a owl:ObjectProperty ; rdfs:label "target" .

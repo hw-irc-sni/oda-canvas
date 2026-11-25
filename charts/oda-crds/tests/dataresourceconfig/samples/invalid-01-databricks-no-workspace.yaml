@@ -1,0 +1,9 @@
+# expect: reject: needs a workspace
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: invalid-01-databricks-no-workspace
+spec:
+  provider: databricks
+  dependentDataResources:
+  - {name: network-kpis, accessType: sql}

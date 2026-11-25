@@ -1,19 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import * as d3 from 'd3'
-import dagre from '@dagrejs/dagre'
-import {
-  CompressOutlined,
-  DownloadOutlined,
-  FullscreenExitOutlined,
-  FullscreenOutlined,
-  MinusOutlined,
-  PlusOutlined,
-} from '@ant-design/icons'
-import { Button, Dropdown, Empty, Select, Space, Tag } from 'antd'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Button, Empty, Select, Space, Tag } from 'antd'
 
 import type { GraphLink, GraphNode, GraphPayload } from '@/api/relationships'
+import { downloadBlob, escapeXmlAttr, escapeXmlText, svgSource, timestamp } from '@/components/graph/export'
+import GraphToolbar from '@/components/graph/GraphToolbar'
+import { edgePath } from '@/components/graph/layout'
+import { emptySurfaceStyle, graphContainerStyle, graphSurfaceStyle, truncate } from '@/components/graph/surface'
+import { useGraphViewport } from '@/components/graph/useGraphViewport'
 import { colors } from '@/theme'
-import { edgePath, nodeDimensions, type PositionedEdge } from './dagre-layout'
+import { nodeDimensions, type PositionedEdge } from './dagre-layout'
 import { LINK_STYLES, NODE_STYLES, nodeTypeLabel, type RelationType } from './style'
 
 interface ResourceMapViewProps {
@@ -51,15 +46,8 @@ const MIN_ZOOM = 0.035
 const MAX_ZOOM = 2.6
 
 export default function ResourceMapView({ data, onSelectNode }: ResourceMapViewProps) {
-  const wrapperRef = useRef<HTMLDivElement | null>(null)
-  const svgRef = useRef<SVGSVGElement | null>(null)
-  const canvasRef = useRef<SVGGElement | null>(null)
-  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null)
   const [namespace, setNamespace] = useState<string>()
   const [selectedComponentIds, setSelectedComponentIds] = useState<string[]>([])
-  const [viewportWidth, setViewportWidth] = useState(1160)
-  const [viewportHeight, setViewportHeight] = useState(MAP_HEIGHT)
-  const [isFullscreen, setIsFullscreen] = useState(false)
 
   const components = useMemo(() => {
     return data.nodes
@@ -93,102 +81,32 @@ export default function ResourceMapView({ data, onSelectNode }: ResourceMapViewP
     [layout.nodes, selectedComponentIds],
   )
 
-  useEffect(() => {
-    if (!wrapperRef.current) return
-    const observer = new ResizeObserver((entries) => {
-      const rect = entries[0]?.contentRect
-      if (rect) {
-        setViewportWidth(Math.max(820, Math.floor(rect.width)))
-        setViewportHeight(Math.max(MAP_HEIGHT, Math.floor(rect.height)))
-      }
-    })
-    observer.observe(wrapperRef.current)
-    return () => observer.disconnect()
-  }, [layout.nodes.length > 0])
-
-  // Exit fullscreen on Escape — standard browser pattern.
-  useEffect(() => {
-    if (!isFullscreen) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsFullscreen(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [isFullscreen])
-
-  // Attach d3-zoom whenever the SVG is mounted. Has to depend on
-  // `layout.nodes.length > 0` because the SVG is conditionally rendered
-  // (empty state hides it), so refs are null on the first render and a
-  // single-shot `useEffect(…, [])` would never see them.
-  const hasNodes = layout.nodes.length > 0
-  useEffect(() => {
-    if (!hasNodes) return
-    const svgEl = svgRef.current
-    const canvas = canvasRef.current
-    if (!svgEl || !canvas) return
-    const svg = d3.select(svgEl)
-    const graphCanvas = d3.select(canvas)
-    const zoom = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([MIN_ZOOM, MAX_ZOOM])
-      .filter((event) => {
-        // Allow left-mouse-drag pan + wheel zoom; ignore right-click (so
-        // browser context menu still works) and ignore drags that start
-        // on a button so the toolbar still works inside the wrapper.
-        if (event.type === 'mousedown' && event.button !== 0) return false
-        const target = event.target as Element | null
-        if (target?.closest('button')) return false
-        return !event.ctrlKey && !event.metaKey
-      })
-      .on('zoom', (event) => graphCanvas.attr('transform', event.transform.toString()))
-    zoomRef.current = zoom
-    svg.call(zoom as never)
-    // Set initial transform so subsequent fit-to-screen has something to compose with.
-    svg.call((selection) => zoom.transform(selection as never, d3.zoomIdentity))
-    return () => {
-      svg.interrupt()
-      svg.on('.zoom', null)
-      zoomRef.current = null
-    }
-  }, [hasNodes])
-
-  useEffect(() => {
-    fitToScreen()
-  }, [layoutKey, layout.bounds.width, layout.bounds.height, viewportWidth, viewportHeight, isFullscreen])
-
-  function zoomBy(factor: number) {
-    const svgEl = svgRef.current
-    const zoom = zoomRef.current
-    if (!svgEl || !zoom) return
-    d3.select(svgEl).transition().duration(180).call((selection) => zoom.scaleBy(selection as never, factor))
-  }
-
-  function fitToScreen() {
-    const svgEl = svgRef.current
-    const zoom = zoomRef.current
-    if (!svgEl || !zoom || layout.nodes.length === 0) return
-    const scale = Math.min(
-      (viewportWidth - MAP_PADDING * 2) / layout.bounds.width,
-      (viewportHeight - MAP_PADDING * 2) / layout.bounds.height,
-      1.15,
-    )
-    const safeScale = Math.max(MIN_ZOOM, scale)
-    const translateX = (viewportWidth - layout.bounds.width * safeScale) / 2
-    const translateY = (viewportHeight - layout.bounds.height * safeScale) / 2
-    const transform = d3.zoomIdentity.translate(translateX, translateY).scale(safeScale)
-    d3.select(svgEl).transition().duration(320).call((selection) => zoom.transform(selection as never, transform))
-  }
+  const {
+    wrapperRef,
+    svgRef,
+    canvasRef,
+    viewportWidth,
+    viewportHeight,
+    isFullscreen,
+    toggleFullscreen,
+    zoomBy,
+    fitToScreen,
+  } = useGraphViewport({
+    hasNodes: layout.nodes.length > 0,
+    bounds: layout.bounds,
+    layoutKey,
+    height: MAP_HEIGHT,
+    minWidth: 820,
+    padding: MAP_PADDING,
+    minZoom: MIN_ZOOM,
+    maxZoom: MAX_ZOOM,
+    maxFitScale: 1.15,
+  })
 
   function downloadSvg() {
     const svgEl = svgRef.current
     if (!svgEl) return
-    const clone = svgEl.cloneNode(true) as SVGSVGElement
-    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
-    clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
-    // Bake a sensible width/height so the file opens at a useful size in Inkscape/Figma.
-    clone.setAttribute('width', String(layout.bounds.width))
-    clone.setAttribute('height', String(layout.bounds.height))
-    clone.setAttribute('viewBox', `0 0 ${layout.bounds.width} ${layout.bounds.height}`)
-    const source = '<?xml version="1.0" standalone="no"?>\n' + new XMLSerializer().serializeToString(clone)
+    const source = svgSource(svgEl, layout.bounds)
     downloadBlob(source, `resource-map-${timestamp()}.svg`, 'image/svg+xml;charset=utf-8')
   }
 
@@ -245,37 +163,8 @@ ${cells.join('\n')}
     downloadBlob(xml, `resource-map-${timestamp()}.drawio`, 'application/xml;charset=utf-8')
   }
 
-  const containerStyle: React.CSSProperties = isFullscreen
-    ? {
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100vw',
-        height: '100vh',
-        zIndex: 1000,
-        background: '#ffffff',
-        padding: 20,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-        overflow: 'hidden',
-      }
-    : {}
-
-  const wrapperStyle: React.CSSProperties = {
-    position: 'relative',
-    width: '100%',
-    height: isFullscreen ? '100%' : MAP_HEIGHT,
-    flex: isFullscreen ? 1 : undefined,
-    border: `1px solid ${colors.border}`,
-    borderRadius: 14,
-    overflow: 'hidden',
-    background: colors.surfaceSubtle,
-    boxShadow: 'inset 0 1px 2px rgba(15,23,42,0.03)',
-  }
-
   return (
-    <div style={containerStyle}>
+    <div style={graphContainerStyle(isFullscreen)}>
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         gap: 14, flexWrap: 'wrap', marginBottom: isFullscreen ? 0 : 14,
@@ -327,35 +216,22 @@ ${cells.join('\n')}
           <Tag color="cyan">{layout.nodes.length} related resources</Tag>
           <Tag color="geekblue">{layout.edges.length} relationships</Tag>
         </Space>
-        <Space size={8} wrap>
-          <Dropdown
-            disabled={layout.nodes.length === 0}
-            menu={{
-              items: [
-                { key: 'svg', label: 'Download SVG (image)', onClick: downloadSvg },
-                { key: 'drawio', label: 'Download .drawio (XML for diagrams.net)', onClick: downloadDrawio },
-              ],
-            }}
-          >
-            <Button icon={<DownloadOutlined />}>Export</Button>
-          </Dropdown>
-          <Button
-            icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
-            onClick={() => setIsFullscreen((v) => !v)}
-          >
-            {isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-          </Button>
-          <Space.Compact>
-            <Button aria-label="Zoom out" icon={<MinusOutlined />} onClick={() => zoomBy(0.82)} />
-            <Button icon={<CompressOutlined />} onClick={fitToScreen}>Fit</Button>
-            <Button aria-label="Zoom in" icon={<PlusOutlined />} onClick={() => zoomBy(1.22)} />
-          </Space.Compact>
-        </Space>
+        <GraphToolbar
+          exports={[
+            { key: 'svg', label: 'Download SVG (image)', onClick: downloadSvg },
+            { key: 'drawio', label: 'Download .drawio (XML for diagrams.net)', onClick: downloadDrawio },
+          ]}
+          exportDisabled={layout.nodes.length === 0}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
+          onZoom={zoomBy}
+          onFit={fitToScreen}
+        />
       </div>
 
-      <div ref={wrapperRef} style={wrapperStyle}>
+      <div ref={wrapperRef} style={graphSurfaceStyle(isFullscreen, MAP_HEIGHT)}>
         {layout.nodes.length === 0 ? (
-          <div style={emptySurface}>
+          <div style={emptySurfaceStyle}>
             <Empty description="Select at least one component to view its related resources" />
           </div>
         ) : (
@@ -932,45 +808,4 @@ function computeMapLayout(nodes: GraphNode[], links: GraphLink[]): MapResult {
       height: maxY - minY + MAP_PADDING,
     },
   }
-}
-
-function truncate(value: string, max: number): string {
-  return value.length > max ? `${value.slice(0, max - 3)}...` : value
-}
-
-function escapeXmlText(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-function escapeXmlAttr(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
-function downloadBlob(content: string, filename: string, mime: string) {
-  const blob = new Blob([content], { type: mime })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
-}
-
-function timestamp(): string {
-  const d = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
-}
-
-const emptySurface: React.CSSProperties = {
-  height: '100%',
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
 }

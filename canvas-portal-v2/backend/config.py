@@ -89,6 +89,25 @@ class Settings(BaseSettings):
     # The workflow viewer as a browser reaches it. Optional.
     ORCHESTRATION_CENTER_PAGE_URL: str = ""
 
+    # TMFC060 Knowledge Management instances behind the AI > Knowledge page. "ri" discovers them in
+    # TMF639 Resource Inventory; "static" uses KNOWLEDGE_INSTANCES_JSON only. KNOWLEDGE_URL_MODE "service"
+    # calls each API's in-cluster Service (the gateway URL may not resolve in the cluster, spike S2);
+    # "gateway" calls the URL Resource Inventory reports.
+    KNOWLEDGE_DISCOVERY: Literal["ri", "static"] = "ri"
+    KNOWLEDGE_INSTANCES_JSON: str = "[]"
+    KNOWLEDGE_URL_MODE: Literal["service", "gateway"] = "service"
+    RESOURCE_INVENTORY_URL: str = "http://resource-inventory.canvas.svc.cluster.local/tmf-api/resourceInventoryManagement/v5"
+    KNOWLEDGE_CACHE_TTL_SECONDS: int = 30
+    # How long the last good instance list is served, marked stale, while Resource Inventory fails.
+    KNOWLEDGE_STALE_TTL_SECONDS: int = 600
+    # The instance client role that counts as the OAS's symbolic canvasSystemRole (the component's CANVAS_SYSTEM_ROLE).
+    KNOWLEDGE_CANVAS_SYSTEM_ROLE: str = "canvasRole"
+    # Proxy limits: the largest request body forwarded, and the upstream timeout (recommend may call an LLM).
+    KNOWLEDGE_MAX_BODY_BYTES: int = 10 * 1024 * 1024
+    # Document uploads (multipart): the component's 50 MiB documents plus 1 MiB for the multipart envelope.
+    KNOWLEDGE_MAX_UPLOAD_BYTES: int = 51 * 1024 * 1024
+    KNOWLEDGE_TIMEOUT_SECONDS: float = 60.0
+
     @property
     def allowed_chart_sources(self) -> list[str]:
         import json

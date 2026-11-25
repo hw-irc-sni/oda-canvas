@@ -19,6 +19,7 @@ A web management portal for an ODA Canvas. It is the successor to the Spring Boo
 - **Model gateway:** create, edit and delete `ModelGatewayService` resources, and proxy chat requests through them.
 - **Registries:** list agents and skills from the in-cluster OpenAN Registry Center and from external registries added by admins.
 - **High Value Scenarios:** the TM Forum AN L4 high-value scenario map, and the solution packages from an OpenAN Orchestration Center placed on it.
+- **Knowledge** (backend): the TMFC060 Knowledge Management instances of the Canvas, the user's capabilities on each, and a proxy to their knowledge-base and ontology APIs. See [Knowledge](#knowledge).
 - **Cluster overview and observability:** a cluster summary, plus Grafana and Prometheus links if configured.
 - **Authentication:** Keycloak or Entra ID (`IDM_PROVIDER`). The backend validates the JWT and the browser keeps a refresh cookie.
 
@@ -31,6 +32,8 @@ Each active model has a **Test** button. It opens a dialog, sends `PING` to the 
 Admins can also change models. The **+** icon in the Models section adds one, and each model in the gateway's `llm.models` list has **Edit** and **Remove** buttons. The dialog has the common [`llm.models[]` settings](https://github.com/agentgateway/agentgateway/blob/v1.7.0/schema/config.md) as form fields, and an **Advanced** JSON box for the rest. The backend writes the change to the gateway's ConfigMap, annotates the gateway pods so the file refreshes right away (if it has that access), and waits for the gateway to report the result. If the gateway rejects the change, the backend puts the config back and shows the error. API keys go in a Secret that the gateway reads as files, and the portal never shows them again. The gateway expands environment variables across its whole config file, so a new `$` is refused everywhere except the API key. New `file` references and TLS file paths are refused too, because the gateway reads them from its own pod. A `helm upgrade` of the gateway needs extra steps after this, or it drops these changes: see the [chart README](../charts/agentgateway/README.md#models-and-mcp-servers-changed-from-the-portal).
 
 Admins can change MCP servers the same way: the **+** icon in the Tools & Resources section adds one, and each server in the gateway's `mcp.targets` list has **Edit** and **Remove** buttons. A server that can't be reached still reloads cleanly, but with the default `failClosed` it fails every MCP request, so the backend also lists tools after each change and undoes the change if that stops working. Auth tokens go in the same Secret as API keys. Some things can't be added from the page, though existing ones stay: `stdio` servers, because they run a process inside the gateway pod, and OpenAPI schemas from a file or URL. Loopback and link-local addresses are refused anywhere in the settings of models and MCP servers, because the gateway's admin port has no auth. Backend auth other than a key is refused too, because `gcp`, `aws`, `azure` and `passthrough` can send the gateway's identity or the caller's token to a chosen host. Settings like these that are already in the config stay when you edit. `statefulMode`, `prefixMode` and `failureMode` apply to all servers, so they stay in the chart values.
+
+Servers named `oda-…` are **managed by the Canvas**: the AI Gateway Management operator (TMFOP013) registers each MCP API that a component exposes as `oda-<namespace>-<exposedapi>`, with the caller's token forwarded (`passthrough`), and removes it with the component. The page shows them with a *Managed by the Canvas* tag instead of **Edit** and **Remove**, and the backend refuses to add, change, rename or remove a server with that prefix (403). Every save re-reads the config and changes only its own entry, so the operator's servers are kept, including ones registered while the form was open.
 
 The name of each live tool and resource opens an inspector dialog, modelled on the [MCP Inspector](https://github.com/modelcontextprotocol/inspector). The backend runs a full MCP session through the gateway for each call, and only for items the gateway lists at that moment. The **Protocol** tab shows the JSON-RPC exchanges.
 
@@ -300,6 +303,118 @@ Things to know when operating this:
 - **Logins.** The Orchestration Center allows 5 logins a minute per client and keeps sessions in memory, so they end when its pod restarts. The backend reuses its token, and logs in again once if a request returns 401. After a rejected login it waits 60 seconds before trying again.
 - **Freshness.** Results are cached for 60 seconds, and the page reloads them every minute.
 - **Errors.** A failure upstream returns 502 with a fixed message, never 401, so it can't log the user out of the portal. The backend logs the details.
+
+## Knowledge
+
+The AI > Knowledge page works with the **TMFC060 Knowledge Management** instances of the Canvas, the knowledge-bases
+and the federated ontology they serve (`source/components/TMFC060-KnowledgeManagement`). The backend lists them,
+tells the page what the user may do on each, and forwards the page's calls to them.
+
+### The page
+
+The instance picker in the header remembers the last choice in the browser. Each part shows only what the user's roles
+on the instance allow; the component checks every call again.
+
+| Section | Views |
+|---|---|
+| **Knowledge-Base** | The knowledge-bases (create, edit, delete). Each one's details: overview with statistics, active model route and lifecycle; documents; sources and ingestion; jobs (TMF701); pipeline proposals; search and recommendations; graph explorer with RDF import and export; SPARQL console |
+| **Federated Ontology** | Modules (graph by layer, table, register, edit), terms (search, describe, layer chain), mappings of bridge modules, reviews (propose, review, rule, history), validation (modules and documents), federation peers |
+
+Roles combine. A reviewer or an approver can list knowledge-bases and move them through their lifecycle, but reads
+their content only with `knowledge-viewer` as well.
+
+### Discovery
+
+With `backend.knowledge.discovery: ri` (the default), the backend asks TMF639 Resource Inventory
+(`backend.knowledge.resourceInventoryUrl`) for every ODAComponent whose `componentId` is TMFC060, and for the `API`
+resources each one exposes:
+
+| API | How it is recognised |
+|---|---|
+| TMFxxx Knowledge Management | apiType `openapi`, apiName `knowledgemanagement` |
+| TMF701 Process Flow (ingestion jobs) | apiType `openapi`, apiName `processflow` |
+| MCP | apiType `mcp` |
+
+An instance is identified by its **component name**, which is also its Keycloak client id. Instances that aren't
+deployed yet, or have no TMFxxx API, are listed with `available: false`.
+
+The gateway URL Resource Inventory reports often doesn't resolve inside the cluster (on kind it is the ingress
+LoadBalancer address `127.0.0.1`). So with `urlMode: service` (the default), the backend calls each API's Service
+directly, at `http://<implementation>.<namespace>.svc.cluster.local:<port><path>`. This needs Resource Inventory 1.2.1
+or later, which reports `port` and `path`. With older versions the backend falls back to the gateway URL. TMFC060
+checks every call's token and roles itself, so calling the Service bypasses only gateway-level policies, such as rate
+limits. Use `urlMode: gateway` where the reported URL resolves inside the cluster.
+
+The list is cached for `cacheTtlSeconds` (30). If Resource Inventory fails, the last good list is served, marked
+`stale`, for up to `staleTtlSeconds` (600). After that the call fails with 502. With `discovery: static`, only
+`backend.knowledge.instances` are listed: `{name, label, namespace, apiUrl, processUrl, mcpUrl}`, with `name` and
+`apiUrl` required and the URLs used as given. Values from Resource Inventory and from `instances` are validated before
+they become URLs, and a malformed entry is skipped with a warning.
+
+### Roles and capabilities
+
+TMFC060 has five roles on its client: `knowledge-viewer`, `knowledge-editor`, `ontology-editor`, `ontology-reviewer`
+and `ontology-approver`. A portal login token carries them in `resource_access["<instance>"]`, as long as the user
+holds one of them. Grant them in Keycloak, on the instance's client in the Canvas realm.
+
+- **`GET /api/knowledge/instances`** returns each instance with the user's `capabilities`:
+  - `roles`
+  - `operations`, from operationId to allowed
+  - the lifecycle `transitions` the user may make on knowledge-bases and ontology modules
+  - the `reviewKinds` they may post
+
+  These come from the roles in the token and from the `x-required-roles`, `x-lifecycle` and `x-review-kinds`
+  extensions of the OAS **the instance itself serves**. The OAS is fetched from `<apiUrl>/openapi.yaml` and
+  `<processUrl>/openapi.yaml`, capped at 2 MB and cached for 5 minutes. The page hides what the capabilities don't
+  allow. The client role named by `backend.knowledge.canvasSystemRole` (`canvasRole` by default, as the component's
+  `CANVAS_SYSTEM_ROLE`) counts as the OAS's symbolic `canvasSystemRole`.
+
+  Each instance also has its active `modelRoute` (`status` and route name only), which the portal reads from the
+  component's `/health` (cached for 30 s; null when it can't be read, or for a user with no role).
+- **`/api/knowledge/{instance}/{path}`** forwards a call to the instance's TMFxxx or TMF701 API, with the **user's own
+  bearer token**. Only operations of the instance's OAS are forwarded. Listeners, hubs, event sources and schemas
+  aren't, and anything else is a 404 without calling the instance.
+  - **No role:** a user with no role on the instance gets a 403 from the portal.
+  - **Otherwise the component decides,** and its 403, like every other 4xx except 401, is passed through with its body.
+  - **Failures:** an upstream 401, redirect, 5xx, timeout or unreachable instance becomes a **502**, with no upstream
+    detail. The page treats a 401 as an expired portal session.
+  - **Headers:** only `Authorization`, `Accept`, `Content-Type`, `If-Match` and `If-None-Match` are forwarded, and
+    only `Content-Type`, `Content-Disposition`, `ETag`, `Last-Modified`, `X-Total-Count`, `X-Result-Count`,
+    `X-Search-Mode` and `X-Result-Truncated` are
+    returned.
+
+The portal logs users in through the `canvas-keycloak` Service, so its tokens name that Service as issuer. The TMFC060
+chart accepts it by default (`keycloak.issuerBaseUrls`). If the portal's `KEYCLOAK_URL` differs, add the portal's realm
+URL to the TMFC060 chart's `keycloak.extraIssuers`.
+
+### Uploads and downloads
+
+- **Streaming:** request and response bodies stream through the backend, and through the frontend nginx for
+  `/api/knowledge/`, without buffering.
+- **Caps:** a document upload may be up to `maxUploadBytes` (51 MiB: the component's 50 MiB documents plus the
+  multipart envelope). Every other body may be up to `maxBodyBytes` (10 MB). Above the cap the answer is 413, before
+  the body is read when its length is declared, and while streaming otherwise. The chart sets the frontend nginx
+  `client_max_body_size` for `/api/knowledge/` to `maxUploadBytes`.
+- **Downloads:** document content is always served as a download (`Content-Disposition: attachment`) with
+  `Content-Security-Policy: sandbox`, because knowledge-editors can upload HTML. Every proxied response carries
+  `X-Content-Type-Options: nosniff`.
+
+### Configuration
+
+| Value (`backend.knowledge.`) | Backend setting | Default |
+|---|---|---|
+| `discovery` | `KNOWLEDGE_DISCOVERY` | `ri` (`ri` or `static`) |
+| `resourceInventoryUrl` | `RESOURCE_INVENTORY_URL` | `http://resource-inventory.canvas.svc.cluster.local/tmf-api/resourceInventoryManagement/v5` |
+| `urlMode` | `KNOWLEDGE_URL_MODE` | `service` (`service` or `gateway`) |
+| `instances` | `KNOWLEDGE_INSTANCES_JSON` | `[]` |
+| `cacheTtlSeconds`, `staleTtlSeconds` | `KNOWLEDGE_CACHE_TTL_SECONDS`, `KNOWLEDGE_STALE_TTL_SECONDS` | `30`, `600` |
+| `canvasSystemRole` | `KNOWLEDGE_CANVAS_SYSTEM_ROLE` | `canvasRole` |
+| `maxBodyBytes` | `KNOWLEDGE_MAX_BODY_BYTES` | `10485760` |
+| `maxUploadBytes` | `KNOWLEDGE_MAX_UPLOAD_BYTES`, and the frontend's `KNOWLEDGE_MAX_UPLOAD_SIZE` | `53477376` |
+| `timeoutSeconds` | `KNOWLEDGE_TIMEOUT_SECONDS` | `60` |
+
+The backend needs no extra Kubernetes permissions for this: it reads Resource Inventory over HTTP and calls the
+instances with the user's token.
 
 ## Local development
 

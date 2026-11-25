@@ -1,0 +1,336 @@
+"""/knowledge, /knowledge/{id}, its /graph (Graph Store Protocol) and /query (read-only SPARQL)."""
+import re
+import time
+from urllib.parse import parse_qs, quote
+
+import httpx
+from pyoxigraph import NamedNode
+
+from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import JSONResponse, StreamingResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..auth import Principal, require_operation
+from ..dataset import ModuleInfo, query_dataset
+from ..db.models import KnowledgeSpecification as SpecRow
+from ..errors import ApiError
+from ..graphstore import kb_graph
+from ..listing import list_response, present
+from .. import processes
+from ..models import ModelError
+from ..ontology import federation
+from ..query import effective_timeout, precheck, run_query
+from ..routers.deps import session
+from ..routers.specifications import json_body
+from . import proposals, recommend
+from .documents import Documents
+from .service import KnowledgeBases
+from .vectors import Vectors
+
+router = APIRouter()
+GRAPH_TYPES = ("text/turtle", "application/ld+json")
+
+
+def kbs_for(request: Request, s: AsyncSession) -> KnowledgeBases:
+    state = request.app.state
+    return KnowledgeBases(s, state.graphs, state.settings, state.events,
+                          Vectors(state.qdrant, state.settings.embedding_dimension), state.lifecycles)
+
+
+def graph_media_type(request: Request) -> str:
+    accept = request.headers.get("accept", "")
+    return "application/ld+json" if "application/ld+json" in accept and "text/turtle" not in accept \
+        else "text/turtle"
+
+
+def body_media_type(request: Request) -> str:
+    media_type = request.headers.get("content-type", "text/turtle").split(";")[0].strip().lower()
+    if media_type not in GRAPH_TYPES:
+        raise ApiError(415, "415", "Unsupported Media Type", f"Use one of {', '.join(GRAPH_TYPES)}")
+    return media_type
+
+
+@router.get("/knowledge")
+async def list_knowledge(request: Request, s: AsyncSession = Depends(session),
+                         _: Principal = Depends(require_operation("listKnowledge"))):
+    return list_response(request, await kbs_for(request, s).all_bodies())
+
+
+@router.post("/knowledge", status_code=201)
+async def create_knowledge(request: Request, s: AsyncSession = Depends(session),
+                           principal: Principal = Depends(require_operation("createKnowledge"))):
+    body = await kbs_for(request, s).create(await json_body(request), principal)
+    return JSONResponse(present(request, body), status_code=201)
+
+
+@router.get("/knowledge/{id}")
+async def retrieve_knowledge(id: str, request: Request, s: AsyncSession = Depends(session),
+                             _: Principal = Depends(require_operation("retrieveKnowledge"))):
+    kbs = kbs_for(request, s)
+    return present(request, await kbs.body(await kbs.get_row(id)))
+
+
+@router.patch("/knowledge/{id}")
+async def patch_knowledge(id: str, request: Request, s: AsyncSession = Depends(session),
+                          principal: Principal = Depends(require_operation("patchKnowledge"))):
+    return present(request, await kbs_for(request, s).patch(id, await json_body(request), principal))
+
+
+@router.delete("/knowledge/{id}", status_code=204)
+async def delete_knowledge(id: str, request: Request, s: AsyncSession = Depends(session),
+                           principal: Principal = Depends(require_operation("deleteKnowledge"))):
+    await kbs_for(request, s).delete(id, principal)
+    return Response(status_code=204)
+
+
+# ---- graph (Graph Store Protocol) ------------------------------------------------------------------------------
+@router.get("/knowledge/{id}/graph")
+async def retrieve_graph(id: str, request: Request, s: AsyncSession = Depends(session),
+                         _: Principal = Depends(require_operation("retrieveKnowledgeGraph"))):
+    kbs = kbs_for(request, s)
+    await kbs.get_row(id)
+    media_type = graph_media_type(request)
+    return Response(kbs.graphs.export_union(kbs.graphs.kb_graphs(id), media_type), media_type=media_type)
+
+
+@router.put("/knowledge/{id}/graph", status_code=204)
+async def replace_graph(id: str, request: Request, s: AsyncSession = Depends(session),
+                        principal: Principal = Depends(require_operation("replaceKnowledgeGraph"))):
+    await kbs_for(request, s).write_graph(id, principal, "replace", await request.body(), body_media_type(request))
+    return Response(status_code=204)
+
+
+@router.post("/knowledge/{id}/graph", status_code=204)
+async def merge_graph(id: str, request: Request, s: AsyncSession = Depends(session),
+                      principal: Principal = Depends(require_operation("mergeKnowledgeGraph"))):
+    await kbs_for(request, s).write_graph(id, principal, "merge", await request.body(), body_media_type(request))
+    return Response(status_code=204)
+
+
+@router.delete("/knowledge/{id}/graph", status_code=204)
+async def clear_graph(id: str, request: Request, s: AsyncSession = Depends(session),
+                      principal: Principal = Depends(require_operation("clearKnowledgeGraph"))):
+    await kbs_for(request, s).write_graph(id, principal, "clear")
+    return Response(status_code=204)
+
+
+# ---- documents -------------------------------------------------------------------------------------------------
+def documents_for(request: Request, s: AsyncSession) -> Documents:
+    return Documents(kbs_for(request, s))
+
+
+@router.get("/knowledge/{id}/document")
+async def list_documents(id: str, request: Request, s: AsyncSession = Depends(session),
+                         _: Principal = Depends(require_operation("listKnowledgeDocument"))):
+    return list_response(request, await documents_for(request, s).list(id))
+
+
+@router.post("/knowledge/{id}/document", status_code=201)
+async def create_document(id: str, request: Request, s: AsyncSession = Depends(session),
+                          principal: Principal = Depends(require_operation("createKnowledgeDocument"))):
+    body = await documents_for(request, s).upload(id, principal, request.headers.get("content-type", ""),
+                                                  request.headers.get("content-length"), request.stream())
+    return JSONResponse(present(request, body), status_code=201)
+
+
+@router.get("/knowledge/{id}/document/{documentId}")
+async def retrieve_document(id: str, documentId: str, request: Request, s: AsyncSession = Depends(session),
+                            _: Principal = Depends(require_operation("retrieveKnowledgeDocument"))):
+    documents = documents_for(request, s)
+    return present(request, documents.present(await documents.get(id, documentId)))
+
+
+@router.get("/knowledge/{id}/document/{documentId}/content")
+async def retrieve_document_content(id: str, documentId: str, request: Request, s: AsyncSession = Depends(session),
+                                    _: Principal = Depends(require_operation("retrieveKnowledgeDocumentContent"))):
+    doc, chunks = await documents_for(request, s).content(id, documentId, request.app.state.sessions)
+    filename = quote(doc.name)
+    return StreamingResponse(chunks, media_type=doc.media_type, headers={
+        "Content-Length": str(doc.size), "Content-Disposition": f"attachment; filename*=UTF-8''{filename}"})
+
+
+@router.delete("/knowledge/{id}/document/{documentId}", status_code=204)
+async def delete_document(id: str, documentId: str, request: Request, s: AsyncSession = Depends(session),
+                          principal: Principal = Depends(require_operation("deleteKnowledgeDocument"))):
+    await documents_for(request, s).delete(id, documentId, principal)
+    return Response(status_code=204)
+
+
+# ---- recommend (KM-FX-06) --------------------------------------------------------------------------------------
+@router.post("/knowledge/{id}/recommend")
+async def recommend_knowledge(id: str, request: Request, s: AsyncSession = Depends(session),
+                              _: Principal = Depends(require_operation("recommendFromKnowledge"))):
+    kbs = kbs_for(request, s)
+    row = await kbs.get_row(id)
+    resolver = getattr(request.app.state, "models", None)
+
+    async def search(text: str, limit: int) -> list[dict]:
+        dense, mode = None, "hybrid"
+        try:
+            if resolver is None:
+                raise ModelError("No model resolver")
+            dense = (await resolver.embed([text]))[0]
+        except (ModelError, httpx.HTTPError, LookupError, ValueError):
+            mode = "sparse"
+        return await kbs.vectors.search(id, text, dense, top_k=limit, threshold=0.0, mode=mode, iris=None)
+
+    result = await recommend.recommend(s, kbs, row, await json_body(request), await dataset_for(s, kbs.graphs, row),
+                                       search)
+    return JSONResponse(result)
+
+
+@router.post("/knowledge/{id}/recommend/feedback", status_code=204)
+async def recommend_feedback(id: str, request: Request, s: AsyncSession = Depends(session),
+                             principal: Principal = Depends(require_operation("createRecommendationFeedback"))):
+    await kbs_for(request, s).get_row(id)
+    await recommend.feedback(s, id, await json_body(request), principal.username)
+    return Response(status_code=204)
+
+
+# ---- proposals (KM-FX-04) --------------------------------------------------------------------------------------
+@router.get("/knowledge/{id}/proposal")
+async def list_proposals(id: str, request: Request, s: AsyncSession = Depends(session),
+                         _: Principal = Depends(require_operation("listKnowledgeProposal"))):
+    await kbs_for(request, s).get_row(id)
+    base = request.app.state.settings.base_path
+    return list_response(request, [proposals.present(base, p) for p in await proposals.listing(s, id)])
+
+
+@router.get("/knowledge/{id}/proposal/{proposalId}")
+async def retrieve_proposal(id: str, proposalId: str, request: Request, s: AsyncSession = Depends(session),
+                            _: Principal = Depends(require_operation("retrieveKnowledgeProposal"))):
+    await kbs_for(request, s).get_row(id)
+    return present(request, proposals.present(request.app.state.settings.base_path,
+                                              await proposals.get(s, id, proposalId)))
+
+
+@router.patch("/knowledge/{id}/proposal/{proposalId}")
+async def decide_proposal(id: str, proposalId: str, request: Request, s: AsyncSession = Depends(session),
+                          principal: Principal = Depends(require_operation("patchKnowledgeProposal"))):
+    kbs = kbs_for(request, s)
+    row = await kbs.get_row(id)
+    kbs.check_writer(row, principal)
+    kbs.check_writable(row)
+    p = await proposals.get(s, id, proposalId)
+    await proposals.decide(s, kbs.graphs, p, await json_body(request), principal.username)
+    await kbs.publish("AttributeValueChange", row.body)
+    return present(request, proposals.present(request.app.state.settings.base_path, p))
+
+
+# ---- ingest ----------------------------------------------------------------------------------------------------
+@router.post("/knowledge/{id}/ingest", status_code=201)
+async def ingest_knowledge(id: str, request: Request, s: AsyncSession = Depends(session),
+                           principal: Principal = Depends(require_operation("createKnowledgeIngestion"))):
+    kbs = kbs_for(request, s)
+    row = await kbs.get_row(id)
+    kbs.check_writer(row, principal)
+    ref = await processes.start_ingestion(s, request.app.state.settings, row, await json_body(request))
+    return JSONResponse(present(request, ref), status_code=201)
+
+
+# ---- search ----------------------------------------------------------------------------------------------------
+IRI = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:[^\s<>\"{}|^`\\]+$")
+SUBCLASSES = "SELECT DISTINCT ?c WHERE {{ VALUES ?root {{ {roots} }} ?c <http://www.w3.org/2000/01/rdf-schema#subClassOf>* ?root }}"
+
+
+async def dataset_for(s: AsyncSession, graphs, row) -> list[str]:
+    """The graphs a KB's queries see: its graph and per-source graphs, plus its conformsTo closure
+    (published/deprecated modules)."""
+    modules = {m.id: ModuleInfo(m.lifecycle_status, tuple(r["id"] for r in m.body.get("imports") or []))
+               for m in (await s.scalars(select(SpecRow))).all()}
+    return query_dataset(row.id, [r["id"] for r in row.body.get("conformsTo") or []], modules,
+                         graphs.kb_graphs(row.id))
+
+
+def with_subclasses(store, dataset: list[str], iris: list[str]) -> list[str]:
+    roots = " ".join(f"<{i}>" for i in iris)
+    result = store.query(SUBCLASSES.format(roots=roots), default_graph=[NamedNode(g) for g in dataset])
+    return sorted(set(iris) | {solution["c"].value for solution in result if isinstance(solution["c"], NamedNode)})
+
+
+@router.post("/knowledge/{id}/search")
+async def search_knowledge(id: str, request: Request, s: AsyncSession = Depends(session),
+                           _: Principal = Depends(require_operation("searchKnowledge"))):
+    kbs = kbs_for(request, s)
+    row = await kbs.get_row(id)
+    payload = await json_body(request)
+    text = payload.get("query")
+    if not isinstance(text, str) or not text.strip():
+        raise ApiError(400, "400", "Bad Request", "query is required")
+    defaults = {"topK": 8, "scoreThreshold": 0, "hybrid": True, **(row.body.get("retrieval") or {})}
+    top_k = payload.get("topK", defaults["topK"])
+    threshold = payload.get("scoreThreshold", defaults["scoreThreshold"])
+    hybrid = payload.get("hybrid", defaults["hybrid"])
+    iris = payload.get("iriFilter")
+    if not isinstance(top_k, int) or isinstance(top_k, bool) or not 1 <= top_k <= 100:
+        raise ApiError(400, "400", "Bad Request", "topK must be an integer from 1 to 100")
+    if not isinstance(threshold, (int, float)) or isinstance(threshold, bool) or not 0 <= threshold <= 1:
+        raise ApiError(400, "400", "Bad Request", "scoreThreshold must be between 0 and 1")
+    if not isinstance(hybrid, bool):
+        raise ApiError(400, "400", "Bad Request", "hybrid must be true or false")
+    if iris is not None and (not isinstance(iris, list) or not all(isinstance(i, str) and IRI.match(i) for i in iris)):
+        raise ApiError(400, "400", "Bad Request", "iriFilter must be a list of IRIs")
+    if row.store_kind == "graph":
+        raise ApiError(409, "409", "Conflict", f"'{id}' is a graph knowledge-base and has no vector store")
+    if iris:
+        iris = with_subclasses(kbs.graphs.store, await dataset_for(s, kbs.graphs, row), iris)
+    else:
+        iris = None
+    resolver = getattr(request.app.state, "models", None)
+    dense, mode = None, "hybrid" if hybrid else "dense"
+    try:
+        if resolver is None:
+            raise ModelError("No model resolver")
+        dense = (await resolver.embed([text]))[0]
+    except (ModelError, httpx.HTTPError, LookupError, ValueError) as exc:
+        if not hybrid:
+            raise ApiError(503, "503", "Service Unavailable",
+                           f"Dense search needs the embedding model: {exc}") from exc
+        mode = "sparse"
+    hits = await kbs.vectors.search(id, text, dense, top_k=top_k, threshold=float(threshold), mode=mode, iris=iris)
+    return JSONResponse({"hits": hits}, headers={"X-Search-Mode": mode})
+
+
+# ---- query -----------------------------------------------------------------------------------------------------
+async def query_text(request: Request) -> str:
+    media_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    raw = await request.body()
+    if media_type == "application/sparql-query":
+        text = raw.decode("utf-8", errors="replace")
+    elif media_type == "application/x-www-form-urlencoded":
+        text = (parse_qs(raw.decode("utf-8", errors="replace")).get("query") or [""])[0]
+    else:
+        raise ApiError(415, "415", "Unsupported Media Type",
+                       "Send the query as application/sparql-query or a form field 'query'")
+    if not text.strip():
+        raise ApiError(400, "400", "Bad Request", "The query is empty")
+    return text
+
+
+@router.post("/knowledge/{id}/query")
+async def query_knowledge(id: str, request: Request, s: AsyncSession = Depends(session),
+                          _: Principal = Depends(require_operation("queryKnowledge"))):
+    settings = request.app.state.settings
+    kbs = kbs_for(request, s)
+    row = await kbs.get_row(id)
+    text = await query_text(request)
+    try:
+        requested = int(request.query_params["timeout"]) if "timeout" in request.query_params else None
+    except ValueError:
+        raise ApiError(400, "400", "Bad Request", "timeout must be an integer") from None
+    if requested is not None and requested < 1:
+        raise ApiError(400, "400", "Bad Request", "timeout must be at least 1")
+    dataset = await dataset_for(s, kbs.graphs, row)
+    graph_format = graph_media_type(request)
+    timeout = effective_timeout(requested, settings.query_timeout_default, settings.query_timeout_max)
+    # federation (#31): pre-check against the published remote modules, then send SERVICE through the relay
+    endpoints = await federation.allowlist(s)
+    precheck(text, frozenset(endpoints))
+    text, relays = federation.rewrite(text, endpoints, request.app.state.relay.port, time.time() + timeout)
+    result = await run_query(settings.store_path, text, dataset, timeout=timeout, row_cap=settings.query_row_cap,
+                             allowed_services=relays, graph_format=graph_format)
+    headers = {"X-Result-Truncated": "true"} if result.truncated else {}
+    if result.kind == "graph":
+        return Response(result.body, media_type=graph_format, headers=headers)
+    return JSONResponse(result.body, media_type="application/sparql-results+json", headers=headers)

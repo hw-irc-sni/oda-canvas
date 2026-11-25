@@ -1,0 +1,9 @@
+# expect: reject: needs a providerRef
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: invalid-05-odacomponent-no-providerref
+spec:
+  provider: odaComponent
+  dependentDataResources:
+  - {name: incident-kb, type: vectorStore}

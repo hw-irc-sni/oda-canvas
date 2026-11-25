@@ -523,6 +523,7 @@
                     <th>Status</th>
                     <th>Version</th>
                     <th>Exposed APIs</th>
+                    <th>Data Resources</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -586,13 +587,46 @@
                             {% endif %}
                         </td>
                         <td>
+                            {% set data = oda_component_data.get(component.id, {}) %}
+                            {% if data.get('provides') or data.get('dependsOn') %}
+                                <ul class="api-list">
+                                {% for dr in data.get('provides', []) %}
+                                    <li class="api-list-item">
+                                        <span class="api-name">
+                                            {% if not dr.store %}&nbsp;&nbsp;↳ {% endif %}<a href="/resource/{{ dr.id }}" class="api-link" target="_blank">{{ dr.name }}</a>
+                                        </span>
+                                        <div class="api-badges">
+                                            <span class="api-badge oas-badge-nolink">{{ dr.label }}</span>
+                                            {% if dr.detail %}<span class="api-badge oas-badge-nolink">{{ dr.detail }}</span>{% endif %}
+                                            {% if dr.lifecycleStatus %}<span class="api-badge oas-badge-nolink">{{ dr.lifecycleStatus }}</span>{% endif %}
+                                            {% if dr.status == 'available' %}
+                                                <span class="api-badge status-available-badge">{{ dr.status }}</span>
+                                            {% else %}
+                                                <span class="api-badge status-unavailable-badge">{{ dr.status }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </li>
+                                {% endfor %}
+                                {% for dr in data.get('dependsOn', []) %}
+                                    <li class="api-list-item">
+                                        <span class="api-name">depends on
+                                            <a href="/resource/{{ dr.id }}" class="api-link" target="_blank">{{ dr.name }}</a>
+                                        </span>
+                                    </li>
+                                {% endfor %}
+                                </ul>
+                            {% else %}
+                                <span class="no-data">No data resources</span>
+                            {% endif %}
+                        </td>
+                        <td>
                             <a href="/resource/{{ component.id }}" class="api-link" target="_blank">View Details</a>
                         </td>
                     </tr>
                 {% endfor %}
             {% else %}
                 <tr>
-                    <td colspan="6" class="no-data" style="text-align: center;">No ODA Components found</td>
+                    <td colspan="7" class="no-data" style="text-align: center;">No ODA Components found</td>
                 </tr>
             {% endif %}
             </tbody>

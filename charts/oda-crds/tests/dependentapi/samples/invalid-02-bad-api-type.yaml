@@ -1,0 +1,8 @@
+# expect: reject: Unsupported value: "graphql"
+apiVersion: oda.tmforum.org/v1
+kind: DependentAPI
+metadata:
+  name: bad-type
+spec:
+  name: kb
+  apiType: graphql

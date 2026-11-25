@@ -1,0 +1,23 @@
+# expect: accept
+# ADR-010 §9 provider example
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: km-knowledgemanagement
+  labels:
+    oda.tmforum.org/componentName: km-knowledgemanagement
+spec:
+  provider: odaComponent
+  role: provider
+  providedDataResources:
+  - name: knowledge-vectors
+    type: vectorStore
+    engine: qdrant
+    exposedAPI: knowledgemanagement
+    mcpAPI: knowledgemcp
+    retrieval: {topK: 8, scoreThreshold: 0.3, hybrid: true}
+  - name: knowledge-graph
+    type: knowledgeGraph
+    engine: pyoxigraph
+    exposedAPI: knowledgemanagement
+    mcpAPI: knowledgemcp

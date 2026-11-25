@@ -516,3 +516,70 @@ def test_target_keys_leaves_out_names_used_twice_and_combines_the_address_fields
     ]
 
     assert mcp.target_keys(KeysCore(targets, {"k": b64("x")})) == {"b": ("x", "http://b:8000/mcp")}
+
+
+# --- targets managed by the Canvas (TMFOP013, oda-<namespace>-<exposedapi>) -------------------------------------
+
+MANAGED = {
+    "name": "oda-components-km-knowledgemanagement-knowledgemcp",
+    "mcp": {"host": "http://km-kmmcp.components.svc.cluster.local:8080/km-knowledgemanagement/mcp"},
+    "policies": {"backendAuth": {"passthrough": {}}},
+}
+
+
+def with_managed(core, gateway):
+    """The operator registered a component's MCP API (it writes the ConfigMap the same way)."""
+    document = yaml.safe_load(core.text)
+    document["mcp"]["targets"].append(dict(MANAGED))
+    core.text = yaml.safe_dump(document, sort_keys=False)
+    gateway.config_written(core.text)
+
+
+def test_managed_targets_are_listed_as_managed(core, gateway):
+    with_managed(core, gateway)
+    managed = view(core, MANAGED["name"])
+    assert managed["managed"] is True and managed["managedBy"] == mcp.MANAGED_BY
+    assert view(core, "first")["managed"] is False and view(core, "first")["managedBy"] is None
+
+
+def test_managed_targets_cannot_be_changed_renamed_or_removed(core, http, gateway):
+    with_managed(core, gateway)
+    revision = view(core, MANAGED["name"])["revision"]
+    before = core.text
+    attempts = [
+        lambda: mcp.save_mcp_target(request(name=MANAGED["name"], host="http://elsewhere.test/mcp"), MANAGED["name"], revision, core=core, http=http),
+        lambda: mcp.save_mcp_target(request(name="renamed"), MANAGED["name"], revision, core=core, http=http),
+        lambda: mcp.remove_mcp_target(MANAGED["name"], core=core, http=http),
+    ]
+    for attempt in attempts:
+        with pytest.raises(GatewayRequestRefused) as refused:
+            attempt()
+        assert refused.value.status_code == 403 and "managed by the Canvas" in refused.value.message
+    assert core.text == before
+
+
+def test_new_names_with_the_managed_prefix_are_refused(core, http):
+    for name_args in (("oda-components-mine", None), ("oda-x", "first")):
+        name, original = name_args
+        with pytest.raises(GatewayRequestRefused) as refused:
+            mcp.save_mcp_target(request(name=name), original, view(core, "first")["revision"] if original else None, core=core, http=http)
+        assert refused.value.status_code == 403
+    assert [t["name"] for t in targets(core)] == ["first"]
+
+
+def test_user_changes_keep_the_managed_targets(core, http, gateway):
+    with_managed(core, gateway)
+    mcp.save_mcp_target(request(), core=core, http=http)                              # add
+    assert targets(core)[1] == MANAGED
+    revision = view(core, "second")["revision"]
+    mcp.save_mcp_target(request(host="http://second.test:9000/mcp"), "second", revision, core=core, http=http)   # edit
+    mcp.remove_mcp_target("first", core=core, http=http)                              # remove
+    assert [t["name"] for t in targets(core)] == [MANAGED["name"], "second"]
+    assert targets(core)[0] == MANAGED
+
+
+def test_a_target_registered_while_the_form_was_open_is_kept(core, http, gateway):
+    revision = view(core, "first")["revision"]                                        # the user opens "first"
+    with_managed(core, gateway)                                                       # the operator registers one
+    mcp.save_mcp_target(request(name="first", host="http://first.test:9000/mcp"), "first", revision, core=core, http=http)
+    assert targets(core)[1] == MANAGED and targets(core)[0]["mcp"]["host"] == "http://first.test:9000/mcp"

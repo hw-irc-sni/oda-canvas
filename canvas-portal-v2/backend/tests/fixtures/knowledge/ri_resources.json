@@ -1,0 +1,490 @@
+[
+  {
+    "id": "kmk-knowledgemanagement",
+    "resourceVersion": "11",
+    "href": "/tmf-api/resourceInventoryManagement/v5/resource/kmk-knowledgemanagement",
+    "@type": "LogicalResource",
+    "@baseType": "Resource",
+    "name": "kmk-knowledgemanagement",
+    "description": "ODA Component: kmk-knowledgemanagement",
+    "category": "ODAComponent",
+    "resourceSpecification": {
+      "@type": "ResourceSpecificationRef",
+      "id": "ODAComponent",
+      "name": "ODA Component"
+    },
+    "resourceCharacteristic": [
+      {
+        "@type": "Characteristic",
+        "name": "namespace",
+        "value": "components"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "deploymentStatus",
+        "value": "Complete"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "id",
+        "value": "TMFC060"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "name",
+        "value": "knowledgemanagement"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "functionalBlock",
+        "value": "IntelligenceManagement"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "publicationDate",
+        "value": "2026-11-24 00:00:00+00:00"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "status",
+        "value": "specified"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "version",
+        "value": "0.1.0"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "description",
+        "value": "TMFC060 Knowledge Management: knowledge-bases (vector and graph) and a governed, federated ontology."
+      },
+      {
+        "@type": "Characteristic",
+        "name": "componentId",
+        "value": "TMFC060"
+      }
+    ],
+    "resourceStatus": "available",
+    "operationalState": "enable",
+    "administrativeState": "unlocked",
+    "usageState": "active",
+    "startDate": "2026-11-24T10:00:00Z",
+    "resourceRelationship": [
+      {
+        "@type": "ResourceRelationship",
+        "relationshipType": "exposes",
+        "id": "expby_kmk-knowledgemanagement-knowledgemanagement",
+        "resource": {
+          "@type": "ResourceRef",
+          "id": "kmk-knowledgemanagement-knowledgemanagement",
+          "href": "/tmf-api/resourceInventoryManagement/v5/resource/kmk-knowledgemanagement-knowledgemanagement"
+        }
+      },
+      {
+        "@type": "ResourceRelationship",
+        "relationshipType": "exposes",
+        "id": "expby_kmk-knowledgemanagement-processflow",
+        "resource": {
+          "@type": "ResourceRef",
+          "id": "kmk-knowledgemanagement-processflow",
+          "href": "/tmf-api/resourceInventoryManagement/v5/resource/kmk-knowledgemanagement-processflow"
+        }
+      },
+      {
+        "@type": "ResourceRelationship",
+        "relationshipType": "exposes",
+        "id": "expby_kmk-knowledgemanagement-knowledgemcp",
+        "resource": {
+          "@type": "ResourceRef",
+          "id": "kmk-knowledgemanagement-knowledgemcp",
+          "href": "/tmf-api/resourceInventoryManagement/v5/resource/kmk-knowledgemanagement-knowledgemcp"
+        }
+      },
+      {
+        "@type": "ResourceRelationship",
+        "relationshipType": "exposes",
+        "id": "expby_kmk-knowledgemanagement-metrics",
+        "resource": {
+          "@type": "ResourceRef",
+          "id": "kmk-knowledgemanagement-metrics",
+          "href": "/tmf-api/resourceInventoryManagement/v5/resource/kmk-knowledgemanagement-metrics"
+        }
+      }
+    ]
+  },
+  {
+    "id": "kmk-knowledgemanagement-knowledgemanagement",
+    "resourceVersion": "12",
+    "href": "/tmf-api/resourceInventoryManagement/v5/resource/kmk-knowledgemanagement-knowledgemanagement",
+    "@type": "LogicalResource",
+    "@baseType": "Resource",
+    "name": "kmk-knowledgemanagement-knowledgemanagement",
+    "description": "Exposed API: knowledgemanagement",
+    "category": "API",
+    "resourceSpecification": {
+      "@type": "ResourceSpecificationRef",
+      "id": "API",
+      "name": "API"
+    },
+    "resourceCharacteristic": [
+      {
+        "@type": "Characteristic",
+        "name": "namespace",
+        "value": "components"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "apiName",
+        "value": "knowledgemanagement"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "apiType",
+        "value": "openapi"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "url",
+        "value": "https://127.0.0.1/kmk-knowledgemanagement/tmf-api/knowledgeManagement/v5"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "implementation",
+        "value": "kmk-kmapi"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "port",
+        "value": 8080
+      },
+      {
+        "@type": "Characteristic",
+        "name": "path",
+        "value": "/kmk-knowledgemanagement/tmf-api/knowledgeManagement/v5"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "specification",
+        "value": [
+          {
+            "url": "http://kmk-kmapi.components.svc.cluster.local:8080/kmk-knowledgemanagement/tmf-api/knowledgeManagement/v5/openapi.yaml"
+          }
+        ]
+      },
+      {
+        "@type": "Characteristic",
+        "name": "apiDocs",
+        "value": "https://127.0.0.1/kmk-knowledgemanagement/tmf-api/knowledgeManagement/v5/docs"
+      }
+    ],
+    "resourceStatus": "available",
+    "operationalState": "enable",
+    "administrativeState": "unlocked",
+    "usageState": "active",
+    "startDate": "2026-11-24T10:01:00Z",
+    "resourceRelationship": [
+      {
+        "@type": "ResourceRelationship",
+        "relationshipType": "exposedBy",
+        "id": "expby_kmk-knowledgemanagement",
+        "resource": {
+          "@type": "ResourceRef",
+          "id": "kmk-knowledgemanagement",
+          "href": "/tmf-api/resourceInventoryManagement/v5/resource/kmk-knowledgemanagement"
+        }
+      }
+    ]
+  },
+  {
+    "id": "kmk-knowledgemanagement-processflow",
+    "resourceVersion": "12",
+    "href": "/tmf-api/resourceInventoryManagement/v5/resource/kmk-knowledgemanagement-processflow",
+    "@type": "LogicalResource",
+    "@baseType": "Resource",
+    "name": "kmk-knowledgemanagement-processflow",
+    "description": "Exposed API: processflow",
+    "category": "API",
+    "resourceSpecification": {
+      "@type": "ResourceSpecificationRef",
+      "id": "API",
+      "name": "API"
+    },
+    "resourceCharacteristic": [
+      {
+        "@type": "Characteristic",
+        "name": "namespace",
+        "value": "components"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "apiName",
+        "value": "processflow"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "apiType",
+        "value": "openapi"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "url",
+        "value": "https://127.0.0.1/kmk-knowledgemanagement/tmf-api/process/v5"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "implementation",
+        "value": "kmk-kmapi"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "port",
+        "value": 8080
+      },
+      {
+        "@type": "Characteristic",
+        "name": "path",
+        "value": "/kmk-knowledgemanagement/tmf-api/process/v5"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "specification",
+        "value": [
+          {
+            "url": "http://kmk-kmapi.components.svc.cluster.local:8080/kmk-knowledgemanagement/tmf-api/process/v5/openapi.yaml"
+          }
+        ]
+      },
+      {
+        "@type": "Characteristic",
+        "name": "apiDocs",
+        "value": "https://127.0.0.1/kmk-knowledgemanagement/tmf-api/process/v5/docs"
+      }
+    ],
+    "resourceStatus": "available",
+    "operationalState": "enable",
+    "administrativeState": "unlocked",
+    "usageState": "active",
+    "startDate": "2026-11-24T10:01:00Z",
+    "resourceRelationship": [
+      {
+        "@type": "ResourceRelationship",
+        "relationshipType": "exposedBy",
+        "id": "expby_kmk-knowledgemanagement",
+        "resource": {
+          "@type": "ResourceRef",
+          "id": "kmk-knowledgemanagement",
+          "href": "/tmf-api/resourceInventoryManagement/v5/resource/kmk-knowledgemanagement"
+        }
+      }
+    ]
+  },
+  {
+    "id": "kmk-knowledgemanagement-knowledgemcp",
+    "resourceVersion": "12",
+    "href": "/tmf-api/resourceInventoryManagement/v5/resource/kmk-knowledgemanagement-knowledgemcp",
+    "@type": "LogicalResource",
+    "@baseType": "Resource",
+    "name": "kmk-knowledgemanagement-knowledgemcp",
+    "description": "Exposed API: knowledgemcp",
+    "category": "API",
+    "resourceSpecification": {
+      "@type": "ResourceSpecificationRef",
+      "id": "API",
+      "name": "API"
+    },
+    "resourceCharacteristic": [
+      {
+        "@type": "Characteristic",
+        "name": "namespace",
+        "value": "components"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "apiName",
+        "value": "knowledgemcp"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "apiType",
+        "value": "mcp"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "url",
+        "value": "https://127.0.0.1/kmk-knowledgemanagement/mcp"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "implementation",
+        "value": "kmk-kmmcp"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "port",
+        "value": 8080
+      },
+      {
+        "@type": "Characteristic",
+        "name": "path",
+        "value": "/kmk-knowledgemanagement/mcp"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "specification",
+        "value": [
+          {
+            "url": "https://modelcontextprotocol.io/specification/2025-06-18"
+          }
+        ]
+      },
+      {
+        "@type": "Characteristic",
+        "name": "apiDocs"
+      }
+    ],
+    "resourceStatus": "available",
+    "operationalState": "enable",
+    "administrativeState": "unlocked",
+    "usageState": "active",
+    "startDate": "2026-11-24T10:01:00Z",
+    "resourceRelationship": [
+      {
+        "@type": "ResourceRelationship",
+        "relationshipType": "exposedBy",
+        "id": "expby_kmk-knowledgemanagement",
+        "resource": {
+          "@type": "ResourceRef",
+          "id": "kmk-knowledgemanagement",
+          "href": "/tmf-api/resourceInventoryManagement/v5/resource/kmk-knowledgemanagement"
+        }
+      }
+    ]
+  },
+  {
+    "id": "kmk-knowledgemanagement-metrics",
+    "resourceVersion": "12",
+    "href": "/tmf-api/resourceInventoryManagement/v5/resource/kmk-knowledgemanagement-metrics",
+    "@type": "LogicalResource",
+    "@baseType": "Resource",
+    "name": "kmk-knowledgemanagement-metrics",
+    "description": "Exposed API: metrics",
+    "category": "API",
+    "resourceSpecification": {
+      "@type": "ResourceSpecificationRef",
+      "id": "API",
+      "name": "API"
+    },
+    "resourceCharacteristic": [
+      {
+        "@type": "Characteristic",
+        "name": "namespace",
+        "value": "components"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "apiName",
+        "value": "metrics"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "apiType",
+        "value": "prometheus"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "url",
+        "value": "https://127.0.0.1/kmk-knowledgemanagement/metrics"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "implementation",
+        "value": "kmk-kmapi"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "port",
+        "value": 4000
+      },
+      {
+        "@type": "Characteristic",
+        "name": "path",
+        "value": "/kmk-knowledgemanagement/metrics"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "apiDocs"
+      }
+    ],
+    "resourceStatus": "available",
+    "operationalState": "enable",
+    "administrativeState": "unlocked",
+    "usageState": "active",
+    "startDate": "2026-11-24T10:01:00Z",
+    "resourceRelationship": [
+      {
+        "@type": "ResourceRelationship",
+        "relationshipType": "exposedBy",
+        "id": "expby_kmk-knowledgemanagement",
+        "resource": {
+          "@type": "ResourceRef",
+          "id": "kmk-knowledgemanagement",
+          "href": "/tmf-api/resourceInventoryManagement/v5/resource/kmk-knowledgemanagement"
+        }
+      }
+    ]
+  },
+  {
+    "id": "pc-productcatalogmanagement",
+    "resourceVersion": "5",
+    "href": "/tmf-api/resourceInventoryManagement/v5/resource/pc-productcatalogmanagement",
+    "@type": "LogicalResource",
+    "@baseType": "Resource",
+    "name": "pc-productcatalogmanagement",
+    "description": "ODA Component: pc-productcatalogmanagement",
+    "category": "ODAComponent",
+    "resourceSpecification": {
+      "@type": "ResourceSpecificationRef",
+      "id": "ODAComponent",
+      "name": "ODA Component"
+    },
+    "resourceCharacteristic": [
+      {
+        "@type": "Characteristic",
+        "name": "namespace",
+        "value": "components"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "deploymentStatus",
+        "value": "Complete"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "id",
+        "value": "TMFC001"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "name",
+        "value": "productcatalogmanagement"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "version",
+        "value": "1.4.5"
+      },
+      {
+        "@type": "Characteristic",
+        "name": "componentId",
+        "value": "TMFC001"
+      }
+    ],
+    "resourceStatus": "available",
+    "operationalState": "enable",
+    "administrativeState": "unlocked",
+    "usageState": "active",
+    "startDate": "2026-11-15T09:43:00Z",
+    "resourceRelationship": []
+  }
+]

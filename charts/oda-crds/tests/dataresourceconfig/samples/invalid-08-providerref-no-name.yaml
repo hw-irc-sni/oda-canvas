@@ -1,0 +1,10 @@
+# expect: reject: exactly one of componentId and componentName
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: invalid-08-providerref-no-name
+spec:
+  provider: odaComponent
+  dependentDataResources:
+  - name: incident-kb
+    providerRef: {knowledgeId: kb-1}

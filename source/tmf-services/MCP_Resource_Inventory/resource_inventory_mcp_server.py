@@ -65,20 +65,41 @@ async def resource_get(
     offset: int = None,
     limit: int = None,
     filter: dict = None,
+    category: str = None,
 ) -> dict:
     """Retrieve resource information from the TM Forum Resource Inventory Management API.
 
     This tool provides read-only access to resources in the inventory. Resources can represent
     physical or logical assets that are being managed by the system.
 
+    In the ODA Canvas the inventory is a projection of the Canvas resources, with these categories:
+    - ODAComponent: a deployed component. Its characteristic componentId is the component specification id
+      (for example TMFC060 Knowledge Management); relationships: exposes (its APIs), provides (the data resources
+      it serves), dependsOn (the data resources it is bound to).
+    - API: an exposed API of a component (characteristics apiType, url, specification; relationship exposedBy).
+    - DataResource: a data resource (ADR-011), at two levels:
+      * store, id <dataresourceconfig>.<item>: a vector store, knowledge graph, data product or cache a component
+        serves (characteristic type: vectorStore, knowledgeGraph, dataProduct or cache; engine, for example qdrant).
+        Relationships: providedBy the ODAComponent, contains the knowledge-bases and modules it holds.
+      * content, id <dataresourceconfig>.knowledge.<id> (a knowledge-base) or
+        <dataresourceconfig>.knowledgeSpecification.<id> (an ontology module): characteristic kind (knowledge or
+        knowledgeSpecification), storeKind (graph, vector or hybrid), layer (modules), lifecycleStatus and href
+        (its URL in the provider's API). Relationships: providedBy the ODAComponent, isPartOf the store(s).
+      Listing category DataResource is the Data Registry view of the Canvas.
+
     Args:
         resource_id: Optional ID of a specific resource to retrieve. If not provided, returns all resources.
         fields: Optional comma-separated list of fields to include in the response.
         offset: Optional starting position for paginated results.
         limit: Optional maximum number of results to return.
-        filter: Optional dictionary of filter criteria to apply to the search.    Returns:
+        filter: Optional dictionary of filter criteria (attribute=value; a comma separates alternatives).
+        category: Optional category: ODAComponent, API or DataResource (added to the filter).
+
+    Returns:
         A dictionary containing the resource(s) information or an error message.
     """
+    if category:
+        filter = {**(filter or {}), "category": category}
     if filter:
         logger.info(f"MCP Tool - Getting resources with filter: {filter}")
     else:
@@ -527,7 +548,7 @@ async def resource_schema() -> dict:
                 },
                 "category": {
                     "type": "string",
-                    "description": "Category of the concrete resource. e.g Gold, Silver for MSISDN concrete resource",
+                    "description": "Category of the concrete resource. In the ODA Canvas: ODAComponent, API or DataResource (a data store, knowledge-base or ontology module served by a component, ADR-011)",
                 },
                 "administrativeState": {
                     "type": "string",
@@ -719,6 +740,25 @@ async def resource_schema() -> dict:
                 "@type": "LogicalResource",
             },
             {
+                "id": "km-knowledgemanagement.knowledge.incident-knowledge",
+                "name": "incident-knowledge",
+                "description": "A knowledge-base served by a TMFC060 Knowledge Management component (ADR-011)",
+                "category": "DataResource",
+                "resourceStatus": "available",
+                "@type": "LogicalResource",
+                "resourceCharacteristic": [
+                    {"name": "kind", "value": "knowledge"},
+                    {"name": "storeKind", "value": "hybrid"},
+                    {"name": "lifecycleStatus", "value": "published"},
+                    {"name": "href", "value": "https://<gateway>/km-knowledgemanagement/tmf-api/knowledgeManagement/v5/knowledge/incident-knowledge"},
+                ],
+                "resourceRelationship": [
+                    {"relationshipType": "providedBy", "resource": {"id": "km-knowledgemanagement"}},
+                    {"relationshipType": "isPartOf", "resource": {"id": "km-knowledgemanagement.knowledge-vectors"}},
+                    {"relationshipType": "isPartOf", "resource": {"id": "km-knowledgemanagement.knowledge-graph"}},
+                ],
+            },
+            {
                 "name": "ODA Component - Product Catalog",
                 "description": "Product Catalog microservice component",
                 "category": "ODA Component",
@@ -750,7 +790,7 @@ def list_resources_prompt(
 
     Args:
         limit: Maximum number of resources to retrieve (default: 10)
-        category: Optional category filter (e.g., "Network Security", "ODA Component")
+        category: Optional category filter (in the ODA Canvas: "ODAComponent", "API", "DataResource")
         resource_status: Optional status filter (e.g., "available", "reserved", "suspended")
 
     Returns:
@@ -777,7 +817,9 @@ Request details:
 The Resource Inventory contains information about physical and logical resources such as:
 * Network equipment (firewalls, routers, switches)
 * Virtual network functions and services
-* ODA Components (microservices)
+* ODA Components (category ODAComponent) and their APIs (category API)
+* Data resources (category DataResource): the data stores components serve, and the knowledge-bases and
+  ontology modules inside them
 * Storage systems and devices
 * Infrastructure resources
 
@@ -869,8 +911,11 @@ Search criteria:
 {f"- State filter: {state_filter}" if state_filter else "- No state filter applied"}
 
 Common resource types in the inventory include:
+* "ODAComponent" - Deployed ODA Components (characteristic componentId, e.g. TMFC060)
+* "API" - The APIs the components expose
+* "DataResource" - Data stores (characteristic type) and the knowledge-bases and ontology modules inside them
+  (characteristic kind), linked by providedBy/provides and isPartOf/contains
 * "Network Security" - Firewalls, intrusion detection systems
-* "ODA Component" - Microservice components and APIs
 * "Virtual Network Function" - Software-defined network services  
 * "Physical Infrastructure" - Servers, storage, network hardware
 * "Cloud Resource" - Virtual machines, containers, cloud services
@@ -884,6 +929,39 @@ Please search for resources matching these criteria and provide:
 This will help me understand what resources of this type are available and their current status.
 
 Filter parameters: {json.dumps(filter_params, indent=2)}
+"""
+
+
+@mcp.prompt()
+def find_knowledge_base_prompt(topic: str) -> str:
+    """Generate a prompt for finding a knowledge-base about a topic, and the component that serves it.
+
+    Args:
+        topic: What the knowledge should be about (for example "network incidents")
+
+    Returns:
+        A formatted prompt string.
+    """
+    return f"""
+I want to find a knowledge-base about: {topic}
+
+Use the Data Registry view of the ODA Canvas Resource Inventory (ADR-011):
+
+1. Call resource_get with category "DataResource".
+2. Keep the content entries with the characteristic kind = "knowledge" (knowledge-bases); entries with
+   kind = "knowledgeSpecification" are ontology modules, and entries with a type characteristic are the data
+   stores themselves.
+3. Pick the knowledge-bases whose name or description matches the topic. Prefer lifecycleStatus "published".
+4. For each match, report:
+   * its id, name, storeKind (graph, vector or hybrid), lifecycleStatus and href (its URL in the provider's API);
+   * the stores it isPartOf (vector store and/or knowledge graph);
+   * the ODAComponent it is providedBy: call resource_get with that id, and give its componentId (for example
+     TMFC060) and the APIs it exposes (its REST API and its MCP API, through the exposes relationships).
+5. Say which components already dependsOn the knowledge-base, if any (ODAComponents with a dependsOn
+   relationship to it).
+
+A component that wants to use the knowledge-base declares it in a consumer DataResourceConfig; the Canvas then
+grants it access and gives it the URLs (ADR-010).
 """
 
 
@@ -928,6 +1006,11 @@ The Resource Inventory Management API (TMF639) provides read-only access to info
   - Resource hierarchies (contains/contained-by)
   - Associations and references
 
+* **ODA Canvas categories**: ODAComponent, API and DataResource. The **Data Registry** view is the inventory
+  filtered by category DataResource: the data stores components serve (characteristic type, relationship
+  providedBy) and the knowledge-bases and ontology modules inside them (characteristic kind, relationship
+  isPartOf the store). An ODAComponent provides its data resources and dependsOn the ones it is bound to.
+
 ## Common Use Cases:
 
 1. **Inventory Monitoring**: Check current status of all resources
@@ -935,6 +1018,8 @@ The Resource Inventory Management API (TMF639) provides read-only access to info
 3. **Dependency Analysis**: Understand resource relationships
 4. **State Tracking**: Monitor operational and administrative states
 5. **ODA Component Discovery**: Find deployed microservices and APIs
+6. **Knowledge Discovery**: Find a knowledge-base about a topic and the component that serves it
+   (see find_knowledge_base_prompt)
 
 ## Example Filters:
 

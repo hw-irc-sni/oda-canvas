@@ -1,0 +1,11 @@
+# expect: reject: Unsupported value: "vectorstore"
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: invalid-06-bad-type
+spec:
+  provider: odaComponent
+  dependentDataResources:
+  - name: incident-kb
+    type: vectorstore
+    providerRef: {componentId: TMFC060, knowledgeId: kb-1}

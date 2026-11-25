@@ -1,0 +1,52 @@
+name: TMFC060 Knowledge Management unit tests
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'source/components/TMFC060-KnowledgeManagement/**'
+      - '.github/workflows/tmfc060-unit-tests.yml'
+  push:
+    branches:
+      - ai-knowledge
+    paths:
+      - 'source/components/TMFC060-KnowledgeManagement/**'
+      - '.github/workflows/tmfc060-unit-tests.yml'
+  workflow_dispatch:
+jobs:
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: 'v3.17.2'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install PyYAML==6.0.2
+      # helm lint, renders with their expected content, and values the chart must refuse (no cluster needed)
+      - run: source/components/TMFC060-KnowledgeManagement/chart/tests/check.sh
+  unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        microservice:
+          - knowledgeApiMicroservice
+          - pipelineWorkerMicroservice
+          - mcpServerMicroservice
+    defaults:
+      run:
+        working-directory: source/components/TMFC060-KnowledgeManagement/${{ matrix.microservice }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.7.18'
+          enable-cache: true
+          cache-dependency-glob: source/components/TMFC060-KnowledgeManagement/${{ matrix.microservice }}/uv.lock
+      - run: uv python install 3.12
+      # Integration tests start Postgres and Qdrant with testcontainers (Docker is available on ubuntu-latest).
+      - run: uv sync --frozen
+      - run: uv run pytest -q

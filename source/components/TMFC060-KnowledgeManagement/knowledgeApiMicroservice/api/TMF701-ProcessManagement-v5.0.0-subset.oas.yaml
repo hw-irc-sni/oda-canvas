@@ -1,0 +1,205 @@
+openapi: 3.0.1
+info:
+  title: Process Management (TMF701 v5, TMFC060 subset)
+  description: >-
+    The read-only subset of TMF701 Process Management v5 that the TMFC060 Knowledge Management component exposes as
+    its `processflow` API. Each ingestion of a knowledge-base (`POST …/knowledgeManagement/v5/knowledge/{id}/ingest`)
+    is a `process`; each document (or source batch) gets one `task` per Knowledge Management function, KM-FX-01 data
+    processing to KM-FX-06 knowledge recommendation, run in that order by the pipeline workers. Processes are created
+    only through `ingest`; this API reads them.
+  version: 5.0.0
+servers:
+  - url: https://serverRoot/tmf-api/process/v5
+security:
+  - bearerAuth: []
+tags:
+  - name: process
+  - name: task
+paths:
+  /process:
+    get:
+      operationId: listProcess
+      summary: Lists the ingestion processes
+      tags: [process]
+      x-required-roles: [knowledge-viewer, knowledge-editor, canvasSystemRole]
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Total-Count:
+              schema: {type: integer}
+            X-Result-Count:
+              schema: {type: integer}
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Process'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+  /process/{id}:
+    get:
+      operationId: retrieveProcess
+      summary: Retrieves an ingestion process
+      tags: [process]
+      x-required-roles: [knowledge-viewer, knowledge-editor, canvasSystemRole]
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Process'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /task:
+    get:
+      operationId: listTask
+      summary: Lists the tasks of the ingestion processes
+      description: Filter by process with `processId=…`.
+      tags: [task]
+      x-required-roles: [knowledge-viewer, knowledge-editor, canvasSystemRole]
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Total-Count:
+              schema: {type: integer}
+            X-Result-Count:
+              schema: {type: integer}
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Task'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+  /task/{id}:
+    get:
+      operationId: retrieveTask
+      summary: Retrieves a task
+      tags: [task]
+      x-required-roles: [knowledge-viewer, knowledge-editor, canvasSystemRole]
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Task'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: {type: string}
+    Fields:
+      name: fields
+      in: query
+      description: Comma-separated attributes to return.
+      schema: {type: string}
+    Offset:
+      name: offset
+      in: query
+      schema: {type: integer, minimum: 0}
+    Limit:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1}
+    Sort:
+      name: sort
+      in: query
+      description: Comma-separated attributes to sort by; `-` for descending.
+      schema: {type: string}
+  schemas:
+    StateType:
+      type: string
+      enum: [acknowledged, inProgress, completed, failed]
+    Process:
+      type: object
+      properties:
+        '@type': {type: string, enum: [Process]}
+        id: {type: string}
+        href: {type: string}
+        state: {$ref: '#/components/schemas/StateType'}
+        description: {type: string}
+        creationDate: {type: string, format: date-time}
+        completionDate: {type: string, format: date-time}
+        errorMessage: {type: string, description: The first error that failed a task for good.}
+        knowledge:
+          type: object
+          description: The knowledge-base being ingested into.
+          properties:
+            id: {type: string}
+            href: {type: string}
+        task:
+          type: array
+          items: {$ref: '#/components/schemas/TaskRef'}
+    TaskRef:
+      type: object
+      properties:
+        '@type': {type: string, enum: [TaskRef]}
+        id: {type: string}
+        href: {type: string}
+    Task:
+      type: object
+      properties:
+        '@type': {type: string, enum: [Task]}
+        id: {type: string}
+        href: {type: string}
+        processId: {type: string}
+        process:
+          type: object
+          properties:
+            '@type': {type: string, enum: [ProcessRef]}
+            id: {type: string}
+            href: {type: string}
+        step:
+          type: string
+          enum: [KM-FX-01, KM-FX-02, KM-FX-03, KM-FX-04, KM-FX-05, KM-FX-06]
+        documentId: {type: string, description: 'The document this chain of tasks ingests, if any.'}
+        state: {$ref: '#/components/schemas/StateType'}
+        attempt: {type: integer, minimum: 0}
+        errorMessage: {type: string}
+        creationDate: {type: string, format: date-time}
+        completionDate: {type: string, format: date-time}
+    Error:
+      type: object
+      required: [code, reason]
+      properties:
+        code: {type: string}
+        reason: {type: string}
+        message: {type: string}
+        status: {type: string}
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}

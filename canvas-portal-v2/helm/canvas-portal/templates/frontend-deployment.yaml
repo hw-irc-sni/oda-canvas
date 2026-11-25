@@ -43,6 +43,9 @@ spec:
               value: {{ default (printf "http://%s.%s.svc.cluster.local:%v" (include "canvas-portal.backend.fullname" .) .Release.Namespace .Values.backend.service.port) .Values.frontend.nginx.backendUpstream | quote }}
             - name: KEYCLOAK_UPSTREAM
               value: {{ $keycloakProxyUpstream | quote }}
+            # nginx's client_max_body_size for /api/knowledge/, in bytes: the backend's document upload cap
+            - name: KNOWLEDGE_MAX_UPLOAD_SIZE
+              value: {{ include "canvas-portal.knowledge.maxUploadBytes" . | quote }}
             - name: APP_API_BASE_URL
               value: {{ .Values.frontend.runtime.apiBaseUrl | quote }}
             - name: APP_KEYCLOAK_URL

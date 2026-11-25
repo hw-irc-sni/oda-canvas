@@ -1,0 +1,29 @@
+apiVersion: v2
+name: knowledgemanagement
+description: BDD test chart - the TMFC060 Knowledge Management component, from its own chart
+
+# BDD test chart knowledgemanagement-v1, used by the UC018 features in feature-definition-and-test-kit/features.
+#
+# A thin wrapper of the TMFC060 chart (source/components/TMFC060-KnowledgeManagement/chart), so the scenarios run
+# the real component: the Component CR (componentMetadata.id TMFC060), its ExposedAPIs knowledgemanagement and
+# processflow (openapi), knowledgemcp (mcp) and metrics, the five static roles and canvasRole, PostgreSQL and
+# Qdrant, and the provider DataResourceConfig when the Canvas has the CRD. Installed as release ctk, the component
+# is ctk-knowledgemanagement.
+#
+# The BDD helm utilities build the dependencies before installing (package-manager-utils-helm ensureDependencies):
+# this chart's file dependency, and the TMFC060 chart's Qdrant dependency. The images are those of the TMFC060
+# chart values (tmforumodacanvas/tmfc060-*:0.1.0-ai-knowledge): build them and load them into the cluster
+# (kind load docker-image) until they are published.
+#
+# version: 0.2.0 - wrapper of the TMFC060 chart (real workloads instead of the ProductCatalog stand-ins)
+# version: 0.1.1 - TMF701 Process Management v5 for the processflow API, as in the TMFC060 specification
+# version: 0.1.0 - first version, with stand-in workloads
+
+type: application
+version: 0.2.1
+appVersion: "1.0.2"
+
+dependencies:
+  - name: knowledgemanagement
+    version: "1.0.2"
+    repository: "file://../../../source/components/TMFC060-KnowledgeManagement/chart"

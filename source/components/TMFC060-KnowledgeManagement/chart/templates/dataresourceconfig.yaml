@@ -1,0 +1,31 @@
+{{- /*
+Provider DataResourceConfig (ADR-010): the component's vector store and knowledge graph, declared to the Canvas.
+Rendered only when the Canvas has the DataResourceConfig CRD (or dataResourceConfig.enabled), so the chart also installs
+on a Canvas without it.
+*/ -}}
+{{- if or (.Capabilities.APIVersions.Has "oda.tmforum.org/v1alpha1/DataResourceConfig") .Values.dataResourceConfig.enabled }}
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: {{ include "km.componentName" . }}
+  labels:
+    {{- include "km.labels" . | nindent 4 }}
+spec:
+  provider: odaComponent
+  role: provider
+  providedDataResources:
+  {{- range .Values.dataResourceConfig.providedDataResources }}
+  - name: {{ .name }}
+    type: {{ .type }}
+    {{- with .description }}
+    description: {{ . | quote }}
+    {{- end }}
+    engine: {{ .engine }}
+    exposedAPI: {{ .exposedAPI }}
+    mcpAPI: {{ .mcpAPI }}
+    {{- with .retrieval }}
+    retrieval:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+  {{- end }}
+{{- end }}

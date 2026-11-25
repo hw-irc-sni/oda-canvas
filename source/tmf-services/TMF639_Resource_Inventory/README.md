@@ -37,9 +37,35 @@ The TMF639 Resource Inventory service wraps the Kubernetes API to provide TMF-co
 - Component namespace mapped to resource place
 
 ### ExposedAPIs → TMF639 Resources  
+- Characteristics `namespace`, `apiName`, `apiType`, `url` (the gateway URL from `status.apiStatus.url`),
+  `implementation` (the Service name), `port` and `path` (`spec.port` and `spec.path`, from 1.2.1), `specification`
+  and `apiDocs`. In-cluster clients such as the Canvas Portal build
+  `http://<implementation>.<namespace>.svc.cluster.local:<port><path>` from them, because the gateway URL may not
+  resolve inside the cluster
 - API specification mapped to resource characteristics
 - API status mapped to resource operational state
 - API configuration mapped to resource properties
+
+### DataResourceConfigs → TMF639 `DataResource` resources (ADR-011)
+DataResourceConfigs (`oda.tmforum.org/v1alpha1`, ADR-010) in the namespace are projected at two levels, as category
+`DataResource` with `resourceSpecification.id` `DataResource`. Without the CRD the category is simply empty.
+
+| Level | Source | Id | Characteristics | Relationships |
+|---|---|---|---|---|
+| Store | `spec.providedDataResources[]` of a provider (`provider: odaComponent`, `role: provider`) | `<drc>.<item>` | `type`, `engine`, `namespace`, `dataResourceConfig`, `description` | `providedBy` → ODAComponent, `contains` → its content entries |
+| Store | `spec.dependentDataResources[]` of a Databricks DataResourceConfig | `<drc>.<item>` | `type` (the item's, else vector-search → vectorStore, otherwise dataProduct), `engine: databricks`, `namespace`, `dataResourceConfig`, `dataProductType`, `accessType` | none |
+| Content | `status.providedResources[]` (knowledge-bases and ontology modules mirrored by TMFOP012) | `<drc>.knowledge.<id>`, `<drc>.knowledgeSpecification.<id>` | `kind`, `storeKind` (knowledge-bases), `layer` (modules), `lifecycleStatus`, `namespace`, `href` | `providedBy` → ODAComponent, `isPartOf` → the stores that hold it (a hybrid knowledge-base both, a module the knowledge graph) |
+
+ODAComponent resources gain the characteristic `componentId` (`componentMetadata.id`, for example `TMFC060`; the
+`id` characteristic stays), `provides` → every DataResource they serve, and `dependsOn` → the knowledge-base a
+consumer DataResourceConfig binds them to (`status.bindings[]`; the provider's store while no knowledge-base is
+bound) and the Databricks stores they declare.
+
+Status: store entries are `available`/`enable` when the DataResourceConfig's `Ready` condition is True (Databricks:
+`phase: Ready`), else `standby`/`disable`. Content entries follow `lifecycleStatus`: published → `available`/`enable`,
+deprecated → `suspended`, rejected → `unknown`, the others (draft, proposed, inReview, agreed) → `standby`/`disable`.
+
+Query them with `GET /resource?category=DataResource`, or get one by its id.
 
 ## Configuration
 

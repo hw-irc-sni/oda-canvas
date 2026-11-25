@@ -25,3 +25,10 @@ The build and release process for docker images is described in [work-with-docke
 It uses the config file present in `$HOME/.kube/config` to run from a local workstation.
 
 Run: `kopf run docker/src/dependentApiSimpleOperator.py`
+
+## Data resource dependencies
+
+A DependentAPI with `spec.dependencyKind: data-resource` belongs to a data resource binding (ADR-010): a data resource
+operator such as TMFOP012 creates it for a DataResourceConfig, owns it and sets its status. Every handler of this
+operator skips such DependentAPIs (kopf `when` filter), so it neither resolves them nor puts its finalizer on them.
+When a resolved DependentAPI's first owner is not a Component, its status is not propagated to a Component.

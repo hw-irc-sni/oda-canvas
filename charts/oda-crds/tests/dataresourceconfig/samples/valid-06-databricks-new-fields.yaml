@@ -1,0 +1,16 @@
+# expect: accept
+# A Databricks consumer using the new platform-neutral fields
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: telco-data-typed
+spec:
+  provider: databricks
+  role: consumer
+  workspace: {host: https://my-workspace.cloud.databricks.com}
+  dependentDataResources:
+  - name: network-kpis
+    type: dataProduct
+    dataProductType: table
+    accessType: sql
+    physicalStorage: {location: "s3://telco/kpis", format: delta}

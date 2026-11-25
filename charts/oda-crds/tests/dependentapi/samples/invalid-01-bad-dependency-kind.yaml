@@ -1,0 +1,9 @@
+# expect: reject: Unsupported value: "dataResource"
+apiVersion: oda.tmforum.org/v1
+kind: DependentAPI
+metadata:
+  name: bad-kind
+spec:
+  name: kb
+  apiType: mcp
+  dependencyKind: dataResource

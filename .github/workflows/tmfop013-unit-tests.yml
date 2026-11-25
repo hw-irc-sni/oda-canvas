@@ -1,0 +1,43 @@
+name: TMFOP013 AI Gateway Management operator tests
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'source/operators/TMFOP013-AI-Gateway-Management/**'
+      - 'charts/agentgateway-mcp-operator/**'
+      - '.github/workflows/tmfop013-unit-tests.yml'
+  push:
+    branches:
+      - ai-knowledge
+    paths:
+      - 'source/operators/TMFOP013-AI-Gateway-Management/**'
+      - 'charts/agentgateway-mcp-operator/**'
+      - '.github/workflows/tmfop013-unit-tests.yml'
+  workflow_dispatch:
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: source/operators/TMFOP013-AI-Gateway-Management/agentgateway-mcp-operator/docker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: pip install -r requirements.txt -r requirementsTest.txt
+      - name: pytest
+        run: python -m pytest -q tests
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: 'v3.17.2'
+      - name: helm lint
+        run: |
+          helm lint charts/agentgateway-mcp-operator
+          helm template t charts/agentgateway-mcp-operator -n canvas > /dev/null

@@ -1,0 +1,97 @@
+{{- $comp := include "km.componentName" . -}}
+{{- $deps := include "km.enabledDependentAPIs" . | fromYaml -}}
+apiVersion: oda.tmforum.org/v1
+kind: Component
+metadata:
+  name: {{ $comp }}
+  labels:
+    {{- include "km.labels" . | nindent 4 }}
+spec:
+  componentMetadata:
+    id: {{ .Values.component.id }}
+    name: {{ .Values.component.name }}
+    functionalBlock: {{ .Values.component.functionalBlock }}
+    publicationDate: {{ .Values.component.publicationDate }}
+    status: specified
+    version: {{ .Values.component.version | quote }}
+    description: {{ .Values.component.description | quote }}
+    {{- with .Values.component.maintainers }}
+    maintainers:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.component.owners }}
+    owners:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+  coreFunction:
+    exposedAPIs:
+    - name: knowledgemanagement
+      specification:
+      - url: {{ include "km.knowledgeApiSpecification" . | quote }}
+      implementation: {{ include "km.apiService" . }}
+      apiType: openapi
+      id: TMFxxx
+      path: {{ include "km.knowledgeBase" . }}
+      developerUI: {{ include "km.knowledgeBase" . }}/docs
+      port: {{ .Values.ports.api }}
+    - name: processflow
+      specification:
+      - url: {{ include "km.processFlowApiSpecification" . | quote }}
+      implementation: {{ include "km.apiService" . }}
+      apiType: openapi
+      id: TMF701
+      path: {{ include "km.processBase" . }}
+      developerUI: {{ include "km.processBase" . }}/docs
+      port: {{ .Values.ports.api }}
+    - name: knowledgemcp
+      # The v1 Component CRD requires a specification; for MCP it is the protocol specification
+      specification:
+      - url: {{ .Values.component.mcpSpecification | quote }}
+      implementation: {{ include "km.mcpService" . }}
+      apiType: mcp
+      path: /{{ $comp }}/mcp
+      port: {{ .Values.ports.mcp }}
+    {{- if $deps }}
+    dependentAPIs:
+    {{- range $name, $dep := $deps }}
+    - name: {{ $name }}
+      apiType: openapi
+      id: {{ $dep.id }}
+      required: false
+      specification:
+      - url: {{ $dep.specification | quote }}
+    {{- end }}
+    {{- else }}
+    dependentAPIs: []
+    {{- end }}
+  eventNotification:
+    publishedEvents: []
+    {{- $events := list -}}
+    {{- range $name, $dep := $deps }}{{ range $dep.events }}{{ $events = append $events (dict "name" . "dep" $dep) }}{{ end }}{{ end }}
+    {{- if $events }}
+    subscribedEvents:
+    {{- range $events }}
+    - name: {{ .name }}
+      description: {{ printf "%s %s, ingested by the knowledge-bases that list this source" .dep.id .name | quote }}
+      # No callback: the API registers each hub itself, with a secret capability URL (spike S5, #46)
+      specification:
+      - url: {{ .dep.specification | quote }}
+        apiType: openapi
+    {{- end }}
+    {{- else }}
+    subscribedEvents: []
+    {{- end }}
+  managementFunction:
+    exposedAPIs:
+    - name: metrics
+      apiType: prometheus
+      implementation: {{ include "km.apiService" . }}
+      path: /{{ $comp }}/metrics
+      port: {{ .Values.ports.metrics }}
+  securityFunction:
+    canvasSystemRole: {{ .Values.security.canvasSystemRole }}
+    {{- with .Values.security.componentRole }}
+    componentRole:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    exposedAPIs: []

@@ -123,6 +123,10 @@ noTests:
   - ".github/workflows/bdd-selection-comment.yml"
   - ".github/workflows/canvas-log-viewer-unit-tests.yml"
   - ".github/workflows/canvas-portal-v2-backend-unit-tests.yml"
+  - ".github/workflows/tmfc060-unit-tests.yml"
+  - ".github/workflows/tmfop012-unit-tests.yml"
+  - ".github/workflows/tmfop013-unit-tests.yml"
+  - ".github/workflows/oda-crds-tests.yml"
   - ".github/workflows/local-test.yml"
   - ".github/workflows/Chart-Releaser-ReleasedChartTester-TrivyScanner.yml"
 
@@ -158,7 +162,8 @@ rules:
       - "charts/api-operator-istio/**"
     canvasSections:
       - api-operator-istio
-    tags: "@UC003 or @UC012"
+    # UC018-F003: MCP ExposedAPIs are registered with the AI gateway
+    tags: "@UC003 or @UC012 or @UC018-F003"
 
   # The UC003 features run on the Istio canvas, so they don't exercise Kong
   # or APISIX. The gateway features run on their own canvas (see gateways).
@@ -187,7 +192,8 @@ rules:
       - "charts/identityconfig-operator-keycloak/**"
     canvasSections:
       - identityconfig-operator-keycloak
-    tags: "@UC005 or @UC010"
+    # UC018-F002: a data-resource binding creates a DependentAPI and grants a provider role
+    tags: "@UC005 or @UC010 or @UC018-F002"
 
   - name: Dependency Management operators
     paths:
@@ -197,7 +203,8 @@ rules:
     canvasSections:
       - dependentapi-simple-operator
       - dependency-management-keycloak-authz
-    tags: "@UC007"
+    # UC018-F002: a data-resource binding creates a DependentAPI and grants a provider role
+    tags: "@UC007 or @UC018-F002"
 
   # The dependent API operator registers resolved dependencies in the
   # canvas info service (TMF638).
@@ -222,7 +229,8 @@ rules:
       - "charts/resource-inventory/**"
     canvasSections:
       - resource-inventory
-    tags: "@UC016"
+    # UC018-F001: the data resources a component provides (DataResource, ADR-011)
+    tags: "@UC016 or @UC018-F001"
 
   - name: Component Registry
     paths:
@@ -230,7 +238,33 @@ rules:
       - "charts/component-registry/**"
     canvasSections:
       - component-registry
-    tags: "@UC016"
+    # UC018-F001: the data resources a component provides (DataResource, ADR-011)
+    tags: "@UC016 or @UC018-F001"
+
+  # TMFOP013 registers MCP ExposedAPIs with agentgateway (UC018-F003).
+  - name: AI Gateway Management operator (TMFOP013)
+    paths:
+      - "source/operators/TMFOP013-AI-Gateway-Management/**"
+      - "charts/agentgateway-mcp-operator/**"
+    canvasSections:
+      - agentgateway-mcp-operator
+    tags: "@UC018-F003"
+
+  # TMFC060 Knowledge Management: the knowledgemanagement-v1 test chart wraps its chart, so the UC018 features
+  # run its images.
+  - name: TMFC060 Knowledge Management component
+    paths:
+      - "source/components/TMFC060-KnowledgeManagement/**"
+    tags: "@UC018"
+
+  # TMFOP012 mirrors a provider's knowledge-bases (UC018-F001 content entries) and binds consumers (UC018-F002).
+  - name: Data Resource Management operator (TMFOP012)
+    paths:
+      - "source/operators/TMFOP012-Data-Resource-Management/**"
+      - "charts/dataresource-operator/**"
+    canvasSections:
+      - dataresource-operator
+    tags: "@UC018-F001 or @UC018-F002"
 
   # The webhook converts components between CRD versions.
   - name: ODA webhook

@@ -216,7 +216,7 @@ identityconfig-operator-keycloak:
 dependentapi-simple-operator:
   enabled: true
   image: tmforumodacanvas/dependentapi-simple-operator
-  version: 1.0.2
+  version: 1.0.3
   prereleaseSuffix:
 
   imagePullPolicy: IfNotPresent
@@ -244,6 +244,33 @@ dependency-management-keycloak-authz:
     loglevel: "20"
     pollIntervalSeconds: "5"
     canvasInfoEndpoint: "http://info.canvas.svc.cluster.local"
+
+# -----------------------------------------------------------------------------
+# TMFOP012 Data Resource Management operator: DataResourceConfig with provider odaComponent (ADR-010). It mirrors
+# what a provider component serves and binds consumer components to it. Off by default: its image is not published
+# yet (build it from source/operators/TMFOP012-Data-Resource-Management/dataresource-operator/docker).
+# A Job creates its Keycloak client (keycloak.setup); see charts/dataresource-operator/values.yaml for all settings.
+# -----------------------------------------------------------------------------
+dataresource-operator:
+  enabled: false
+  image: tmforumodacanvas/dataresource-operator
+  version: 0.3.0
+  prereleaseSuffix:
+  imagePullPolicy: IfNotPresent
+  loglevel: '20'
+
+# -----------------------------------------------------------------------------
+# TMFOP013 AI Gateway Management operator: registers every ready MCP ExposedAPI with agentgateway (charts/agentgateway,
+# a separate release) as the target oda-<namespace>-<exposedapi>, forwarding the caller's token. Off by default: its
+# image is not published yet, and it needs agentgateway installed. See charts/agentgateway-mcp-operator/values.yaml.
+# -----------------------------------------------------------------------------
+agentgateway-mcp-operator:
+  enabled: false
+  image: tmforumodacanvas/agentgateway-mcp-operator
+  version: 0.1.0
+  prereleaseSuffix:
+  imagePullPolicy: IfNotPresent
+  loglevel: '20'
 
 canvas-vault:
   enabled: true
@@ -632,7 +659,7 @@ canvas-info-service:
 resource-inventory:
   enabled: true
   image: tmforumodacanvas/tmf639-resource-inventory-api
-  version: 1.1.1
+  version: 1.2.1
   prereleaseSuffix:
   imagePullPolicy: IfNotPresent
   serverUrl: http://resource-inventory.canvas.svc.cluster.local/tmf-api/resourceInventoryManagement/v5
@@ -647,7 +674,7 @@ resource-inventory:
 component-registry:
   enabled: true
   image: tmforumodacanvas/component-registry
-  version: 0.1.0
+  version: 0.2.0
   prereleaseSuffix:
   imagePullPolicy: IfNotPresent
    

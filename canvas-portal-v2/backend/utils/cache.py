@@ -45,3 +45,6 @@ class SimpleCache:
 jwks_cache = SimpleCache()
 admin_token_cache = SimpleCache()
 security_status_cache = SimpleCache()
+knowledge_instances_cache = SimpleCache()
+knowledge_spec_cache = SimpleCache()
+knowledge_health_cache = SimpleCache()

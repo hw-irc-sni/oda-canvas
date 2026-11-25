@@ -1,0 +1,43 @@
+@startuml knowledge-query-federation
+
+actor "Ontology\nApprover" as Approver
+actor "Knowledge\nUser or Agent" as User
+participant "Knowledge\nManagement\nComponent" as KM
+database "Graph\nStore" as Graph
+participant "Allowlisted Peer\n(SPARQL endpoint or\npeer Knowledge Management)" as Peer
+participant "Other\nEndpoint" as Other
+
+group Register a federation peer
+    Approver -> KM : POST /knowledgeSpecification\n(specKind: remote, remoteEndpoint)
+    note right of KM
+        A peer is an ontology module of kind remote.
+        It follows the same proposal and ruling
+        workflow, and is allowlisted only once published.
+    end note
+    KM --> Approver : 201 Created
+end
+
+group Federated query
+    User -> KM : POST /knowledge/{id}/query\n(SPARQL with a SERVICE clause)
+    KM -> KM : validate token and role knowledge-viewer
+    KM -> KM : check every SERVICE IRI\nagainst the published remote modules
+    alt all SERVICE endpoints allowlisted
+        KM -> Graph : evaluate the local part over the knowledge-base graph\nand its conformsTo module graphs
+        KM -> Peer : evaluate the SERVICE part (with timeout)
+        alt peer answers in time
+            Peer --> KM : bindings
+            KM -> KM : merge results, apply the row cap,\ncache the remote result
+            KM --> User : 200 OK (results)
+        else timeout
+            KM --> User : 504 Gateway Timeout (RFC 7807)
+        end
+    else a SERVICE endpoint is not allowlisted
+        KM --> User : 403 Forbidden (RFC 7807),\ncode SERVICE_NOT_ALLOWED
+        note right of Other
+            The non-allowlisted
+            endpoint is never called
+        end note
+    end
+end
+
+@enduml

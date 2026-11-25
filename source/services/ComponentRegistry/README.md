@@ -10,6 +10,13 @@ A FastAPI-based REST service for managing Resources following the TM Forum OpenA
 - **FastAPI Framework**: Modern, fast web framework with automatic API documentation
 - **Event Subscriptions**: Support for registering event listeners (hub endpoints with GET support)
 - **Advanced Filtering**: Support for pagination, sorting, and filtering
+- **Data resources (ADR-011)**: with `CANVAS_RESOURCE_INVENTORY` set, the registry watches DataResourceConfigs too
+  and mirrors their `DataResource` entries from the Resource Inventory: stores (`<drc>.<item>`) and their
+  knowledge-bases and modules (`<drc>.knowledge.<id>`, `<drc>.knowledgeSpecification.<id>`), with `providedBy`,
+  `isPartOf` and `contains`. ODAComponent entries keep their `provides` and `dependsOn` relationships (API relations
+  stay on the APIs, as `exposedBy`). Entries that disappear are deleted, and the components a DataResourceConfig
+  names are re-synced when it changes. The web UI lists each component's data resources. Without the
+  DataResourceConfig CRD, its watch waits and checks again every minute.
 
 ## What's New in v5.0.0
 

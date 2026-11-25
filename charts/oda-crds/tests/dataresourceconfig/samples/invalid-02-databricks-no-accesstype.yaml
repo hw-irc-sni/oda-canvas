@@ -1,0 +1,11 @@
+# expect: reject: needs an accessType
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: invalid-02-databricks-no-accesstype
+spec:
+  provider: databricks
+  workspace: {host: https://my-workspace.cloud.databricks.com}
+  dependentDataResources:
+  - {name: network-kpis, accessType: sql}
+  - {name: incident-index, dataProductType: vectorDb}

@@ -1,0 +1,18 @@
+apiVersion: v2
+name: knowledgemanagement
+description: TMFC060 Knowledge Management ODA Component - knowledge-bases (vector and graph) and a governed, federated ontology
+type: application
+# version: 1.0.2 - tokens issued through the canvas-keycloak Service are accepted too (keycloak.issuerBaseUrls), as the Canvas Portal forwards them (#73)
+# version: 1.0.1 - the values schema accepts global, so the chart can be a dependency (the BDD test chart, #64)
+# version: 1.0.0 - the complete chart (PHASE 3): workloads with the store PVC (#52), the in-chart PostgreSQL (#53),
+#                  the Qdrant subchart with an API key (#54), opt-in ModelGatewayService RBAC (#55), the provider
+#                  DataResourceConfig (#56), ontology sources and the FTO demo values (#57), the kind checks (#58)
+# version: 0.1.0 - first version: the Component CR (exposed APIs, metrics, static roles, optional dependent APIs)
+version: 1.0.2
+appVersion: "0.1.0"
+dependencies:
+  # The official Qdrant chart (condition qdrant.enabled; externalQdrant otherwise)
+  - name: qdrant
+    version: 1.20.2
+    repository: https://qdrant.github.io/qdrant-helm
+    condition: qdrant.enabled

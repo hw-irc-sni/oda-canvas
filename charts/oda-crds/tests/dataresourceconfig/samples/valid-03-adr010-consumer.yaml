@@ -1,0 +1,21 @@
+# expect: accept
+# ADR-010 §9 consumer example (no role: it defaults to consumer)
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: assurance-agent-knowledge
+  labels:
+    oda.tmforum.org/componentName: assurance-agent
+spec:
+  provider: odaComponent
+  dependentDataResources:
+  - name: incident-kb
+    type: vectorStore
+    access: read
+    retrieval: {topK: 5, hybrid: true}
+    providerRef:
+      componentId: TMFC060
+      create:
+        name: incident-knowledge
+        storeKind: hybrid
+        source: [tmf642, tmf628]

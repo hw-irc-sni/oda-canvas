@@ -1,0 +1,49 @@
+[project]
+name = "tmfc060-knowledge-api"
+version = "0.1.0"
+description = "TMFC060 Knowledge Management reference implementation: the TMFxxx Knowledge Management API microservice"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "fastapi==0.165.0",
+    "uvicorn[standard]==0.54.0",
+    "pydantic-settings==2.16.3",
+    "psycopg[binary]==3.3.9",
+    "qdrant-client==1.20.0",
+    "pyoxigraph==0.5.13",
+    "httpx==0.28.1",
+    "PyJWT[crypto]==2.15.1",
+    "PyYAML==6.0.4",
+    "SQLAlchemy[asyncio]==2.1.9",
+    "alembic==1.20.1",
+    "rdflib==7.6.0",
+    "pyshacl==0.40.2",
+    "python-multipart==0.0.20",
+    "jsonschema==4.26.0",
+    "prometheus-client==0.26.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+    "pytest-asyncio==1.5.0",
+    "schemathesis==4.33.1",
+    "testcontainers[postgres]==4.15.0",
+]
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+# Installable as the "app" package so the pipeline worker's tests can run the real API (a dev-only path dependency);
+# the image installs the dependencies only (--no-install-project) and copies app/ and api/.
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+markers = ["integration: needs Docker (testcontainers)", "contract: schemathesis contract tests against the OAS"]

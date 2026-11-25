@@ -1,0 +1,10 @@
+# expect: reject: spec.providedDataResources[0].type: Required value
+apiVersion: oda.tmforum.org/v1alpha1
+kind: DataResourceConfig
+metadata:
+  name: invalid-11-provided-without-type
+spec:
+  provider: odaComponent
+  role: provider
+  providedDataResources:
+  - {name: knowledge-vectors, engine: qdrant}

@@ -1,0 +1,4886 @@
+openapi: 3.0.1
+info:
+  title: Knowledge Management
+  description: >-
+    **Draft.** The Knowledge Management API of the TMFC060 Knowledge Management ODA Component
+    reference implementation. TM Forum has not assigned an API number yet (TMFC060 open decision
+    D-03), so the API is identified as `TMFxxx`.
+
+
+    The API manages two resources, following the TMF630 v5 design guidelines:
+
+    - `knowledge`: a knowledge-base. A hybrid of an RDF instance graph and a document and vector
+    store, linked so that search hits carry the ontology IRIs of the entities they mention.
+
+    - `knowledgeSpecification`: an ontology module of a federated, governed ontology.
+
+
+    Strings in JSON bodies must not hold the NUL character (U+0000): a body with one gets `400`.
+
+
+    ### Operations
+
+    - Retrieve an entity or a collection of entities depending on filter criteria
+
+    - Partial update of an entity (including updating rules)
+
+    - Create an entity (including default values and creation rules)
+
+    - Delete an entity
+
+    - Manage notification of events
+
+
+    ### Security and roles
+
+    Every operation needs a bearer JWT issued by the Canvas identity platform. The component reads
+    its client roles from the token (`resource_access`). The `x-required-roles` extension on each
+    operation lists the roles that may call it; **any one** of them is enough. A caller without one
+    of them gets `403`.
+
+    | Role | Allows |
+    |---|---|
+    | `knowledge-viewer` | Read knowledge-bases, search, query and recommend; read ontology modules |
+    | `knowledge-editor` | Change knowledge-bases, upload documents and start ingestion |
+    | `ontology-editor` | Create and propose ontology modules and mappings; revise rejected items |
+    | `ontology-reviewer` | Move proposals to review, comment on them and run validation; list and retrieve knowledge-bases |
+    | `ontology-approver` | Rule proposals agreed or rejected, publish and deprecate modules and knowledge-bases; list and retrieve knowledge-bases |
+    | `canvasSystemRole` | Canvas operators, for example the Data Resource Management operator |
+
+
+    ### Errors
+
+    Errors use the TMF630 `Error` schema extended with the members of RFC 7807 (problem details),
+    and are served as `application/json` or `application/problem+json`.
+  version: 5.0.0
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+  x-api-id: TMFxxx
+servers:
+  - url: 'https://{apiRoot}/tmf-api/knowledgeManagement/v5'
+    variables:
+      apiRoot:
+        default: localhost:8080
+tags:
+  - name: knowledge
+    description: Operations for knowledge-bases
+  - name: knowledgeSpecification
+    description: Operations for ontology modules
+  - name: events subscription
+    description: Endpoints to register and terminate an Event Listener
+  - name: notification listener
+    description: Notifications for resource lifecycle and event notifications
+security:
+  - bearerAuth: []
+paths:
+  /hub:
+    post:
+      operationId: createHub
+      summary: Create a subscription (hub) to receive Events
+      description: Sets the communication endpoint to receive Events.
+      tags:
+        - events subscription
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      requestBody:
+        $ref: '#/components/requestBodies/Hub_FVO'
+      responses:
+        '201':
+          $ref: '#/components/responses/Hub'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/hub/{id}':
+    get:
+      operationId: retrieveHub
+      summary: Retrieve a subscription (hub)
+      description: This operation retrieves the subscription to receive Events.
+      tags:
+        - events subscription
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          $ref: '#/components/responses/Hub'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteHub
+      summary: Remove a subscription (hub) to receive Events
+      description: Removes the subscription.
+      tags:
+        - events subscription
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  /knowledge:
+    get:
+      operationId: listKnowledge
+      summary: List or find Knowledge objects
+      description: This operation lists the knowledge-bases, filtered and paged.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          $ref: '#/components/responses/200KnowledgeArray'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createKnowledge
+      summary: Creates a Knowledge
+      description: >-
+        This operation creates a knowledge-base, with its graph and its vector collection. The
+        knowledge-base starts as `draft` (see `x-lifecycle` on `Knowledge`).
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+      requestBody:
+        $ref: '#/components/requestBodies/Knowledge_FVO'
+      responses:
+        '201':
+          $ref: '#/components/responses/201Knowledge'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        '503':
+          $ref: '#/components/responses/503'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}':
+    get:
+      operationId: retrieveKnowledge
+      summary: Retrieves a Knowledge by ID
+      description: This operation retrieves a knowledge-base.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        '200':
+          $ref: '#/components/responses/200Knowledge'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: patchKnowledge
+      summary: Updates partially a Knowledge
+      description: >-
+        This operation updates a knowledge-base with a JSON merge patch. Changing `lifecycleStatus`
+        is a governance transition: each transition is allowed to one role, as listed in the
+        `x-lifecycle` extension of `Knowledge` (403 for another role, 409 for a transition that is
+        not listed), and publishes a `KnowledgeStateChangeEvent`. Other fields can be changed by a
+        `knowledge-editor` unless the knowledge-base is `deprecated` (409); a change publishes a
+        `KnowledgeAttributeValueChangeEvent`.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Fields'
+      requestBody:
+        $ref: '#/components/requestBodies/Knowledge_MVO'
+      responses:
+        '200':
+          $ref: '#/components/responses/200Knowledge'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '405':
+          $ref: '#/components/responses/405'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteKnowledge
+      summary: Deletes a Knowledge
+      description: >-
+        This operation deletes a knowledge-base with its graph, its vector collection and its
+        documents.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        '503':
+          $ref: '#/components/responses/503'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/graph':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: retrieveKnowledgeGraph
+      summary: Retrieves the graph of a Knowledge
+      description: >-
+        Returns the RDF graph of the knowledge-base (Graph Store Protocol GET), in Turtle or
+        JSON-LD depending on the Accept header. The graph holds the instance data only, not the
+        ontology modules it conforms to.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      responses:
+        '200':
+          description: The graph of the knowledge-base
+          content:
+            text/turtle:
+              schema:
+                type: string
+              example: |
+                @prefix ex: <https://example.org/incident/> .
+                @prefix as: <https://example.org/ontology/telecom/assurance#> .
+                ex:INC-1042 a as:Incident ;
+                    as:affects ex:cell-4711 ;
+                    as:resolvedBy ex:RES-17 .
+            application/ld+json:
+              schema:
+                $ref: '#/components/schemas/JsonLdDocument'
+              example:
+                '@context':
+                  as: https://example.org/ontology/telecom/assurance#
+                '@id': https://example.org/incident/INC-1042
+                '@type': as:Incident
+                as:affects:
+                  '@id': https://example.org/incident/cell-4711
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '406':
+          $ref: '#/components/responses/406'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: replaceKnowledgeGraph
+      summary: Replaces the graph of a Knowledge
+      description: Replaces the whole graph of the knowledge-base (Graph Store Protocol PUT).
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      requestBody:
+        $ref: '#/components/requestBodies/RdfGraph'
+      responses:
+        '204':
+          description: Replaced
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '415':
+          $ref: '#/components/responses/415'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: mergeKnowledgeGraph
+      summary: Adds triples to the graph of a Knowledge
+      description: Merges the given triples into the graph of the knowledge-base (Graph Store Protocol POST).
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      requestBody:
+        $ref: '#/components/requestBodies/RdfGraph'
+      responses:
+        '204':
+          description: Merged
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '415':
+          $ref: '#/components/responses/415'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: clearKnowledgeGraph
+      summary: Empties the graph of a Knowledge
+      description: Removes every triple from the graph of the knowledge-base (Graph Store Protocol DELETE). The knowledge-base itself is kept.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      responses:
+        '204':
+          description: Emptied
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/query':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      operationId: queryKnowledge
+      summary: Runs a read-only SPARQL query on a Knowledge
+      description: >-
+        Runs a SPARQL 1.1 query (SELECT, ASK, CONSTRUCT or DESCRIBE) over the dataset of the
+        knowledge-base: its graph plus the graphs of the ontology modules it conforms to. Update
+        operations are rejected with `400`.
+
+
+        **Limits.** A query runs for at most the `timeout` it asks for, capped by the server
+        maximum; a query that runs longer gets `504`. A SELECT result is capped at the server's row
+        limit; when the cap applies, the response has the header `X-Result-Truncated: true`.
+
+
+        **Federation.** `SERVICE` clauses may only name the endpoint of a published
+        `knowledgeSpecification` with `specKind: remote` (an allowlisted peer). Any other `SERVICE`
+        IRI is rejected with `403` and the error `code` `SERVICE_NOT_ALLOWED`, before any remote
+        call.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      parameters:
+        - name: timeout
+          in: query
+          description: Query timeout in seconds, capped by the server maximum.
+          schema:
+            type: integer
+            minimum: 1
+            default: 30
+      requestBody:
+        required: true
+        content:
+          application/sparql-query:
+            schema:
+              type: string
+              format: sparql-query
+            example: |
+              PREFIX as: <https://example.org/ontology/telecom/assurance#>
+              SELECT ?incident ?cell WHERE { ?incident a as:Incident ; as:affects ?cell } LIMIT 10
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - query
+              properties:
+                query:
+                  type: string
+                  format: sparql-query
+                  description: The SPARQL query.
+      responses:
+        '200':
+          description: The query result
+          headers:
+            X-Result-Truncated:
+              description: Present and `true` when the row cap was applied to a SELECT result.
+              schema:
+                type: boolean
+          content:
+            application/sparql-results+json:
+              schema:
+                $ref: '#/components/schemas/SparqlResults'
+              example:
+                head:
+                  vars:
+                    - incident
+                    - cell
+                results:
+                  bindings:
+                    - incident:
+                        type: uri
+                        value: https://example.org/incident/INC-1042
+                      cell:
+                        type: uri
+                        value: https://example.org/incident/cell-4711
+            text/turtle:
+              schema:
+                type: string
+            application/ld+json:
+              schema:
+                $ref: '#/components/schemas/JsonLdDocument'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403Query'
+        '404':
+          $ref: '#/components/responses/404'
+        '415':
+          $ref: '#/components/responses/415'
+        '500':
+          $ref: '#/components/responses/500'
+        '502':
+          $ref: '#/components/responses/502'
+        '504':
+          $ref: '#/components/responses/504'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/search':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      operationId: searchKnowledge
+      summary: Searches a Knowledge
+      description: >-
+        Hybrid search over the chunks of the knowledge-base: dense (embedding) and sparse (BM25)
+        scores fused (reciprocal rank fusion, normalised so that a chunk ranked first by both scores 1);
+        with `hybrid: false`, dense only, scored by cosine similarity. Fields not set in the request fall
+        back to the knowledge-base's `retrieval` settings. `iriFilter` keeps only chunks that mention at
+        least one of the given ontology IRIs or a subclass of one. Without an embedding model a hybrid
+        search runs on the sparse side alone (`X-Search-Mode: sparse`) and a dense-only one answers `503`.
+        A `graph` knowledge-base has no chunks (`409`).
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+            example:
+              query: cell outage after a power alarm
+              topK: 3
+              hybrid: true
+              iriFilter:
+                - https://example.org/ontology/telecom/assurance#PowerAlarm
+      responses:
+        '200':
+          description: The search hits, best first
+          headers:
+            X-Search-Mode:
+              description: >-
+                Which search ran: `hybrid` (dense and sparse fused), `dense` (with `hybrid: false`), or `sparse`
+                (the keyword side alone, when no embedding model is available).
+              schema:
+                type: string
+                enum:
+                  - hybrid
+                  - dense
+                  - sparse
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResult'
+              example:
+                hits:
+                  - chunkId: 9c2d-0004
+                    text: After the mains power alarm the cell went down; the battery backup had failed.
+                    score: 0.87
+                    documentId: 7a10b3
+                    entityIri:
+                      - https://example.org/incident/INC-1042
+                      - https://example.org/ontology/telecom/assurance#PowerAlarm
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        '503':
+          $ref: '#/components/responses/503'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/recommend':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      operationId: recommendFromKnowledge
+      summary: Recommends knowledge for a context
+      description: >-
+        Knowledge recommendation (KM-FX-06): ranks entities, documents or chunks for a context,
+        using relevance and the ranking signals the knowledge-base has learnt (success rate,
+        applicability, usage). Report what was used through `recommend/feedback`.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecommendationRequest'
+            example:
+              context: Cell 4711 is down after a mains power alarm
+              iri:
+                - https://example.org/incident/cell-4711
+              topK: 3
+      responses:
+        '200':
+          description: The recommended items, best first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationResult'
+              example:
+                recommendationId: rec-5521
+                items:
+                  - itemId: RES-17
+                    kind: entity
+                    iri: https://example.org/incident/RES-17
+                    label: Replace the battery backup and reset the site power unit
+                    score: 0.91
+                    signals:
+                      successRate: 0.82
+                      applicability: 0.95
+                      usage: 41
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/recommend/feedback':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      operationId: createRecommendationFeedback
+      summary: Records feedback on a recommendation
+      description: Records whether a recommended item was used and its outcome. The feedback updates the ranking signals.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecommendationFeedback'
+            example:
+              recommendationId: rec-5521
+              itemId: RES-17
+              used: true
+              outcome: success
+      responses:
+        '204':
+          description: Recorded
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/document':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: listKnowledgeDocument
+      summary: Lists the documents of a Knowledge
+      description: Lists the documents uploaded to the knowledge-base.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Success
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/X-Total-Count'
+            X-Result-Count:
+              $ref: '#/components/headers/X-Result-Count'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Document'
+              example:
+                - id: 7a10b3
+                  href: https://host/tmf-api/knowledgeManagement/v5/knowledge/3f1e2c8a/document/7a10b3
+                  name: site-power-runbook.pdf
+                  mediaType: application/pdf
+                  size: 482113
+                  ingestionState: ingested
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createKnowledgeDocument
+      summary: Uploads a document to a Knowledge
+      description: >-
+        Uploads a document (PDF, Markdown, HTML, Turtle, JSON-LD or JSON). The document is stored
+        but not ingested; start ingestion with `ingest`. A document larger than the server's size
+        cap gets `413`.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The document content.
+                name:
+                  type: string
+                  description: Name of the document; defaults to the file name.
+                description:
+                  type: string
+            example:
+              file: "# Site power runbook\n\nWhen the mains power alarm is raised, check the rectifier first."
+              name: site-power-runbook.md
+              description: Runbook for site power failures
+            encoding:
+              file:
+                contentType: text/markdown, application/pdf, text/html, text/turtle, application/ld+json, application/json
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+              examples:
+                runbook:
+                  $ref: '#/components/examples/Document_runbook'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '413':
+          $ref: '#/components/responses/413'
+        '415':
+          $ref: '#/components/responses/415'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/document/{documentId}':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      operationId: retrieveKnowledgeDocument
+      summary: Retrieves the metadata of a document
+      description: Retrieves the metadata of a document. Download its content from `…/content`.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+              examples:
+                runbook:
+                  $ref: '#/components/examples/Document_runbook'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteKnowledgeDocument
+      summary: Deletes a document
+      description: >-
+        Deletes a document with its chunks and vectors. Triples extracted from it stay in the
+        graph; their provenance still names the document.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        '503':
+          $ref: '#/components/responses/503'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/document/{documentId}/content':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      operationId: retrieveKnowledgeDocumentContent
+      summary: Downloads a document
+      description: Downloads the content of a document, in its original media type.
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      responses:
+        '200':
+          description: The document content, in the media type it was uploaded as
+          content:
+            text/markdown:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            text/html:
+              schema:
+                type: string
+                format: binary
+            text/turtle:
+              schema:
+                type: string
+                format: binary
+            application/ld+json:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/ingest':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      operationId: createKnowledgeIngestion
+      summary: Starts the ingestion of knowledge
+      description: >-
+        Starts an ingestion: a TMF701 v5 process with one task per Knowledge Management
+        function (KM-FX-01 data processing to KM-FX-06 knowledge recommendation). Without
+        `documentId`, every document not yet ingested is ingested. Follow the progress through the
+        component's TMF701 Process Management API (v5).
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestRequest'
+            example:
+              source: upload
+              documentId:
+                - 7a10b3
+      responses:
+        '201':
+          description: The process of the ingestion was created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessRef'
+              example:
+                '@type': ProcessRef
+                '@referredType': Process
+                id: pf-8812
+                href: https://host/tmf-api/process/v5/process/pf-8812
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  /knowledgeSpecification:
+    get:
+      operationId: listKnowledgeSpecification
+      summary: List or find KnowledgeSpecification objects
+      description: This operation lists the ontology modules, filtered and paged.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Success
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/X-Total-Count'
+            X-Result-Count:
+              $ref: '#/components/headers/X-Result-Count'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KnowledgeSpecification'
+              examples:
+                list:
+                  $ref: '#/components/examples/KnowledgeSpecification_list'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createKnowledgeSpecification
+      summary: Creates a KnowledgeSpecification
+      description: >-
+        This operation registers an ontology module. The module always starts as `draft`. Its
+        content is loaded from `source`; an `upload` module gets its content through `…/content`.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeSpecification_FVO'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSpecification'
+              examples:
+                telecomFromGit:
+                  $ref: '#/components/examples/KnowledgeSpecification_telecomGit'
+                remotePeer:
+                  $ref: '#/components/examples/KnowledgeSpecification_remotePeer'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledgeSpecification/{id}':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: retrieveKnowledgeSpecification
+      summary: Retrieves a KnowledgeSpecification by ID
+      description: This operation retrieves an ontology module.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSpecification'
+              examples:
+                telecomFromGit:
+                  $ref: '#/components/examples/KnowledgeSpecification_telecomGit'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: patchKnowledgeSpecification
+      summary: Updates partially a KnowledgeSpecification
+      description: >-
+        This operation updates an ontology module with a JSON merge patch.
+
+
+        **Lifecycle.** Changing `lifecycleStatus` is a governance transition. Each transition is
+        allowed to one role, as listed in the `x-lifecycle` extension of the
+        `KnowledgeSpecification` schema; a transition that is not listed, or that the caller's
+        roles don't allow, gets `409` or `403`. A transition publishes a
+        `KnowledgeSpecificationStateChangeEvent` and is recorded in the review history.
+
+
+        **Other fields** can be changed by an `ontology-editor` while the module is `draft` or
+        `rejected`. `linkStatus` is set by an `ontology-approver` when ruling.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeSpecification_MVO'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSpecification'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteKnowledgeSpecification
+      summary: Deletes a KnowledgeSpecification
+      description: >-
+        This operation deletes an ontology module and its content. An `ontology-editor` may delete
+        a module that is `draft` or `rejected`; an `ontology-approver` may delete a module in any
+        state, though deprecating a published module is preferred. A module that a knowledge-base
+        conforms to, or that another module imports, gets `409`.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+        - ontology-approver
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  /listener/knowledgeSpecificationCreateEvent:
+    post:
+      operationId: knowledgeSpecificationCreateEvent
+      summary: Client listener for entity KnowledgeSpecificationCreateEvent
+      description: Example of a client listener for receiving the notification KnowledgeSpecificationCreateEvent
+      tags:
+        - notification listener
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeSpecificationCreateEvent'
+      responses:
+        '204':
+          description: Notified
+        default:
+          $ref: '#/components/responses/Error'
+  /listener/knowledgeSpecificationAttributeValueChangeEvent:
+    post:
+      operationId: knowledgeSpecificationAttributeValueChangeEvent
+      summary: Client listener for entity KnowledgeSpecificationAttributeValueChangeEvent
+      description: Example of a client listener for receiving the notification KnowledgeSpecificationAttributeValueChangeEvent
+      tags:
+        - notification listener
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeSpecificationAttributeValueChangeEvent'
+      responses:
+        '204':
+          description: Notified
+        default:
+          $ref: '#/components/responses/Error'
+  /listener/knowledgeSpecificationStateChangeEvent:
+    post:
+      operationId: knowledgeSpecificationStateChangeEvent
+      summary: Client listener for entity KnowledgeSpecificationStateChangeEvent
+      description: Example of a client listener for receiving the notification KnowledgeSpecificationStateChangeEvent
+      tags:
+        - notification listener
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeSpecificationStateChangeEvent'
+      responses:
+        '204':
+          description: Notified
+        default:
+          $ref: '#/components/responses/Error'
+  /listener/knowledgeSpecificationDeleteEvent:
+    post:
+      operationId: knowledgeSpecificationDeleteEvent
+      summary: Client listener for entity KnowledgeSpecificationDeleteEvent
+      description: Example of a client listener for receiving the notification KnowledgeSpecificationDeleteEvent
+      tags:
+        - notification listener
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeSpecificationDeleteEvent'
+      responses:
+        '204':
+          description: Notified
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledgeSpecification/{id}/content':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: retrieveKnowledgeSpecificationContent
+      summary: Retrieves the content of a KnowledgeSpecification
+      description: >-
+        Returns the ontology module content in Turtle.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      responses:
+        '200':
+          description: The module content
+          content:
+            text/turtle:
+              schema:
+                type: string
+              example: |
+                @prefix as: <https://example.org/ontology/telecom/assurance#> .
+                @prefix owl: <http://www.w3.org/2002/07/owl#> .
+                @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+                @prefix fto: <https://models.tmforum.org/ontology/fto/> .
+                <https://example.org/ontology/telecom/assurance> a owl:Ontology ;
+                    fto:layer fto:Telecom ;
+                    owl:imports <https://example.org/ontology/foundational/core> .
+                as:Incident a owl:Class ;
+                    rdfs:label "Incident" ;
+                    rdfs:subClassOf <https://example.org/ontology/foundational/core#Event> .
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '406':
+          $ref: '#/components/responses/406'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: replaceKnowledgeSpecificationContent
+      summary: Replaces the content of a KnowledgeSpecification
+      description: >-
+        Replaces the Turtle content of a module, while it is `draft` or `rejected`. An `ontology-editor` may
+        replace the content of a module whose source is `upload`. The contributing component, calling with
+        its Canvas system role, may replace the content of a module whose source is `componentContribution`
+        and names it. Modules loaded from git or a mount get their content from that source (`409`).
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+        - canvasSystemRole
+      requestBody:
+        required: true
+        content:
+          text/turtle:
+            schema:
+              type: string
+              format: turtle
+            example: |
+              @prefix as: <https://example.org/ontology/telecom/assurance#> .
+              @prefix owl: <http://www.w3.org/2002/07/owl#> .
+              @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+              as:Problem a owl:Class ; rdfs:label "Problem" .
+      responses:
+        '204':
+          description: Replaced
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '415':
+          $ref: '#/components/responses/415'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledgeSpecification/{id}/mapping':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: listKnowledgeSpecificationMapping
+      summary: Lists the mappings of a bridge module
+      description: >-
+        Lists the bridge statements (reified bridge:mapping) of a module whose specKind is `bridge`.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Mapping'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createKnowledgeSpecificationMapping
+      summary: Proposes a mapping in a bridge module
+      description: >-
+        Adds a bridge statement to a module whose specKind is `bridge` (`409` otherwise). The mapping starts as `draft`; its derived `status` is `proposed` until it is agreed.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Mapping_FVO'
+            examples:
+              proposed:
+                $ref: '#/components/examples/Mapping_FVO_proposed'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mapping'
+              examples:
+                proposed:
+                  $ref: '#/components/examples/Mapping_proposed'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledgeSpecification/{id}/mapping/{mappingId}':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/MappingId'
+    get:
+      operationId: retrieveKnowledgeSpecificationMapping
+      summary: Retrieves a mapping
+      description: >-
+        Retrieves a bridge statement.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mapping'
+              examples:
+                proposed:
+                  $ref: '#/components/examples/Mapping_proposed'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: patchKnowledgeSpecificationMapping
+      summary: Updates partially a mapping
+      description: >-
+        Updates a bridge statement with a JSON merge patch. A change of `lifecycleStatus` is a governance transition, allowed as in the `x-lifecycle` of `KnowledgeSpecification`. Other fields can be changed by an `ontology-editor` while the mapping is `draft` or `rejected`.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/Mapping_MVO'
+            example:
+              confidence: high
+              rationale: Confirmed by the vendor team
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mapping'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteKnowledgeSpecificationMapping
+      summary: Deletes a mapping
+      description: >-
+        Deletes a bridge statement. An `ontology-editor` may delete a `draft` or `rejected` mapping; an `ontology-approver` may delete any.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+        - ontology-approver
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledgeSpecification/{id}/review':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: listKnowledgeSpecificationReview
+      summary: Lists the review history of a module
+      description: >-
+        Lists the proposals, comments and rulings on the module and its mappings, oldest first.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReviewItem'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createKnowledgeSpecificationReview
+      summary: Adds a proposal, a comment or a ruling
+      description: >-
+        Adds a review item to the module or to one of its mappings. Each kind needs its own role and target state, as listed in the `x-review-kinds` extension of `ReviewItem`: a `proposal` moves the target from `draft` to `proposed`; a `comment` is accepted while the target is `proposed` or `inReview`; a `ruling` moves it from `inReview` to `agreed` or `rejected`, and a ruling `agreed` needs the latest validation to pass. A review item in the wrong state gets `409`. `author`, `approver` and `date` are taken from the token and the clock.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewItem_FVO'
+            examples:
+              ruling:
+                $ref: '#/components/examples/ReviewItem_FVO_ruling'
+              comment:
+                $ref: '#/components/examples/ReviewItem_FVO_comment'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewItem'
+              examples:
+                ruling:
+                  $ref: '#/components/examples/ReviewItem_ruling'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledgeSpecification/{id}/transition':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: listKnowledgeSpecificationTransition
+      summary: Lists the lifecycle history of a module
+      description: >-
+        Lists the lifecycle transitions of the module and of its mappings, oldest first: those made by a review item (a proposal or a ruling), by a PATCH of `lifecycleStatus`, and by editing an agreed or published mapping, which takes it back to `draft`.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LifecycleTransition'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledgeSpecification/{id}/validation':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: retrieveKnowledgeSpecificationValidation
+      summary: Retrieves the latest validation report
+      description: >-
+        Returns the report of the latest validation run of the module.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationReport'
+              examples:
+                failing:
+                  $ref: '#/components/examples/ValidationReport_failing'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: runKnowledgeSpecificationValidation
+      summary: Validates a module
+      description: >-
+        Runs the structural checks (the five rules of the FTO check.py: parse, layer annotation, layer monotonicity, parents resolve, catalog integrity) and SHACL validation against the shapes the module imports, and returns the report.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+      responses:
+        '200':
+          description: The validation report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationReport'
+              examples:
+                failing:
+                  $ref: '#/components/examples/ValidationReport_failing'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/schema/{name}':
+    get:
+      operationId: retrieveSchema
+      summary: Retrieves an extension schema
+      description: >-
+        Returns a JSON Schema that the `@schemaLocation` of an extended resource points to, for example
+        `FederatedKnowledgeSpecification.schema.json`.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: The schema file name
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The JSON Schema
+          content:
+            application/schema+json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        default:
+          $ref: '#/components/responses/Error'
+  /knowledgeTerm:
+    get:
+      operationId: retrieveKnowledgeTerm
+      summary: Searches ontology terms
+      description: >-
+        Searches the terms of the ontology modules by label, local name and definition, ranked (exact label, label
+        prefix, label substring, IRI local name, then definition or comment). The FTO MCP tool fto_search. Describe a
+        term with `/knowledgeTerm/describe`.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Text to search for in labels, local names and definitions.
+          schema:
+            type: string
+            minLength: 1
+            pattern: '\S'
+        - name: limit
+          in: query
+          description: The maximum number of hits.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 25
+        - name: includeUnpublished
+          in: query
+          description: >-
+            Also look in modules that are not published (draft, proposed, inReview, agreed, rejected). By default only
+            published and deprecated modules are searched.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: The hits, best first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TermLookupResult'
+              examples:
+                search:
+                  $ref: '#/components/examples/Term_search'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  /knowledgeTerm/describe:
+    get:
+      operationId: describeKnowledgeTerm
+      summary: Describes an ontology term
+      description: >-
+        Describes one term (labels, definitions, defining modules, FTO layer, parents and SKOS matches), given as an
+        IRI or a CURIE of a registered prefix; with `layerChain=true`, also its subclass chain with the layer of each
+        term. A term no module mentions, or a CURIE with an unknown prefix, gives `404`. The FTO MCP tools
+        fto_describe and fto_layer_of.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      parameters:
+        - name: iri
+          in: query
+          required: true
+          description: The term, as an IRI or a CURIE.
+          schema:
+            type: string
+            pattern: '^[A-Za-z][A-Za-z0-9+.-]*:[^\s<>"{}|^`\\]+$'
+        - name: layerChain
+          in: query
+          description: Also return the subclass chain with the layer of each term.
+          schema:
+            type: boolean
+            default: false
+        - name: includeUnpublished
+          in: query
+          description: >-
+            Also look in modules that are not published (draft, proposed, inReview, agreed, rejected). By default only
+            published and deprecated modules are searched.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: The description (and the layer chain when asked)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TermLookupResult'
+              examples:
+                describe:
+                  $ref: '#/components/examples/Term_describe'
+        '404':
+          $ref: '#/components/responses/404'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  /listener/knowledgeCreateEvent:
+    post:
+      operationId: knowledgeCreateEvent
+      summary: Client listener for entity KnowledgeCreateEvent
+      description: Example of a client listener for receiving the notification KnowledgeCreateEvent
+      tags:
+        - notification listener
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeCreateEvent'
+      responses:
+        '204':
+          description: Notified
+        default:
+          $ref: '#/components/responses/Error'
+  /listener/knowledgeAttributeValueChangeEvent:
+    post:
+      operationId: knowledgeAttributeValueChangeEvent
+      summary: Client listener for entity KnowledgeAttributeValueChangeEvent
+      description: Example of a client listener for receiving the notification KnowledgeAttributeValueChangeEvent
+      tags:
+        - notification listener
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeAttributeValueChangeEvent'
+      responses:
+        '204':
+          description: Notified
+        default:
+          $ref: '#/components/responses/Error'
+  /listener/knowledgeStateChangeEvent:
+    post:
+      operationId: knowledgeStateChangeEvent
+      summary: Client listener for entity KnowledgeStateChangeEvent
+      description: Example of a client listener for receiving the notification KnowledgeStateChangeEvent
+      tags:
+        - notification listener
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeStateChangeEvent'
+      responses:
+        '204':
+          description: Notified
+        default:
+          $ref: '#/components/responses/Error'
+  /listener/knowledgeDeleteEvent:
+    post:
+      operationId: knowledgeDeleteEvent
+      summary: Client listener for entity KnowledgeDeleteEvent
+      description: Example of a client listener for receiving the notification KnowledgeDeleteEvent
+      tags:
+        - notification listener
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/KnowledgeDeleteEvent'
+      responses:
+        '204':
+          description: Notified
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/proposal':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: listKnowledgeProposal
+      summary: Lists the proposed changes of a knowledge-base
+      description: >-
+        The changes the ingestion pipeline (KM-FX-04 knowledge fusion) proposes instead of applying them: data in
+        conflict with the shapes or rules (`dataConflict`, its triples withheld), classes and properties the ontology
+        lacks (`ontologyTerm`), and entities with several possible matches (`entityLink`).
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      parameters:
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KnowledgeProposal'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledge/{id}/proposal/{proposalId}':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - name: proposalId
+        in: path
+        required: true
+        description: Identifier of the proposal
+        schema:
+          type: string
+    get:
+      operationId: retrieveKnowledgeProposal
+      summary: Retrieves a proposed change
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - canvasSystemRole
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeProposal'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: patchKnowledgeProposal
+      summary: Accepts or rejects a proposed change
+      description: >-
+        Set `state` to `accepted` or `rejected`. Accepting a `dataConflict` writes its withheld triples to the
+        knowledge-base graph; accepting an `entityLink` needs `choice` (one of the candidates) and writes
+        `owl:sameAs`. `ontologyTerm` proposals are decided on an ontology module (`409` here), as are proposals
+        already decided. A deprecated knowledge-base cannot be changed (`409`).
+      tags:
+        - knowledge
+      x-required-roles:
+        - knowledge-editor
+        - canvasSystemRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeProposal_MVO'
+            example:
+              state: accepted
+              choice: https://example.org/cell/4711
+      responses:
+        '200':
+          description: The decided proposal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeProposal'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+  '/eventSource/{kind}/{token}':
+    parameters:
+      - name: kind
+        in: path
+        required: true
+        description: The TMF API the events come from.
+        schema:
+          type: string
+          enum:
+            - tmf639
+            - tmf638
+            - tmf642
+            - tmf628
+            - tmf921
+      - name: token
+        in: path
+        required: true
+        description: The secret of this hub registration (the callback URL is a capability).
+        schema:
+          type: string
+    post:
+      operationId: receiveSourceEvent
+      summary: Receives a notification from a TMF provider (event-driven ingestion)
+      description: >-
+        The callback this component registers on the hub of each provider (TMF639, TMF638, TMF642, TMF628,
+        TMF921) whose events a knowledge-base ingests (`source[].kind`). It needs no bearer token: the secret in
+        the URL identifies the registration (`404` for an unknown one). The event goes to every knowledge-base
+        whose `source[]` wants it (`eventTypes`, `query`), and is ingested in batches; anything else is ignored.
+        The TMF v5 form `…/listener/{eventName}` is accepted too.
+      tags:
+        - knowledge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Event'
+      responses:
+        '204':
+          description: Received (taken or ignored)
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+        default:
+          $ref: '#/components/responses/Error'
+  '/knowledgeSpecification/{id}/validation/document':
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      operationId: validateDocument
+      summary: Validates a document against a shapes module
+      description: >-
+        SHACL-validates the submitted RDF (for example an intent expression) against this module, which must be a
+        `shapes` module (`409` otherwise), together with the shapes and ontology modules it imports. Nothing is
+        stored. The FTO `validate` tool of the MCP server wraps this operation.
+      tags:
+        - knowledgeSpecification
+      x-required-roles:
+        - knowledge-viewer
+        - knowledge-editor
+        - ontology-editor
+        - ontology-reviewer
+        - ontology-approver
+        - canvasSystemRole
+      requestBody:
+        required: true
+        content:
+          text/turtle:
+            schema:
+              type: string
+              format: turtle
+          application/ld+json:
+            schema:
+              $ref: '#/components/schemas/JsonLdDocument'
+      responses:
+        '200':
+          description: The SHACL report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentValidationReport'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '415':
+          $ref: '#/components/responses/415'
+        '500':
+          $ref: '#/components/responses/500'
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        An access token from the Canvas identity platform. The component client roles in
+        `resource_access` are checked against the `x-required-roles` of each operation.
+  schemas:
+    DocumentValidationReport:
+      type: object
+      description: The SHACL validation of a submitted document against a shapes module.
+      properties:
+        shapesModule:
+          type: string
+        runAt:
+          type: string
+          format: date-time
+        conforms:
+          type: boolean
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShaclResult'
+    KnowledgeProposal:
+      type: object
+      description: A change the ingestion pipeline proposes for a knowledge-base; a person accepts or rejects it.
+      properties:
+        '@type':
+          type: string
+          enum:
+            - KnowledgeProposal
+        id:
+          type: string
+        href:
+          type: string
+        kind:
+          type: string
+          enum:
+            - dataConflict
+            - ontologyTerm
+            - entityLink
+        state:
+          type: string
+          enum:
+            - proposed
+            - accepted
+            - rejected
+        summary:
+          type: string
+        source:
+          type: string
+          description: The document or source batch the proposal came from.
+        processId:
+          type: string
+          description: The ingestion process (TMF701) that made it.
+        details:
+          type: object
+          additionalProperties: true
+          description: >-
+            `dataConflict`: `triples` (withheld), `violation` or `clash`; `ontologyTerm`: `term`, `role`, `count`,
+            `example`; `entityLink`: `iri`, `label`, `type`, `candidates`.
+        suggestion:
+          type: object
+          additionalProperties: true
+          description: A model's suggested resolution (`action`, `rationale`), never applied by itself.
+        decidedBy:
+          type: string
+        decidedAt:
+          type: string
+          format: date-time
+        creationDate:
+          type: string
+          format: date-time
+    KnowledgeProposal_MVO:
+      type: object
+      required:
+        - state
+      properties:
+        state:
+          type: string
+          enum:
+            - accepted
+            - rejected
+        choice:
+          type: string
+          description: For an `entityLink`, the candidate to link to.
+    Addressable:
+      type: object
+      description: Base schema for addressable entities
+      properties:
+        href:
+          type: string
+          description: Hyperlink reference
+        id:
+          type: string
+          description: unique identifier
+    Extensible:
+      type: object
+      description: >-
+        Base Extensible schema for use in TMForum Open-APIs - When used for in a schema it means
+        that the Entity described by the schema MUST be extended with the @type
+      properties:
+        '@type':
+          type: string
+          description: When sub-classing, this defines the sub-class Extensible name
+        '@baseType':
+          type: string
+          description: When sub-classing, this defines the super-class
+        '@schemaLocation':
+          type: string
+          description: A URI to a JSON-Schema file that defines additional attributes and relationships
+      required:
+        - '@type'
+    Extensible_FVO:
+      type: object
+      description: >-
+        The Extensible properties of a request body. In requests `@type` is optional everywhere, references
+        included: the API sets it when it is missing. Responses use `Extensible`, where it is always present.
+      properties:
+        '@type':
+          type: string
+          description: When sub-classing, this defines the sub-class Extensible name
+        '@baseType':
+          type: string
+          description: When sub-classing, this defines the super-class
+        '@schemaLocation':
+          type: string
+          description: A URI to a JSON-Schema file that defines additional attributes and relationships
+    Entity:
+      type: object
+      description: Base entity schema for use in TMForum Open-APIs. Property.
+      allOf:
+        - $ref: '#/components/schemas/Extensible'
+        - $ref: '#/components/schemas/Addressable'
+    EntityRef:
+      allOf:
+        - $ref: '#/components/schemas/Extensible'
+        - $ref: '#/components/schemas/Addressable'
+        - type: object
+          description: Entity reference schema to be use for all entityRef class.
+          properties:
+            id:
+              type: string
+              description: The identifier of the referred entity.
+            href:
+              type: string
+              description: The URI of the referred entity.
+            name:
+              type: string
+              description: Name of the referred entity.
+            '@referredType':
+              type: string
+              description: The actual type of the target instance when needed for disambiguation.
+          required:
+            - id
+    TimePeriod:
+      type: object
+      description: A period of time, either as a deadline (endDateTime only) a startDateTime only, or both
+      properties:
+        startDateTime:
+          description: Start of the time period, using IETC-RFC-3339 format
+          type: string
+          format: date-time
+          example: '1985-04-12T23:20:50.52Z'
+        endDateTime:
+          description: End of the time period, using IETC-RFC-3339 format
+          type: string
+          format: date-time
+          example: '1985-04-12T23:20:50.52Z'
+    PartyRef:
+      type: object
+      description: A Party reference
+      allOf:
+        - $ref: '#/components/schemas/EntityRef'
+        - properties:
+            '@type':
+              type: string
+              enum:
+                - PartyRef
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          PartyRef: '#/components/schemas/PartyRef'
+    PartyRoleRef:
+      allOf:
+        - $ref: '#/components/schemas/EntityRef'
+        - type: object
+          description: Party role reference. A party role represents the part played by a party in a given context.
+          properties:
+            '@type':
+              type: string
+              enum:
+                - PartyRoleRef
+            partyId:
+              type: string
+              description: The identifier of the engaged party that is linked to the PartyRole object.
+            partyName:
+              type: string
+              description: The name of the engaged party that is linked to the PartyRole object.
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          PartyRoleRef: '#/components/schemas/PartyRoleRef'
+    PartyRefOrPartyRoleRef:
+      type: object
+      description: A reference to a party or to a party role
+      oneOf:
+        - $ref: '#/components/schemas/PartyRef'
+        - $ref: '#/components/schemas/PartyRoleRef'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          PartyRef: '#/components/schemas/PartyRef'
+          PartyRoleRef: '#/components/schemas/PartyRoleRef'
+    RelatedPartyRefOrPartyRoleRef:
+      allOf:
+        - $ref: '#/components/schemas/Extensible'
+        - type: object
+          description: >-
+            RelatedParty reference. A related party defines party or party role or its reference,
+            linked to a specific entity
+          properties:
+            role:
+              description: >-
+                Role played by the related party or party role in the context of the specific
+                entity it is linked to. Such as 'owner', 'steward', 'contributor'
+              type: string
+            partyOrPartyRole:
+              $ref: '#/components/schemas/PartyRefOrPartyRoleRef'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          RelatedPartyRefOrPartyRoleRef: '#/components/schemas/RelatedPartyRefOrPartyRoleRef'
+    Event:
+      allOf:
+        - $ref: '#/components/schemas/Extensible'
+        - type: object
+          description: >-
+            Event with common attributes. Each resource event (Create, AttributeValueChange,
+            StateChange, Delete) extends it with an `event` payload that carries the resource.
+          properties:
+            href:
+              type: string
+              description: Hyperlink reference
+            id:
+              type: string
+              description: unique identifier
+            correlationId:
+              type: string
+              description: The correlation id for this event.
+            domain:
+              type: string
+              description: The domain of the event.
+            title:
+              type: string
+              description: The title of the event.
+            description:
+              type: string
+              description: An explanation of the event.
+            priority:
+              type: string
+              description: A priority.
+            timeOccurred:
+              type: string
+              format: date-time
+              description: The time the event occurred.
+            source:
+              $ref: '#/components/schemas/EntityRef'
+            reportingSystem:
+              $ref: '#/components/schemas/EntityRef'
+            relatedParty:
+              type: array
+              description: Collection of related parties
+              items:
+                $ref: '#/components/schemas/RelatedPartyRefOrPartyRoleRef'
+            eventId:
+              type: string
+              description: The identifier of the notification.
+            eventTime:
+              type: string
+              format: date-time
+              description: Time of the event occurrence.
+            eventType:
+              type: string
+              description: The type of the notification.
+            fieldPath:
+              type: string
+              description: >-
+                For AttributeValueChange and StateChange events, the path of the changed
+                attributes, as in TMF630.
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          Event: '#/components/schemas/Event'
+    Hub:
+      type: object
+      description: Sets the communication endpoint address the service instance must use to deliver notification information
+      allOf:
+        - $ref: '#/components/schemas/Entity'
+        - properties:
+            id:
+              type: string
+              description: Id of the listener
+            callback:
+              type: string
+              format: callback-url
+              description: >-
+                The callback being registered: an http(s) URL whose host resolves to a public address, or matches the
+                deployment's allowed callback hosts.
+            query:
+              type: string
+              description: >-
+                Additional data to be passed: a filter on the events to deliver, for example
+                `eventType=KnowledgeCreateEvent`.
+          required:
+            - callback
+    Hub_FVO:
+      type: object
+      description: Sets the communication endpoint address the service instance must use to deliver notification information
+      required:
+        - callback
+      allOf:
+        - $ref: '#/components/schemas/Extensible_FVO'
+        - properties:
+            '@type':
+              type: string
+              description: Optional in requests; the API sets it when missing.
+              enum:
+                - Hub
+            callback:
+              type: string
+              format: callback-url
+              description: >-
+                The callback being registered: an http(s) URL whose host resolves to a public address, or matches the
+                deployment's allowed callback hosts.
+            query:
+              type: string
+              pattern: '^eventType=[A-Za-z]+(,[A-Za-z]+)*$'
+              description: The events to deliver, for example `eventType=KnowledgeCreateEvent,KnowledgeDeleteEvent`.
+    JsonPatch:
+      type: object
+      description: A JSONPatch document as defined by RFC 6902
+      required:
+        - op
+        - path
+      properties:
+        op:
+          type: string
+          description: The operation to be performed
+          enum:
+            - add
+            - remove
+            - replace
+            - move
+            - copy
+            - test
+        path:
+          type: string
+          description: A JSON-Pointer
+        value:
+          description: The value to be used within the operations.
+        from:
+          type: string
+          description: A string containing a JSON Pointer value.
+    JsonPatchOperations:
+      description: JSONPatch Operations document as defined by RFC 6902
+      type: array
+      items:
+        $ref: '#/components/schemas/JsonPatch'
+    Error:
+      description: >-
+        Used when an API throws an Error, typically with a HTTP error response-code (3xx, 4xx, 5xx).
+        The TMF630 Error, extended with the members of RFC 7807 problem details (`type`, `title`,
+        `detail`, `instance`). `status` keeps its TMF630 string type and carries the HTTP status
+        code, as the RFC 7807 `status` member does.
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          Error: '#/components/schemas/Error'
+      allOf:
+        - $ref: '#/components/schemas/Extensible'
+        - type: object
+          required:
+            - code
+            - reason
+          properties:
+            code:
+              type: string
+              description: Application relevant detail, defined in the API or a common list.
+            reason:
+              type: string
+              description: Explanation of the reason for the error which can be shown to a client user.
+            message:
+              type: string
+              description: More details and corrective actions related to the error which can be shown to a client user.
+            status:
+              type: string
+              pattern: '^[1-5][0-9][0-9]$'
+              description: HTTP Error code extension
+            referenceError:
+              type: string
+              description: URI of documentation describing the error.
+            type:
+              type: string
+              format: uri-reference
+              description: RFC 7807 - a URI reference that identifies the problem type.
+              default: about:blank
+            title:
+              type: string
+              description: RFC 7807 - a short, human-readable summary of the problem type.
+            detail:
+              type: string
+              description: RFC 7807 - a human-readable explanation specific to this occurrence of the problem.
+            instance:
+              type: string
+              format: uri-reference
+              description: RFC 7807 - a URI reference that identifies the specific occurrence of the problem.
+    KnowledgeCategoryType:
+      type: string
+      description: The kind of knowledge a knowledge-base holds, from the TMFC060 inception form.
+      enum:
+        - know-what
+        - know-why
+        - know-how
+        - know-who
+    StoreKindType:
+      type: string
+      description: >-
+        How a knowledge-base stores its knowledge: an RDF graph, a document and vector store, or
+        both, linked (hybrid).
+      enum:
+        - graph
+        - vector
+        - hybrid
+    KnowledgeSource:
+      type: object
+      description: >-
+        A source the knowledge-base ingests from. `upload` takes documents uploaded to the
+        knowledge-base. The `tmf…` kinds take events of that TM Forum API, delivered to the component
+        through its subscribed events. `remote` takes content from a URL.
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - upload
+            - tmf639
+            - tmf638
+            - tmf642
+            - tmf628
+            - tmf921
+            - remote
+          description: The kind of source.
+        dependentApiName:
+          type: string
+          description: For `tmf…` kinds, the name of the component's dependent API that provides the events.
+        eventTypes:
+          type: array
+          description: For `tmf…` kinds, the event types to ingest. All events of the API when empty.
+          items:
+            type: string
+        query:
+          type: string
+          description: An optional filter on the source, in the source API's filter syntax.
+        url:
+          type: string
+          format: uri
+          description: For `remote`, the URL to ingest from.
+    RetrievalSettings:
+      type: object
+      description: Default retrieval settings of a knowledge-base, used when a search request does not set them.
+      properties:
+        topK:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 8
+          description: Number of hits to return.
+        scoreThreshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0
+          description: Minimum score of a hit.
+        hybrid:
+          type: boolean
+          default: true
+          description: Fuse dense (embedding) and sparse (BM25) scores.
+    KnowledgeStatistics:
+      type: object
+      description: Size of a knowledge-base, computed by the component.
+      readOnly: true
+      properties:
+        triples:
+          type: integer
+          minimum: 0
+          description: Number of triples in the knowledge-base graph.
+        documents:
+          type: integer
+          minimum: 0
+          description: Number of documents.
+        chunks:
+          type: integer
+          minimum: 0
+          description: Number of indexed chunks in the vector store.
+    Knowledge:
+      allOf:
+        - $ref: '#/components/schemas/Entity'
+        - type: object
+          description: >-
+            A knowledge-base: an RDF instance graph and a document and vector store, linked so that
+            search hits carry the IRIs of the entities they mention. It is typed by the ontology
+            modules it conforms to.
+          properties:
+            name:
+              type: string
+              description: Name of the knowledge-base.
+            description:
+              type: string
+              description: Description of the knowledge-base.
+            version:
+              type: string
+              description: Version of the knowledge-base.
+            lifecycleStatus:
+              $ref: '#/components/schemas/GovernedLifecycleStatusType'
+            lastUpdate:
+              type: string
+              format: date-time
+              readOnly: true
+              description: Date and time of the last update.
+            knowledgeCategory:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeCategoryType'
+            storeKind:
+              $ref: '#/components/schemas/StoreKindType'
+            conformsTo:
+              type: array
+              description: The ontology modules that type the knowledge-base.
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            source:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeSource'
+            retrieval:
+              $ref: '#/components/schemas/RetrievalSettings'
+            statistics:
+              $ref: '#/components/schemas/KnowledgeStatistics'
+            relatedParty:
+              type: array
+              items:
+                $ref: '#/components/schemas/RelatedPartyRefOrPartyRoleRef'
+            validFor:
+              $ref: '#/components/schemas/TimePeriod'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          Knowledge: '#/components/schemas/Knowledge'
+      x-lifecycle:
+        description: >-
+          Allowed lifecycleStatus transitions of a knowledge-base and the role that may make each
+          one: the governed lifecycle of ontology modules, with knowledge-editor as the proposer.
+          A knowledge-base is created as draft. It can be read in every state; its content (graph,
+          documents, ingestion) can be changed in every state except deprecated (409).
+        initial: draft
+        transitions:
+          - {from: draft, to: proposed, role: knowledge-editor}
+          - {from: proposed, to: inReview, role: ontology-reviewer}
+          - {from: inReview, to: agreed, role: ontology-approver}
+          - {from: inReview, to: rejected, role: ontology-approver}
+          - {from: rejected, to: draft, role: knowledge-editor}
+          - {from: agreed, to: published, role: ontology-approver}
+          - {from: published, to: deprecated, role: ontology-approver}
+        writableIn: [draft, proposed, inReview, agreed, rejected, published]
+        readableIn: [draft, proposed, inReview, agreed, rejected, published, deprecated]
+    Knowledge_FVO:
+      allOf:
+        - $ref: '#/components/schemas/Extensible_FVO'
+        - type: object
+          description: A knowledge-base, as given to create it.
+          required:
+            - name
+          properties:
+            '@type':
+              type: string
+              description: Optional in requests; the API sets it when missing.
+              enum:
+                - Knowledge
+            name:
+              type: string
+              minLength: 1
+              pattern: '\S'
+            description:
+              type: string
+            version:
+              type: string
+            knowledgeCategory:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeCategoryType'
+            storeKind:
+              allOf:
+                - $ref: '#/components/schemas/StoreKindType'
+              default: hybrid
+            conformsTo:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            source:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeSource'
+            retrieval:
+              $ref: '#/components/schemas/RetrievalSettings'
+            relatedParty:
+              type: array
+              items:
+                $ref: '#/components/schemas/RelatedPartyRefOrPartyRoleRef'
+            validFor:
+              $ref: '#/components/schemas/TimePeriod'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          Knowledge: '#/components/schemas/Knowledge_FVO'
+    Knowledge_MVO:
+      allOf:
+        - $ref: '#/components/schemas/Extensible_FVO'
+        - type: object
+          description: >-
+            The fields of a knowledge-base that can be changed. `storeKind` cannot change once the
+            knowledge-base exists. A change of `lifecycleStatus` is a governance transition (see
+            `x-lifecycle` on `Knowledge`).
+          properties:
+            '@type':
+              type: string
+              description: Optional in requests; the API sets it when missing.
+              enum:
+                - Knowledge
+            name:
+              type: string
+            description:
+              type: string
+            version:
+              type: string
+            lifecycleStatus:
+              $ref: '#/components/schemas/GovernedLifecycleStatusType'
+            knowledgeCategory:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeCategoryType'
+            conformsTo:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            source:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeSource'
+            retrieval:
+              $ref: '#/components/schemas/RetrievalSettings'
+            relatedParty:
+              type: array
+              items:
+                $ref: '#/components/schemas/RelatedPartyRefOrPartyRoleRef'
+            validFor:
+              $ref: '#/components/schemas/TimePeriod'
+        - anyOf:
+            - description: A lifecycle transition, on its own.
+              required:
+                - lifecycleStatus
+              properties:
+                'lifecycleStatus': {}
+                '@type':
+                  type: string
+              additionalProperties: false
+            - description: A change of fields, without lifecycleStatus.
+              not:
+                required:
+                  - lifecycleStatus
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          Knowledge: '#/components/schemas/Knowledge_MVO'
+    KnowledgeRef:
+      allOf:
+        - $ref: '#/components/schemas/EntityRef'
+      description: Reference to a knowledge-base.
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeRef: '#/components/schemas/KnowledgeRef'
+    KnowledgeSpecificationRef:
+      type: object
+      description: >-
+        Reference to an ontology module, by `id` or by `iri` (at least one; responses carry both). The EntityRef
+        properties, with `iri` as an alternative identifier.
+      anyOf:
+        - required:
+            - id
+        - required:
+            - iri
+      properties:
+        id:
+          type: string
+          description: Identifier of the module.
+        iri:
+          type: string
+          format: uri
+          description: The IRI of the ontology module, as an alternative way to identify it.
+        href:
+          type: string
+          description: Hyperlink reference.
+        name:
+          type: string
+          description: Name of the module.
+        '@referredType':
+          type: string
+        '@type':
+          type: string
+        '@baseType':
+          type: string
+        '@schemaLocation':
+          type: string
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeSpecificationRef: '#/components/schemas/KnowledgeSpecificationRef'
+    KnowledgeCreateEvent:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          description: KnowledgeCreateEvent generic structure
+          properties:
+            event:
+              $ref: '#/components/schemas/KnowledgeEventPayload'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeCreateEvent: '#/components/schemas/KnowledgeCreateEvent'
+    KnowledgeAttributeValueChangeEvent:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          description: KnowledgeAttributeValueChangeEvent generic structure
+          properties:
+            event:
+              $ref: '#/components/schemas/KnowledgeEventPayload'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeAttributeValueChangeEvent: '#/components/schemas/KnowledgeAttributeValueChangeEvent'
+    KnowledgeStateChangeEvent:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          description: KnowledgeStateChangeEvent generic structure
+          properties:
+            event:
+              $ref: '#/components/schemas/KnowledgeEventPayload'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeStateChangeEvent: '#/components/schemas/KnowledgeStateChangeEvent'
+    KnowledgeDeleteEvent:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          description: KnowledgeDeleteEvent generic structure
+          properties:
+            event:
+              $ref: '#/components/schemas/KnowledgeEventPayload'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeDeleteEvent: '#/components/schemas/KnowledgeDeleteEvent'
+    KnowledgeEventPayload:
+      type: object
+      description: The payload of a Knowledge event
+      properties:
+        knowledge:
+          $ref: '#/components/schemas/Knowledge'
+    JsonLdDocument:
+      description: A JSON-LD document.
+      oneOf:
+        - type: object
+          additionalProperties: true
+        - type: array
+          items:
+            type: object
+            additionalProperties: true
+    SparqlResults:
+      type: object
+      description: SPARQL 1.1 query results in JSON (application/sparql-results+json), for SELECT and ASK.
+      properties:
+        head:
+          type: object
+          properties:
+            vars:
+              type: array
+              items:
+                type: string
+            link:
+              type: array
+              items:
+                type: string
+        results:
+          type: object
+          properties:
+            bindings:
+              type: array
+              items:
+                type: object
+                additionalProperties:
+                  type: object
+                  required:
+                    - type
+                    - value
+                  properties:
+                    type:
+                      type: string
+                      enum:
+                        - uri
+                        - literal
+                        - bnode
+                        - triple
+                    value:
+                      type: string
+                    datatype:
+                      type: string
+                    xml:lang:
+                      type: string
+        boolean:
+          type: boolean
+          description: The result of an ASK query.
+    SearchRequest:
+      type: object
+      description: A hybrid search over the chunks of a knowledge-base.
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          minLength: 1
+          pattern: '\S'
+          description: The search text (not blank).
+        topK:
+          type: integer
+          minimum: 1
+          maximum: 100
+        scoreThreshold:
+          type: number
+          minimum: 0
+          maximum: 1
+        hybrid:
+          type: boolean
+        iriFilter:
+          type: array
+          description: Keep only chunks that mention at least one of these IRIs.
+          items:
+            type: string
+            format: uri
+    SearchHit:
+      type: object
+      required:
+        - chunkId
+        - text
+        - score
+      properties:
+        chunkId:
+          type: string
+        text:
+          type: string
+          description: The text of the chunk.
+        score:
+          type: number
+          description: The fused relevance score.
+        documentId:
+          type: string
+          description: The document the chunk comes from, if any.
+        entityIri:
+          type: array
+          description: The IRIs of the graph entities the chunk mentions.
+          items:
+            type: string
+            format: uri
+    SearchResult:
+      type: object
+      properties:
+        hits:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchHit'
+    RecommendationRequest:
+      type: object
+      description: The context to recommend knowledge for; give a text `context`, context `iri`s, or both.
+      anyOf:
+        - required:
+            - context
+        - required:
+            - iri
+      properties:
+        context:
+          type: string
+          minLength: 1
+          pattern: '\S'
+          description: A description of the situation, in text (not blank).
+        iri:
+          type: array
+          minItems: 1
+          description: Entities of the situation, by IRI.
+          items:
+            type: string
+            format: uri
+        topK:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 5
+    RecommendationItem:
+      type: object
+      required:
+        - itemId
+        - kind
+        - score
+      properties:
+        itemId:
+          type: string
+        kind:
+          type: string
+          enum:
+            - entity
+            - document
+            - chunk
+        iri:
+          type: string
+          format: uri
+          description: The IRI of the item, for an entity.
+        label:
+          type: string
+        score:
+          type: number
+        signals:
+          type: object
+          description: The ranking signals behind the score.
+          properties:
+            successRate:
+              type: number
+              minimum: 0
+              maximum: 1
+            applicability:
+              type: number
+              minimum: 0
+              maximum: 1
+            usage:
+              type: integer
+              minimum: 0
+              description: How often the item was used.
+    RecommendationResult:
+      type: object
+      properties:
+        recommendationId:
+          type: string
+          description: Identifies this recommendation, for feedback.
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecommendationItem'
+    RecommendationFeedback:
+      type: object
+      required:
+        - recommendationId
+        - itemId
+      properties:
+        recommendationId:
+          type: string
+        itemId:
+          type: string
+        used:
+          type: boolean
+          description: Whether the item was used.
+        outcome:
+          type: string
+          enum:
+            - success
+            - failure
+            - ignored
+          description: The outcome of using the item.
+    Document:
+      type: object
+      description: A document uploaded to a knowledge-base.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        href:
+          type: string
+          readOnly: true
+        name:
+          type: string
+        description:
+          type: string
+        mediaType:
+          type: string
+          example: application/pdf
+        size:
+          type: integer
+          minimum: 0
+          description: Size in bytes.
+        sha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        uploadDate:
+          type: string
+          format: date-time
+        ingestionState:
+          type: string
+          enum:
+            - pending
+            - ingested
+            - failed
+        lastIngestion:
+          $ref: '#/components/schemas/ProcessRef'
+    IngestRequest:
+      type: object
+      description: What to ingest.
+      properties:
+        source:
+          type: string
+          description: The kind of source to ingest from, one of the knowledge-base's `source[].kind`.
+          enum:
+            - upload
+            - tmf639
+            - tmf638
+            - tmf642
+            - tmf628
+            - tmf921
+            - remote
+        documentId:
+          type: array
+          description: For `upload`, the documents to ingest. Every document not yet ingested when empty.
+          items:
+            type: string
+        params:
+          type: object
+          description: Source-specific parameters, for example a TMF filter for an inventory snapshot.
+          additionalProperties: true
+    ProcessRef:
+      allOf:
+        - $ref: '#/components/schemas/EntityRef'
+      description: >-
+        Reference to a TMF701 v5 process (`…/tmf-api/process/v5/process/{id}`), served by the
+        component's process API (TMF701 Process Management v5).
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          ProcessRef: '#/components/schemas/ProcessRef'
+    OntologyLayerType:
+      type: string
+      description: The FTO layer of an ontology module (fto:layer).
+      enum:
+        - Foundational
+        - Telecom
+        - Implementation
+    SpecKindType:
+      type: string
+      description: >-
+        What an ontology module is. `bridge` modules hold mappings between modules; a `remote`
+        module is a federation peer (a remote SPARQL endpoint or a peer TMFC060) found by IRI.
+      enum:
+        - ontology
+        - vocabulary
+        - shapes
+        - bridge
+        - remote
+    GovernedLifecycleStatusType:
+      type: string
+      description: The governance lifecycle of knowledge-bases, ontology modules and mappings.
+      enum:
+        - draft
+        - proposed
+        - inReview
+        - agreed
+        - rejected
+        - published
+        - deprecated
+    LinkStatusType:
+      type: string
+      description: How settled the module's links to its parents are (fto:linkStatus).
+      enum:
+        - provisional
+        - confirmed
+    KnowledgeSpecificationSource:
+      description: Where the content of an ontology module comes from.
+      oneOf:
+        - $ref: '#/components/schemas/UploadSource'
+        - $ref: '#/components/schemas/GitSource'
+        - $ref: '#/components/schemas/MountSource'
+        - $ref: '#/components/schemas/ComponentContributionSource'
+        - $ref: '#/components/schemas/RemoteEndpointSource'
+      discriminator:
+        propertyName: kind
+        mapping:
+          upload: '#/components/schemas/UploadSource'
+          git: '#/components/schemas/GitSource'
+          mount: '#/components/schemas/MountSource'
+          componentContribution: '#/components/schemas/ComponentContributionSource'
+          remoteEndpoint: '#/components/schemas/RemoteEndpointSource'
+    UploadSource:
+      type: object
+      description: The content is uploaded through `…/content`.
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - upload
+    GitSource:
+      type: object
+      description: The content is a file in a git repository.
+      required:
+        - kind
+        - url
+        - path
+      properties:
+        kind:
+          type: string
+          enum:
+            - git
+        url:
+          type: string
+          minLength: 1
+          description: The repository URL.
+        ref:
+          type: string
+          default: main
+          description: Branch, tag or commit.
+        path:
+          type: string
+          minLength: 1
+          description: Path of the module file in the repository.
+        secretRef:
+          type: string
+          description: Name of the Kubernetes Secret with the git credentials, for a private repository.
+    MountSource:
+      type: object
+      description: The content is a file on a volume mounted into the component (Secret or PVC).
+      required:
+        - kind
+        - path
+      properties:
+        kind:
+          type: string
+          enum:
+            - mount
+        path:
+          type: string
+          minLength: 1
+          description: Path of the module file in the container.
+    ComponentContributionSource:
+      type: object
+      description: The content is contributed by another ODA Component.
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - componentContribution
+        componentId:
+          type: string
+          description: The catalog id of the contributing component, for example TMFC001.
+        componentName:
+          type: string
+          description: The name of the contributing component instance.
+    RemoteEndpointSource:
+      type: object
+      description: >-
+        A federation peer. Its content stays remote; queries reach it through SPARQL SERVICE once
+        the module is published.
+      required:
+        - kind
+        - url
+      properties:
+        kind:
+          type: string
+          enum:
+            - remoteEndpoint
+        url:
+          type: string
+          minLength: 1
+          format: uri
+          description: The SPARQL endpoint, or the query URL of the peer knowledge-base.
+        endpointKind:
+          type: string
+          enum:
+            - sparql
+            - tmfc060
+          default: sparql
+          description: A plain SPARQL endpoint, or a peer TMFC060 knowledge-base.
+    KnowledgeSpecification:
+      allOf:
+        - $ref: '#/components/schemas/Entity'
+        - type: object
+          description: >-
+            An ontology module of the federated ontology, modelled on FTO's module registry.
+          properties:
+            name:
+              type: string
+              description: Name of the module (FTO label).
+            description:
+              type: string
+              description: Purpose of the module.
+            version:
+              type: string
+            iri:
+              type: string
+              format: uri
+              description: The ontology IRI of the module. Unique; used to resolve owl:imports.
+            prefix:
+              type: string
+              description: >-
+                The preferred namespace prefix. A module that declares several prefixes lists them
+                comma-separated, as in FTO modules.json.
+            layer:
+              $ref: '#/components/schemas/OntologyLayerType'
+            specKind:
+              $ref: '#/components/schemas/SpecKindType'
+            depth:
+              type: string
+              description: How complete the module is, for example Full ontology, Vocabulary or Scaffold.
+            owner:
+              $ref: '#/components/schemas/RelatedPartyRefOrPartyRoleRef'
+            imports:
+              type: array
+              description: The modules this module imports (owl:imports).
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            describes:
+              type: array
+              description: For a vocabulary, the modules whose terms it describes.
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            source:
+              $ref: '#/components/schemas/KnowledgeSpecificationSource'
+            lifecycleStatus:
+              $ref: '#/components/schemas/GovernedLifecycleStatusType'
+            linkStatus:
+              $ref: '#/components/schemas/LinkStatusType'
+            lastUpdate:
+              type: string
+              format: date-time
+              readOnly: true
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeSpecification: '#/components/schemas/KnowledgeSpecification'
+          FederatedKnowledgeSpecification: '#/components/schemas/FederatedKnowledgeSpecification'
+      x-lifecycle:
+        description: >-
+          Allowed lifecycleStatus transitions and the role that may make each one. Confirmed in
+          hw-irc-sni/oda-canvas#5. A module is created as draft.
+        initial: draft
+        transitions:
+          - {from: draft, to: proposed, role: ontology-editor}
+          - {from: proposed, to: inReview, role: ontology-reviewer}
+          - {from: inReview, to: agreed, role: ontology-approver, condition: validation passes}
+          - {from: inReview, to: rejected, role: ontology-approver}
+          - {from: rejected, to: draft, role: ontology-editor, condition: review history kept}
+          - {from: agreed, to: published, role: ontology-approver}
+          - {from: published, to: deprecated, role: ontology-approver}
+        reviewComments: [proposed, inReview]
+    FederatedKnowledgeSpecification:
+      allOf:
+        - $ref: '#/components/schemas/KnowledgeSpecification'
+        - type: object
+          description: >-
+            An ontology module imported from a federation repository (modules.json and catalog.json, as in
+            FTO) by the configured ontology source sync. The source repository governs it, so it is published;
+            its status in the source is kept as `sourceStatus`. `@baseType` is `KnowledgeSpecification` and
+            `@schemaLocation` points to the JSON Schema of this extension.
+          properties:
+            sourceStatus:
+              type: string
+              readOnly: true
+              description: The status of the module in the source federation repository, for example provisional.
+              example: provisional
+    KnowledgeSpecification_FVO:
+      allOf:
+        - $ref: '#/components/schemas/Extensible_FVO'
+        - type: object
+          description: An ontology module, as given to register it. It starts as draft.
+          required:
+            - name
+            - iri
+            - specKind
+            - source
+          properties:
+            '@type':
+              type: string
+              description: Optional in requests; the API sets it when missing.
+              enum:
+                - KnowledgeSpecification
+                - FederatedKnowledgeSpecification
+            name:
+              type: string
+              minLength: 1
+              pattern: '\S'
+              description: Name of the module (FTO label).
+            description:
+              type: string
+              description: Purpose of the module.
+            version:
+              type: string
+            iri:
+              type: string
+              minLength: 1
+              format: uri
+              description: The ontology IRI of the module. Unique; used to resolve owl:imports.
+            prefix:
+              type: string
+              description: >-
+                The preferred namespace prefix. A module that declares several prefixes lists them
+                comma-separated, as in FTO modules.json.
+            layer:
+              $ref: '#/components/schemas/OntologyLayerType'
+            specKind:
+              $ref: '#/components/schemas/SpecKindType'
+            depth:
+              type: string
+              description: How complete the module is, for example Full ontology, Vocabulary or Scaffold.
+            owner:
+              $ref: '#/components/schemas/RelatedPartyRefOrPartyRoleRef'
+            imports:
+              type: array
+              description: The modules this module imports (owl:imports).
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            describes:
+              type: array
+              description: For a vocabulary, the modules whose terms it describes.
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            source:
+              $ref: '#/components/schemas/KnowledgeSpecificationSource'
+        - description: A remote module takes its content from a federation peer.
+          anyOf:
+            - not:
+                required:
+                  - specKind
+                properties:
+                  specKind:
+                    enum:
+                      - remote
+            - properties:
+                source:
+                  properties:
+                    kind:
+                      enum:
+                        - remoteEndpoint
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeSpecification: '#/components/schemas/KnowledgeSpecification_FVO'
+    KnowledgeSpecification_MVO:
+      allOf:
+        - $ref: '#/components/schemas/Extensible_FVO'
+        - type: object
+          description: >-
+            The fields of an ontology module that can be changed. A change of lifecycleStatus is a
+            governance transition (see x-lifecycle). The iri cannot change.
+          properties:
+            '@type':
+              type: string
+              description: Optional in requests; the API sets it when missing.
+              enum:
+                - KnowledgeSpecification
+                - FederatedKnowledgeSpecification
+            name:
+              type: string
+              description: Name of the module (FTO label).
+            description:
+              type: string
+              description: Purpose of the module.
+            version:
+              type: string
+            prefix:
+              type: string
+              description: >-
+                The preferred namespace prefix. A module that declares several prefixes lists them
+                comma-separated, as in FTO modules.json.
+            layer:
+              $ref: '#/components/schemas/OntologyLayerType'
+            specKind:
+              $ref: '#/components/schemas/SpecKindType'
+            depth:
+              type: string
+              description: How complete the module is, for example Full ontology, Vocabulary or Scaffold.
+            owner:
+              $ref: '#/components/schemas/RelatedPartyRefOrPartyRoleRef'
+            imports:
+              type: array
+              description: The modules this module imports (owl:imports).
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            describes:
+              type: array
+              description: For a vocabulary, the modules whose terms it describes.
+              items:
+                $ref: '#/components/schemas/KnowledgeSpecificationRef'
+            source:
+              $ref: '#/components/schemas/KnowledgeSpecificationSource'
+            lifecycleStatus:
+              $ref: '#/components/schemas/GovernedLifecycleStatusType'
+        - anyOf:
+            - description: A lifecycle transition, on its own.
+              required:
+                - lifecycleStatus
+              properties:
+                'lifecycleStatus': {}
+                '@type':
+                  type: string
+              additionalProperties: false
+            - description: A change of fields, without lifecycleStatus.
+              not:
+                required:
+                  - lifecycleStatus
+        - description: A remote module takes its content from a federation peer.
+          anyOf:
+            - not:
+                required:
+                  - specKind
+                properties:
+                  specKind:
+                    enum:
+                      - remote
+            - properties:
+                source:
+                  properties:
+                    kind:
+                      enum:
+                        - remoteEndpoint
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeSpecification: '#/components/schemas/KnowledgeSpecification_MVO'
+    KnowledgeSpecificationCreateEvent:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          description: KnowledgeSpecificationCreateEvent generic structure
+          properties:
+            event:
+              $ref: '#/components/schemas/KnowledgeSpecificationEventPayload'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeSpecificationCreateEvent: '#/components/schemas/KnowledgeSpecificationCreateEvent'
+    KnowledgeSpecificationAttributeValueChangeEvent:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          description: KnowledgeSpecificationAttributeValueChangeEvent generic structure
+          properties:
+            event:
+              $ref: '#/components/schemas/KnowledgeSpecificationEventPayload'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeSpecificationAttributeValueChangeEvent: '#/components/schemas/KnowledgeSpecificationAttributeValueChangeEvent'
+    KnowledgeSpecificationStateChangeEvent:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          description: KnowledgeSpecificationStateChangeEvent generic structure
+          properties:
+            event:
+              $ref: '#/components/schemas/KnowledgeSpecificationEventPayload'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeSpecificationStateChangeEvent: '#/components/schemas/KnowledgeSpecificationStateChangeEvent'
+    KnowledgeSpecificationDeleteEvent:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          description: KnowledgeSpecificationDeleteEvent generic structure
+          properties:
+            event:
+              $ref: '#/components/schemas/KnowledgeSpecificationEventPayload'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          KnowledgeSpecificationDeleteEvent: '#/components/schemas/KnowledgeSpecificationDeleteEvent'
+    KnowledgeSpecificationEventPayload:
+      type: object
+      description: The payload of a KnowledgeSpecification event
+      properties:
+        knowledgeSpecification:
+          $ref: '#/components/schemas/KnowledgeSpecification'
+    MappingConfidenceType:
+      type: string
+      description: How confident the author is in a mapping (bridge:confidence).
+      enum:
+        - high
+        - medium
+        - low
+    Mapping:
+      type: object
+      description: >-
+        A bridge statement between terms of two ontologies: the reified bridge:mapping of FTO
+        bridge modules. Mappings follow the governed lifecycle of ontology modules. `status`
+        (bridge:status) is derived from it and written to RDF: `agreed` for agreed and published
+        mappings, `proposed` otherwise.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        href:
+          type: string
+          readOnly: true
+        subject:
+          type: string
+          description: The term being mapped, as an IRI or a CURIE.
+          example: irc:KPI
+        predicate:
+          type: string
+          description: >-
+            The relationship: rdfs:subClassOf, owl:equivalentClass, skos:exactMatch,
+            skos:closeMatch, skos:broadMatch, or another property.
+          example: rdfs:subClassOf
+        object:
+          type: string
+          description: The term it is mapped to, as an IRI or a CURIE.
+          example: an:KPI
+        confidence:
+          $ref: '#/components/schemas/MappingConfidenceType'
+        rationale:
+          type: string
+          description: A one-line justification (bridge:rationale).
+        lifecycleStatus:
+          $ref: '#/components/schemas/GovernedLifecycleStatusType'
+        status:
+          type: string
+          readOnly: true
+          enum:
+            - agreed
+            - proposed
+          description: The bridge:status, derived from lifecycleStatus.
+    Mapping_FVO:
+      type: object
+      description: A bridge statement, as proposed. It starts as draft.
+      required:
+        - subject
+        - predicate
+        - object
+      properties:
+        subject:
+          type: string
+          format: iri-or-curie
+          description: An IRI, or a CURIE of a prefix a registered module declares.
+        predicate:
+          type: string
+          format: iri-or-curie
+          description: An IRI, or a CURIE of a prefix a registered module declares.
+        object:
+          type: string
+          format: iri-or-curie
+          description: An IRI, or a CURIE of a prefix a registered module declares.
+        confidence:
+          $ref: '#/components/schemas/MappingConfidenceType'
+        rationale:
+          type: string
+    Mapping_MVO:
+      type: object
+      description: The fields of a mapping that can be changed. A change of lifecycleStatus is a governance transition.
+      anyOf:
+        - description: A lifecycle transition, on its own.
+          required:
+            - lifecycleStatus
+          properties:
+            'lifecycleStatus': {}
+          additionalProperties: false
+        - description: A change of fields, without lifecycleStatus.
+          not:
+            required:
+              - lifecycleStatus
+      properties:
+        subject:
+          type: string
+          format: iri-or-curie
+          description: An IRI, or a CURIE of a prefix a registered module declares.
+        predicate:
+          type: string
+          format: iri-or-curie
+          description: An IRI, or a CURIE of a prefix a registered module declares.
+        object:
+          type: string
+          format: iri-or-curie
+          description: An IRI, or a CURIE of a prefix a registered module declares.
+        confidence:
+          $ref: '#/components/schemas/MappingConfidenceType'
+        rationale:
+          type: string
+        lifecycleStatus:
+          $ref: '#/components/schemas/GovernedLifecycleStatusType'
+    ReviewTarget:
+      type: object
+      description: What a review item is about.
+      required:
+        - kind
+        - id
+      properties:
+        kind:
+          type: string
+          enum:
+            - module
+            - mapping
+        id:
+          type: string
+          description: The module id, or the mapping id within the module.
+    ReviewItem:
+      type: object
+      description: A proposal, a review comment or a ruling on a module or on one of its mappings.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        kind:
+          type: string
+          enum:
+            - proposal
+            - comment
+            - ruling
+        target:
+          $ref: '#/components/schemas/ReviewTarget'
+        text:
+          type: string
+          description: The proposal note, the comment, or the rationale of the ruling.
+        ruling:
+          type: string
+          enum:
+            - agreed
+            - rejected
+          description: For a ruling, the decision.
+        linkStatus:
+          $ref: '#/components/schemas/LinkStatusType'
+        author:
+          type: string
+          readOnly: true
+          description: Who wrote the item, from the token.
+        approver:
+          type: string
+          readOnly: true
+          description: For a ruling, the approver, from the token.
+        date:
+          type: string
+          format: date-time
+          readOnly: true
+      x-review-kinds:
+        proposal: {role: ontology-editor, targetState: draft, transition: draft -> proposed}
+        comment: {role: ontology-reviewer, targetState: [proposed, inReview]}
+        ruling: {role: ontology-approver, targetState: inReview, transition: inReview -> agreed | rejected, condition: validation passes for agreed, sets: linkStatus}
+    ReviewItem_FVO:
+      type: object
+      description: A review item, as added.
+      required:
+        - kind
+        - target
+      anyOf:
+        - description: A proposal or a comment.
+          properties:
+            kind:
+              enum:
+                - proposal
+                - comment
+        - description: A ruling, which says agreed or rejected.
+          required:
+            - ruling
+      properties:
+        kind:
+          type: string
+          enum:
+            - proposal
+            - comment
+            - ruling
+        target:
+          $ref: '#/components/schemas/ReviewTarget'
+        text:
+          type: string
+        ruling:
+          type: string
+          enum:
+            - agreed
+            - rejected
+        linkStatus:
+          $ref: '#/components/schemas/LinkStatusType'
+    LifecycleTransition:
+      type: object
+      description: A lifecycle transition of a module or of one of its mappings, as it happened.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        target:
+          $ref: '#/components/schemas/ReviewTarget'
+        from:
+          $ref: '#/components/schemas/GovernedLifecycleStatusType'
+        to:
+          $ref: '#/components/schemas/GovernedLifecycleStatusType'
+        actor:
+          type: string
+          readOnly: true
+          description: Who made the transition, from the token.
+        reviewItem:
+          type: string
+          readOnly: true
+          description: The id of the proposal or ruling that made the transition, if one did.
+        date:
+          type: string
+          format: date-time
+          readOnly: true
+    ValidationMessage:
+      type: object
+      required:
+        - severity
+        - text
+      properties:
+        severity:
+          type: string
+          enum:
+            - error
+            - warning
+        text:
+          type: string
+    ValidationRuleResult:
+      type: object
+      required:
+        - rule
+        - passed
+      properties:
+        rule:
+          type: string
+          description: >-
+            The structural rule (FTO check.py): parse (every file parses), layerAnnotation (the
+            module and its classes carry a consistent fto:layer), layerMonotonicity (no class
+            extends a deeper layer), parentsResolve (every superclass resolves), catalogIntegrity
+            (every import resolves through the catalog to a file that declares it).
+          enum:
+            - parse
+            - layerAnnotation
+            - layerMonotonicity
+            - parentsResolve
+            - catalogIntegrity
+        passed:
+          type: boolean
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationMessage'
+    ShaclResult:
+      type: object
+      description: One result of a SHACL validation report.
+      properties:
+        focusNode:
+          type: string
+        resultPath:
+          type: string
+        severity:
+          type: string
+          enum:
+            - Violation
+            - Warning
+            - Info
+        message:
+          type: string
+        sourceShape:
+          type: string
+    ValidationReport:
+      type: object
+      description: The result of validating an ontology module.
+      properties:
+        moduleId:
+          type: string
+        runAt:
+          type: string
+          format: date-time
+        conforms:
+          type: boolean
+          description: True when every structural rule passed and the SHACL validation conforms.
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationRuleResult'
+        shacl:
+          type: object
+          properties:
+            conforms:
+              type: boolean
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/ShaclResult'
+    TermDescription:
+      type: object
+      description: A description of one ontology term (fto_describe).
+      properties:
+        iri:
+          type: string
+        curie:
+          type: string
+        definedIn:
+          type: array
+          description: The modules that state something about the term.
+          items:
+            type: string
+        labels:
+          type: array
+          items:
+            type: string
+        definitions:
+          type: array
+          items:
+            type: string
+        types:
+          type: array
+          items:
+            type: string
+        parents:
+          type: array
+          items:
+            type: string
+        matches:
+          type: array
+          items:
+            type: object
+            properties:
+              predicate:
+                type: string
+              object:
+                type: string
+        layer:
+          $ref: '#/components/schemas/OntologyLayerType'
+        linkStatus:
+          $ref: '#/components/schemas/LinkStatusType'
+    TermHit:
+      type: object
+      description: A search hit (fto_search).
+      properties:
+        iri:
+          type: string
+        curie:
+          type: string
+        module:
+          type: string
+        layer:
+          $ref: '#/components/schemas/OntologyLayerType'
+        via:
+          type: string
+          description: The property the text matched, for example label or definition.
+        text:
+          type: string
+    LayerChainEntry:
+      type: object
+      properties:
+        term:
+          type: string
+        layer:
+          $ref: '#/components/schemas/OntologyLayerType'
+        module:
+          type: string
+        linkStatus:
+          $ref: '#/components/schemas/LinkStatusType'
+    TermLookupResult:
+      type: object
+      description: >-
+        The result of a term lookup: `description` (and `layerChain` if asked) for an `iri`
+        lookup, `hits` for a `q` search.
+      properties:
+        description:
+          $ref: '#/components/schemas/TermDescription'
+        hits:
+          type: array
+          items:
+            $ref: '#/components/schemas/TermHit'
+        layerChain:
+          type: object
+          description: The subclass chain of the term down to the Foundational layer (fto_layer_of).
+          properties:
+            chain:
+              type: array
+              items:
+                $ref: '#/components/schemas/LayerChainEntry'
+            endsAtFoundational:
+              type: boolean
+  parameters:
+    Id:
+      name: id
+      required: true
+      schema:
+        type: string
+      in: path
+      description: Identifier of the resource
+    Fields:
+      name: fields
+      in: query
+      description: Comma-separated properties to be provided in response
+      schema:
+        type: string
+    Offset:
+      name: offset
+      in: query
+      description: Requested index for start of resources to be provided in response
+      schema:
+        type: integer
+        minimum: 0
+    Limit:
+      name: limit
+      in: query
+      description: Requested number of resources to be provided in response
+      schema:
+        type: integer
+        minimum: 1
+    Sort:
+      name: sort
+      in: query
+      description: >-
+        Comma-separated properties for sorting. The default direction is ascending; a leading
+        '-' changes the direction of that field.
+      schema:
+        type: string
+    DocumentId:
+      name: documentId
+      required: true
+      schema:
+        type: string
+      in: path
+      description: Identifier of the document
+    MappingId:
+      name: mappingId
+      required: true
+      schema:
+        type: string
+      in: path
+      description: Identifier of the mapping
+  headers:
+    X-Total-Count:
+      description: Total number of items matching criteria
+      schema:
+        type: integer
+    X-Result-Count:
+      description: Actual number of items returned in the response body
+      schema:
+        type: integer
+  requestBodies:
+    Hub_FVO:
+      description: Data containing the callback endpoint to deliver the information
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Hub_FVO'
+          examples:
+            basic:
+              summary: Subscribe to the knowledge-base events
+              value:
+                '@type': Hub
+                callback: https://host/tmf-api/knowledgeManagement/v5/listener/knowledgeCreateEvent
+                query: eventType=KnowledgeCreateEvent
+    Knowledge_FVO:
+      description: The Knowledge to be created
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Knowledge_FVO'
+          examples:
+            hybrid:
+              $ref: '#/components/examples/Knowledge_FVO_hybrid'
+    Knowledge_MVO:
+      description: The Knowledge to be patched
+      required: true
+      content:
+        application/merge-patch+json:
+          schema:
+            $ref: '#/components/schemas/Knowledge_MVO'
+          examples:
+            retrieval:
+              $ref: '#/components/examples/Knowledge_MVO_retrieval'
+    KnowledgeCreateEvent:
+      description: Knowledge create Event payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeCreateEvent'
+          examples:
+            created:
+              $ref: '#/components/examples/KnowledgeCreateEvent_example'
+    KnowledgeAttributeValueChangeEvent:
+      description: Knowledge attributeValueChange Event payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeAttributeValueChangeEvent'
+    KnowledgeStateChangeEvent:
+      description: Knowledge stateChange Event payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeStateChangeEvent'
+    KnowledgeDeleteEvent:
+      description: Knowledge delete Event payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeDeleteEvent'
+    RdfGraph:
+      description: An RDF graph, in Turtle or JSON-LD
+      required: true
+      content:
+        text/turtle:
+          schema:
+            type: string
+            format: turtle
+          example: |
+            @prefix ex: <https://example.org/incident/> .
+            @prefix as: <https://example.org/ontology/telecom/assurance#> .
+            ex:INC-1043 a as:Incident ;
+                as:affects ex:cell-4712 .
+        application/ld+json:
+          schema:
+            $ref: '#/components/schemas/JsonLdDocument'
+    KnowledgeSpecification_FVO:
+      description: The KnowledgeSpecification to be created
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeSpecification_FVO'
+          examples:
+            telecomFromGit:
+              $ref: '#/components/examples/KnowledgeSpecification_FVO_telecomGit'
+            remotePeer:
+              $ref: '#/components/examples/KnowledgeSpecification_FVO_remotePeer'
+    KnowledgeSpecification_MVO:
+      description: The KnowledgeSpecification to be patched
+      required: true
+      content:
+        application/merge-patch+json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeSpecification_MVO'
+          examples:
+            propose:
+              summary: The ontology-editor proposes the module
+              value:
+                '@type': KnowledgeSpecification
+                lifecycleStatus: proposed
+    KnowledgeSpecificationCreateEvent:
+      description: KnowledgeSpecification Create Event payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeSpecificationCreateEvent'
+    KnowledgeSpecificationAttributeValueChangeEvent:
+      description: KnowledgeSpecification AttributeValueChange Event payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeSpecificationAttributeValueChangeEvent'
+    KnowledgeSpecificationStateChangeEvent:
+      description: KnowledgeSpecification StateChange Event payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeSpecificationStateChangeEvent'
+    KnowledgeSpecificationDeleteEvent:
+      description: KnowledgeSpecification Delete Event payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/KnowledgeSpecificationDeleteEvent'
+  responses:
+    Hub:
+      description: Notified
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Hub'
+          examples:
+            basic:
+              summary: Hub example
+              value:
+                '@type': Hub
+                id: 5ab3c4d6
+                callback: https://host/tmf-api/knowledgeManagement/v5/listener/knowledgeCreateEvent
+                query: eventType=KnowledgeCreateEvent
+    '400':
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            badRequest:
+              $ref: '#/components/examples/Error400'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '401':
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '403':
+      description: Forbidden. The token does not hold any of the roles in `x-required-roles`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missingRole:
+              $ref: '#/components/examples/Error403'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '404':
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '405':
+      description: Method Not allowed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '409':
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '500':
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '501':
+      description: Not Implemented
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '503':
+      description: Service Unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    200Knowledge:
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Knowledge'
+          examples:
+            hybrid:
+              $ref: '#/components/examples/Knowledge_hybrid'
+    201Knowledge:
+      description: Created
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Knowledge'
+          examples:
+            hybrid:
+              $ref: '#/components/examples/Knowledge_hybrid'
+    200KnowledgeArray:
+      description: Success
+      headers:
+        X-Total-Count:
+          $ref: '#/components/headers/X-Total-Count'
+        X-Result-Count:
+          $ref: '#/components/headers/X-Result-Count'
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/Knowledge'
+          examples:
+            list:
+              $ref: '#/components/examples/Knowledge_list'
+    '406':
+      description: Not Acceptable. None of the media types in the Accept header can be produced.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '413':
+      description: Payload Too Large. The document is larger than the server's size cap.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '415':
+      description: Unsupported Media Type
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '502':
+      description: >-
+        Bad Gateway. A federated SERVICE call failed at the peer (error `code` `FEDERATION_ERROR`). Use
+        `SERVICE SILENT` to continue without the peer's answers.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '504':
+      description: >-
+        Gateway Timeout. The query exceeded its timeout, or a federated SERVICE call exceeded the federation call
+        timeout (error `code` `FEDERATION_TIMEOUT`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    403Query:
+      description: >-
+        Forbidden. Either the token does not hold any of the roles in `x-required-roles`, or a
+        `SERVICE` clause names an endpoint that is not an allowlisted peer (`code` `SERVICE_NOT_ALLOWED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missingRole:
+              $ref: '#/components/examples/Error403'
+            serviceNotAllowed:
+              $ref: '#/components/examples/Error403ServiceNotAllowed'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  examples:
+    Error400:
+      summary: A request that fails validation
+      value:
+        '@type': Error
+        code: '400'
+        reason: Bad request
+        message: The field storeKind must be one of graph, vector or hybrid
+        status: '400'
+        type: https://example.org/problems/validation
+        title: Invalid request
+        detail: The field storeKind must be one of graph, vector or hybrid
+        instance: /tmf-api/knowledgeManagement/v5/knowledge
+    Error403:
+      summary: A caller without one of the required roles
+      value:
+        '@type': Error
+        code: '403'
+        reason: Forbidden
+        message: This operation needs one of the roles knowledge-editor, canvasSystemRole
+        status: '403'
+        type: https://example.org/problems/missing-role
+        title: Missing role
+        detail: The token holds the role knowledge-viewer only
+        instance: /tmf-api/knowledgeManagement/v5/knowledge
+    Knowledge_FVO_hybrid:
+      summary: A hybrid knowledge-base conforming to two ontology modules
+      value:
+        '@type': Knowledge
+        name: incident-knowledge
+        description: Network incidents, alarms and trouble tickets, with their resolutions
+        knowledgeCategory:
+          - know-what
+          - know-how
+        storeKind: hybrid
+        conformsTo:
+          - '@type': KnowledgeSpecificationRef
+            id: fto-telecom-assurance
+            iri: https://example.org/ontology/telecom/assurance
+          - '@type': KnowledgeSpecificationRef
+            id: fto-foundational-core
+            iri: https://example.org/ontology/foundational/core
+        source:
+          - kind: upload
+          - kind: tmf642
+            dependentApiName: alarmmanagement
+            eventTypes:
+              - AlarmCreateEvent
+          - kind: tmf628
+            dependentApiName: performancemanagement
+        retrieval:
+          topK: 8
+          scoreThreshold: 0.3
+          hybrid: true
+        relatedParty:
+          - '@type': RelatedPartyRefOrPartyRoleRef
+            role: owner
+            partyOrPartyRole:
+              '@type': PartyRoleRef
+              id: noc-operations
+              name: NOC operations
+    Knowledge_hybrid:
+      summary: A hybrid knowledge-base conforming to two ontology modules
+      value:
+        '@type': Knowledge
+        id: 3f1e2c8a
+        href: https://host/tmf-api/knowledgeManagement/v5/knowledge/3f1e2c8a
+        name: incident-knowledge
+        description: Network incidents, alarms and trouble tickets, with their resolutions
+        version: '1.0'
+        lifecycleStatus: published
+        lastUpdate: '2026-11-22T10:00:00Z'
+        knowledgeCategory:
+          - know-what
+          - know-how
+        storeKind: hybrid
+        conformsTo:
+          - '@type': KnowledgeSpecificationRef
+            id: fto-telecom-assurance
+            href: https://host/tmf-api/knowledgeManagement/v5/knowledgeSpecification/fto-telecom-assurance
+            iri: https://example.org/ontology/telecom/assurance
+          - '@type': KnowledgeSpecificationRef
+            id: fto-foundational-core
+            href: https://host/tmf-api/knowledgeManagement/v5/knowledgeSpecification/fto-foundational-core
+            iri: https://example.org/ontology/foundational/core
+        source:
+          - kind: upload
+          - kind: tmf642
+            dependentApiName: alarmmanagement
+            eventTypes:
+              - AlarmCreateEvent
+          - kind: tmf628
+            dependentApiName: performancemanagement
+        retrieval:
+          topK: 8
+          scoreThreshold: 0.3
+          hybrid: true
+        statistics:
+          triples: 48210
+          documents: 312
+          chunks: 5840
+        relatedParty:
+          - '@type': RelatedPartyRefOrPartyRoleRef
+            role: owner
+            partyOrPartyRole:
+              '@type': PartyRoleRef
+              id: noc-operations
+              name: NOC operations
+    Knowledge_list:
+      summary: A list with one knowledge-base, with selected fields
+      value:
+        - '@type': Knowledge
+          id: 3f1e2c8a
+          href: https://host/tmf-api/knowledgeManagement/v5/knowledge/3f1e2c8a
+          name: incident-knowledge
+          lifecycleStatus: published
+          storeKind: hybrid
+          statistics:
+            triples: 48210
+            documents: 312
+            chunks: 5840
+    Knowledge_MVO_retrieval:
+      summary: Change the default retrieval settings
+      value:
+        '@type': Knowledge
+        retrieval:
+          topK: 5
+          scoreThreshold: 0.4
+    KnowledgeCreateEvent_example:
+      summary: A knowledge-base was created
+      value:
+        '@type': KnowledgeCreateEvent
+        eventId: 0b6c9f2e
+        eventTime: '2026-11-22T10:00:00Z'
+        eventType: KnowledgeCreateEvent
+        event:
+          knowledge:
+            '@type': Knowledge
+            id: 3f1e2c8a
+            href: https://host/tmf-api/knowledgeManagement/v5/knowledge/3f1e2c8a
+            name: incident-knowledge
+            lifecycleStatus: draft
+            storeKind: hybrid
+    Document_runbook:
+      summary: An uploaded runbook
+      value:
+        id: 7a10b3
+        href: https://host/tmf-api/knowledgeManagement/v5/knowledge/3f1e2c8a/document/7a10b3
+        name: site-power-runbook.pdf
+        description: Runbook for site power failures
+        mediaType: application/pdf
+        size: 482113
+        sha256: 9f2b5c0d1e7a4b3c8d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c
+        uploadDate: '2026-11-22T09:12:00Z'
+        ingestionState: ingested
+        lastIngestion:
+          '@type': ProcessRef
+          id: pf-8812
+          href: https://host/tmf-api/process/v5/process/pf-8812
+    Error403ServiceNotAllowed:
+      summary: A SPARQL SERVICE clause names an endpoint that is not an allowlisted peer
+      value:
+        '@type': Error
+        code: SERVICE_NOT_ALLOWED
+        reason: SERVICE endpoint not allowed
+        message: Only the endpoints of published remote ontology modules may be used in SERVICE
+        status: '403'
+        title: SERVICE endpoint not allowed
+        detail: https://other.example.net/sparql is not an allowlisted peer
+    KnowledgeSpecification_FVO_telecomGit:
+      summary: A Telecom-layer ontology module from a private git repository
+      value:
+        '@type': KnowledgeSpecification
+        name: Telecom assurance ontology
+        description: Incidents, alarms, problems and their resolutions
+        version: '0.3'
+        iri: https://example.org/ontology/telecom/assurance
+        prefix: as
+        layer: Telecom
+        specKind: ontology
+        depth: Full ontology
+        owner:
+          '@type': RelatedPartyRefOrPartyRoleRef
+          role: owner
+          partyOrPartyRole:
+            '@type': PartyRoleRef
+            id: assurance-team
+            name: Assurance ontology team
+        imports:
+          - '@type': KnowledgeSpecificationRef
+            id: fto-foundational-core
+            iri: https://example.org/ontology/foundational/core
+        source:
+          kind: git
+          url: https://git.example.org/ontologies/federation.git
+          ref: main
+          path: telecom/assurance/assurance.ttl
+          secretRef: ontology-git-credentials
+    KnowledgeSpecification_telecomGit:
+      summary: A Telecom-layer ontology module from a private git repository
+      value:
+        '@type': KnowledgeSpecification
+        id: fto-telecom-assurance
+        href: https://host/tmf-api/knowledgeManagement/v5/knowledgeSpecification/fto-telecom-assurance
+        name: Telecom assurance ontology
+        description: Incidents, alarms, problems and their resolutions
+        version: '0.3'
+        iri: https://example.org/ontology/telecom/assurance
+        prefix: as
+        layer: Telecom
+        specKind: ontology
+        depth: Full ontology
+        owner:
+          '@type': RelatedPartyRefOrPartyRoleRef
+          role: owner
+          partyOrPartyRole:
+            '@type': PartyRoleRef
+            id: assurance-team
+            name: Assurance ontology team
+        imports:
+          - '@type': KnowledgeSpecificationRef
+            id: fto-foundational-core
+            iri: https://example.org/ontology/foundational/core
+        source:
+          kind: git
+          url: https://git.example.org/ontologies/federation.git
+          ref: main
+          path: telecom/assurance/assurance.ttl
+          secretRef: ontology-git-credentials
+        lifecycleStatus: draft
+        linkStatus: provisional
+        lastUpdate: '2026-11-22T10:00:00Z'
+    KnowledgeSpecification_FVO_remotePeer:
+      summary: A federation peer, a remote SPARQL endpoint
+      value:
+        '@type': KnowledgeSpecification
+        name: Partner network inventory graph
+        description: The inventory knowledge graph of a partner operator, queried through SPARQL SERVICE
+        iri: https://partner.example.net/ontology/inventory
+        layer: Implementation
+        specKind: remote
+        source:
+          kind: remoteEndpoint
+          url: https://partner.example.net/sparql
+          endpointKind: sparql
+    KnowledgeSpecification_remotePeer:
+      summary: A federation peer, a remote SPARQL endpoint
+      value:
+        '@type': KnowledgeSpecification
+        id: partner-inventory
+        href: https://host/tmf-api/knowledgeManagement/v5/knowledgeSpecification/partner-inventory
+        name: Partner network inventory graph
+        description: The inventory knowledge graph of a partner operator, queried through SPARQL SERVICE
+        iri: https://partner.example.net/ontology/inventory
+        layer: Implementation
+        specKind: remote
+        source:
+          kind: remoteEndpoint
+          url: https://partner.example.net/sparql
+          endpointKind: sparql
+        lifecycleStatus: draft
+    KnowledgeSpecification_list:
+      summary: A list of ontology modules, with selected fields
+      value:
+        - '@type': KnowledgeSpecification
+          id: fto-foundational-core
+          name: Foundational core ontology
+          iri: https://example.org/ontology/foundational/core
+          layer: Foundational
+          specKind: ontology
+          lifecycleStatus: published
+          linkStatus: confirmed
+        - '@type': KnowledgeSpecification
+          id: fto-telecom-assurance
+          name: Telecom assurance ontology
+          iri: https://example.org/ontology/telecom/assurance
+          layer: Telecom
+          specKind: ontology
+          lifecycleStatus: draft
+          linkStatus: provisional
+    Mapping_FVO_proposed:
+      summary: Propose that an IRC KPI is a kind of AN KPI
+      value:
+        subject: irc:KPI
+        predicate: rdfs:subClassOf
+        object: an:KPI
+        confidence: high
+        rationale: Same thing, same scope - a continuous performance measurement over a time window
+    Mapping_proposed:
+      summary: A proposed mapping
+      value:
+        id: m-kpi
+        href: https://host/tmf-api/knowledgeManagement/v5/knowledgeSpecification/irc-fto-bridge/mapping/m-kpi
+        subject: irc:KPI
+        predicate: rdfs:subClassOf
+        object: an:KPI
+        confidence: high
+        rationale: Same thing, same scope - a continuous performance measurement over a time window
+        lifecycleStatus: proposed
+        status: proposed
+    ReviewItem_FVO_comment:
+      summary: A reviewer comments on a mapping
+      value:
+        kind: comment
+        target:
+          kind: mapping
+          id: m-kpi
+        text: Should this be skos:closeMatch? The IRC KPI is narrower than the AN KPI.
+    ReviewItem_FVO_ruling:
+      summary: The approver rules a mapping agreed
+      value:
+        kind: ruling
+        target:
+          kind: mapping
+          id: m-kpi
+        ruling: agreed
+        linkStatus: confirmed
+        text: Agreed at the programme ruling; the scopes match.
+    ReviewItem_ruling:
+      summary: A recorded ruling
+      value:
+        id: rv-0042
+        kind: ruling
+        target:
+          kind: mapping
+          id: m-kpi
+        ruling: agreed
+        linkStatus: confirmed
+        text: Agreed at the programme ruling; the scopes match.
+        author: approver@example.org
+        approver: approver@example.org
+        date: '2026-11-22T11:30:00Z'
+    ValidationReport_failing:
+      summary: A failing validation report
+      value:
+        moduleId: fto-telecom-assurance
+        runAt: '2026-11-22T11:00:00Z'
+        conforms: false
+        rules:
+          - rule: parse
+            passed: true
+          - rule: layerAnnotation
+            passed: true
+          - rule: layerMonotonicity
+            passed: false
+            messages:
+              - severity: error
+                text: Incident (Telecom) extends deeper-layer ImplementationEvent (Implementation)
+          - rule: parentsResolve
+            passed: true
+          - rule: catalogIntegrity
+            passed: true
+            messages:
+              - severity: warning
+                text: imports https://example.org/ontology/telecom/legacy, which is deprecated
+        shacl:
+          conforms: false
+          results:
+            - focusNode: https://example.org/ontology/telecom/assurance#Incident
+              resultPath: http://www.w3.org/2000/01/rdf-schema#label
+              severity: Violation
+              message: Every class needs an rdfs:label
+              sourceShape: https://example.org/ontology/foundational/shapes#ClassLabelShape
+    Term_describe:
+      summary: Describe a term, with its layer chain
+      value:
+        description:
+          iri: https://example.org/ontology/telecom/assurance#Incident
+          curie: as:Incident
+          definedIn:
+            - fto-telecom-assurance
+          labels:
+            - Incident
+          definitions:
+            - An unplanned interruption or quality reduction of a service.
+          types:
+            - owl:Class
+          parents:
+            - core:Event
+          matches:
+            - predicate: skos:closeMatch
+              object: tmf724:Incident
+          layer: Telecom
+          linkStatus: provisional
+        layerChain:
+          chain:
+            - term: as:Incident
+              layer: Telecom
+              module: fto-telecom-assurance
+              linkStatus: provisional
+            - term: core:Event
+              layer: Foundational
+              module: fto-foundational-core
+              linkStatus: confirmed
+          endsAtFoundational: true
+    Term_search:
+      summary: Search terms by text
+      value:
+        hits:
+          - iri: https://example.org/ontology/telecom/assurance#Incident
+            curie: as:Incident
+            module: fto-telecom-assurance
+            layer: Telecom
+            via: label
+            text: Incident

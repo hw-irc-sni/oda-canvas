@@ -1,0 +1,61 @@
+# TMFOP012 Data Resource Management operator. Handles DataResourceConfig resources with spec.provider odaComponent
+# (ADR-010): mirrors what a provider component serves, and binds consumer components to it.
+
+image: tmforumodacanvas/dataresource-operator
+version: 0.3.0
+# A prerelease image (tag <version>-<prereleaseSuffix>) is pulled with prereleasePullPolicy. For an image built
+# locally and kind-loaded: --set prereleaseSuffix=ai-knowledge --set prereleasePullPolicy=IfNotPresent
+prereleaseSuffix:
+prereleasePullPolicy: Always
+imagePullPolicy: IfNotPresent
+# Python log level as an integer string (10 debug, 20 info)
+loglevel: '20'
+
+# Seconds between polls of a provider component (role provider)
+pollIntervalSeconds: 60
+# Default namespace of provider components (providerRef.namespace overrides it)
+componentNamespace: components
+# Seconds before a consumer that is not bound yet is tried again
+retryIntervalSeconds: 15
+# The provider client roles granted to a consumer component per access (TMFC060's roles)
+accessRoles:
+  read: [knowledge-viewer]
+  readWrite: [knowledge-viewer, knowledge-editor]
+
+# Change events from provider hubs (for example TMFC060 /hub): the operator listens on listenerPort and registers
+# <callbackBase>/providers/<namespace>/<name> on each provider. An event only makes the operator poll that provider
+# earlier; its payload is never used. Disabled: polling only.
+events:
+  enabled: true
+  listenerPort: 8081
+  # Empty: http://<release>-dataresource-op.<namespace>.svc.cluster.local:<listenerPort> (the chart's Service)
+  callbackBase: ""
+
+keycloak:
+  # Keycloak base URL. It must be the host provider components expect as token issuer (Keycloak sets iss from the
+  # request host); TMFC060's default is the in-cluster headless Service.
+  url: http://canvas-keycloak-headless.canvas.svc.cluster.local:8083/auth
+  realm: odari
+  # Admin credentials for the setup Job only, from the Keycloak chart's Secret in this namespace
+  adminUser: admin
+  adminSecret: canvas-keycloak
+  adminPasswordKey: admin-password
+  setup:
+    # A Job per release revision creates the operator's Keycloak client (realm-management view-clients and
+    # manage-users) and the client credentials Secret; a pre-delete hook removes both
+    enabled: true
+    # How long the Job keeps retrying while Keycloak or the realm is not up yet
+    timeoutSeconds: 900
+    ttlSecondsAfterFinished: 3600
+
+oidc:
+  clientId: dataresource-operator
+  # Written by the setup Job, mounted into the operator
+  secretName: dataresource-operator-oidc-secret
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 96Mi
+  limits:
+    memory: 256Mi

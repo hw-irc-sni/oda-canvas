@@ -1,0 +1,33 @@
+# TMFOP013 AI Gateway Management operator: every ExposedAPI with apiType mcp whose implementation is ready becomes an
+# agentgateway MCP target named oda-<namespace>-<exposedapi>; targets added by hand or in the Canvas Portal are kept.
+
+image: tmforumodacanvas/agentgateway-mcp-operator
+version: 0.1.0
+# A prerelease image (tag <version>-<prereleaseSuffix>) is pulled with prereleasePullPolicy. For an image built
+# locally and kind-loaded: --set prereleaseSuffix=ai-knowledge --set prereleasePullPolicy=IfNotPresent
+prereleaseSuffix:
+prereleasePullPolicy: Always
+imagePullPolicy: IfNotPresent
+# Python log level as an integer string (10 debug, 20 info)
+loglevel: '20'
+
+# The agentgateway release (charts/agentgateway): its namespace, config ConfigMap and key, and its pods
+gateway:
+  namespace: canvas
+  configMap: agentgateway-config
+  configKey: config.yaml
+  podSelector: app.kubernetes.io/name=agentgateway-standalone
+  # The gateway an mcp section is attached to, when the config has none yet
+  mcpGateway: default
+
+# Namespaces whose MCP ExposedAPIs are registered (glob patterns, comma-separated); empty: all
+watchedNamespaces: "components,odacompns-*"
+# Seconds between full reconciliations (they restore the targets after a helm upgrade of agentgateway resets them)
+resyncIntervalSeconds: 60
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 80Mi
+  limits:
+    memory: 200Mi

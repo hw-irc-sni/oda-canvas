@@ -16,7 +16,15 @@ type: application
 # to the chart and its templates, including the app version.
 # Versions are expected to follow Semantic Versioning (https://semver.org/)
 
-version: 1.2.6-rc9
+version: 1.2.6-rc17
+# version: 1.2.6-rc17 - Resource Inventory 1.2.1: port and path characteristics on API resources (Canvas Portal Knowledge discovery)
+# version: 1.2.6-rc16 - TMFOP013 agentgateway-mcp-operator 0.1.0 (MCP ExposedAPIs registered with agentgateway), off by default
+# version: 1.2.6-rc15 - Component Registry 0.2.0: DataResource category (ADR-011)
+# version: 1.2.6-rc14 - Resource Inventory 1.2.0: DataResource category and componentId (ADR-011)
+# version: 1.2.6-rc13 - oda-crds 1.5.0 (DependentAPI apiType mcp, dependencyKind), TMFOP012 consumer role, TMFOP005 simple operator skips data-resource DependentAPIs
+# version: 1.2.6-rc12 - TMFOP012 dataresource-operator 0.2.0 (provider role), off by default
+# version: 1.2.6-rc11 - TMFOP012 dataresource-operator 0.1.0 (scaffold), off by default
+# version: 1.2.6-rc10 - oda-crds 1.4.0 - DataResourceConfig v1alpha1 CRD (ADR-010)
 # version: 1.2.6-rc9 - issue 656 - operator charts carry the oda.tmforum.org operator labels read by Canvas Portal v2
 # version: 1.2.6-rc8 - issue 650 - Kong API operator creates the ServiceMonitor for prometheus/openmetrics ExposedAPIs again
 # version: 1.2.6-hv1 - issue 620 - cert-manager-init 1.1.3: wait for the cert-manager webhook before creating issuers
@@ -94,7 +102,7 @@ dependencies:
     repository: 'file://../canvas-namespaces'
     condition: canvas-namespaces.enabled
   - name: oda-crds
-    version: "1.3.4"
+    version: "1.5.0"
     repository: 'file://../oda-crds'
     condition: oda-crds.enabled
   - name: keycloak
@@ -112,13 +120,21 @@ dependencies:
     repository: 'file://../api-operator-istio'
     condition: api-operator-istio.enabled
   - name: dependentapi-simple-operator
-    version: "1.0.6"
+    version: "1.0.7"
     repository: 'file://../dependentapi-simple-operator'
     condition: dependentapi-simple-operator.enabled
   - name: dependency-management-keycloak-authz
     version: "0.2.2"
     repository: 'file://../dependency-management-keycloak-authz'
     condition: dependency-management-keycloak-authz.enabled
+  - name: dataresource-operator
+    version: "0.3.1"
+    repository: 'file://../dataresource-operator'
+    condition: dataresource-operator.enabled
+  - name: agentgateway-mcp-operator
+    version: "0.1.0"
+    repository: 'file://../agentgateway-mcp-operator'
+    condition: agentgateway-mcp-operator.enabled
   - name: secretsmanagement-operator
     version: "1.0.3"
     repository: 'file://../secretsmanagement-operator'
@@ -142,7 +158,7 @@ dependencies:
     repository: 'file://../canvas-info-service'
     condition: canvas-info-service.enabled
   - name: resource-inventory
-    version: "1.1.1"
+    version: "1.2.1"
     repository: 'file://../resource-inventory'
     condition: resource-inventory.enabled
   - name: pdb-management-operator
@@ -150,7 +166,7 @@ dependencies:
     repository: 'file://../pdb-management-operator'
     condition: pdb-management-operator.enabled
   - name: component-registry
-    version: "0.1.0"
+    version: "0.2.0"
     repository: 'file://../component-registry'
     condition: component-registry.enabled
 

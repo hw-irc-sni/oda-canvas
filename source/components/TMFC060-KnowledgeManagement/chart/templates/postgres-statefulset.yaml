@@ -1,0 +1,91 @@
+{{- if .Values.postgresql.enabled }}
+{{- $pg := .Values.postgresql -}}
+{{- $secret := $pg.existingSecret | default (include "km.pgSecret" .) -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "km.pgName" . }}
+  labels:
+    {{- include "km.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+spec:
+  replicas: 1
+  serviceName: {{ include "km.pgName" . }}-hl
+  selector:
+    matchLabels:
+      {{- include "km.selectorLabels" (dict "root" . "workload" "postgresql") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "km.labels" . | nindent 8 }}
+        app.kubernetes.io/component: postgresql
+    spec:
+      serviceAccountName: {{ include "km.serviceAccount" . }}
+      # uid/gid 70: the postgres user of the alpine image
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
+      {{- include "km.scheduling" $pg | nindent 6 }}
+      containers:
+      - name: postgresql
+        image: {{ $pg.image }}
+        imagePullPolicy: {{ $pg.pullPolicy }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          capabilities:
+            drop: [ALL]
+        ports:
+        - {name: postgresql, containerPort: 5432}
+        env:
+        - {name: POSTGRES_USER, value: {{ $pg.username | quote }}}
+        - {name: POSTGRES_DB, value: {{ $pg.database | quote }}}
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef: {name: {{ $secret }}, key: password}
+        # A subdirectory, so the volume root (lost+found) is not the data directory
+        - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+        startupProbe:
+          exec: {command: [pg_isready, -U, {{ $pg.username | quote }}, -d, {{ $pg.database | quote }}, -h, 127.0.0.1]}
+          periodSeconds: 3
+          failureThreshold: 100
+        readinessProbe:
+          exec: {command: [pg_isready, -U, {{ $pg.username | quote }}, -d, {{ $pg.database | quote }}, -h, 127.0.0.1]}
+          periodSeconds: 10
+        livenessProbe:
+          exec: {command: [pg_isready, -U, {{ $pg.username | quote }}, -d, {{ $pg.database | quote }}, -h, 127.0.0.1]}
+          periodSeconds: 20
+          timeoutSeconds: 5
+        resources:
+          {{- toYaml $pg.resources | nindent 10 }}
+        volumeMounts:
+        - {name: data, mountPath: /var/lib/postgresql/data}
+        - {name: run, mountPath: /var/run/postgresql}
+        - {name: tmp, mountPath: /tmp}
+      volumes:
+      - name: run
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      # No oda.tmforum.org/componentName label: the Component operator would adopt the PVC and delete it with the
+      # Component, and the data must survive an uninstall
+      labels:
+        {{- include "km.unownedLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgresql
+    spec:
+      accessModes: [ReadWriteOnce]
+      {{- with $pg.persistence.storageClass }}
+      storageClassName: {{ . }}
+      {{- end }}
+      resources:
+        requests:
+          storage: {{ $pg.persistence.size }}
+{{- end }}
