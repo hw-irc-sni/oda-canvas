@@ -2,7 +2,8 @@
 
 ``GET /api/knowledge/instances`` lists the instances (``k8s/resources/knowledge_instances.py``) with the user's
 ``capabilities`` on each, computed from the roles in the user's token and the ``x-required-roles``,
-``x-lifecycle`` and ``x-review-kinds`` extensions of the OAS the instance serves (``knowledge_spec.py``).
+``x-lifecycle`` and ``x-review-kinds`` extensions of the OAS the instance serves (``knowledge_spec.py``), and its active
+model route (``knowledge_health.py``).
 
 ``/api/knowledge/{instance}/{path}`` forwards a call to the instance's TMFxxx or TMF701 API with the **user's own
 bearer token**; the component validates it and checks the role, and its 403 is passed through. Only operations of
@@ -26,7 +27,7 @@ from starlette.concurrency import run_in_threadpool
 from auth.jwt_validator import validate_token
 from auth.middleware import bearer_scheme
 from config import get_settings
-from k8s.resources import knowledge_instances, knowledge_spec
+from k8s.resources import knowledge_health, knowledge_instances, knowledge_spec
 from k8s.resources.knowledge_instances import DNS_LABEL, KnowledgeInstance
 from utils.exceptions import CanvasPortalError
 
@@ -76,16 +77,19 @@ def _too_large() -> CanvasPortalError:
 
 
 async def _instance_view(instance: KnowledgeInstance, caller: Caller) -> dict:
-    capabilities, error = None, None
+    capabilities, error, model_route = None, None, None
     if not instance.available:
         error = "The knowledge instance is not available"
     else:
         try:
             spec = await run_in_threadpool(knowledge_spec.load_spec, instance)
-            capabilities = knowledge_spec.capabilities(spec, knowledge_spec.user_roles(caller.claims, instance))
+            roles = knowledge_spec.user_roles(caller.claims, instance)
+            capabilities = knowledge_spec.capabilities(spec, roles)
+            if roles:
+                model_route = await run_in_threadpool(knowledge_health.model_route, instance)
         except knowledge_spec.SpecUnavailable as exc:
             error = exc.message
-    return {**instance.public(), "capabilities": capabilities, "capabilitiesError": error}
+    return {**instance.public(), "capabilities": capabilities, "capabilitiesError": error, "modelRoute": model_route}
 
 
 @router.get("/instances")

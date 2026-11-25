@@ -13,9 +13,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from config import get_settings
-from k8s.resources import knowledge_instances, knowledge_spec
+from k8s.resources import knowledge_health, knowledge_instances, knowledge_spec
 from routers import knowledge
-from utils.cache import knowledge_spec_cache
+from utils.cache import knowledge_health_cache, knowledge_spec_cache
 from utils.exceptions import register_exception_handlers
 
 API_DIR = Path(__file__).resolve().parents[3] / "source/components/TMFC060-KnowledgeManagement/knowledgeApiMicroservice/api"
@@ -67,6 +67,8 @@ def setup(monkeypatch):
     monkeypatch.setenv("KNOWLEDGE_INSTANCES_JSON", json.dumps(INSTANCES))
     knowledge_instances.reset()
     knowledge_spec_cache.clear()
+    knowledge_health_cache.clear()
+    monkeypatch.setattr(knowledge_health, "transport", httpx.MockTransport(lambda request: httpx.Response(404)))
     spec_calls = []
 
     def serve_oas(request):

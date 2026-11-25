@@ -315,6 +315,9 @@ holds one of them. Grant them in Keycloak, on the instance's client in the Canva
   - the lifecycle `transitions` the user may make on knowledge-bases and ontology modules
   - the `reviewKinds` they may post
 
+  It also returns the instance's active `modelRoute` (`status` and route name only), which the portal reads from the
+  component's `/health` (cached for 30 s; null when it can't be read, or for a user with no role).
+
   These come from the roles in the token and from the `x-required-roles`, `x-lifecycle` and `x-review-kinds`
   extensions of the OAS **the instance itself serves**. The OAS is fetched from `<apiUrl>/openapi.yaml` and
   `<processUrl>/openapi.yaml`, capped at 2 MB and cached for 5 minutes. The page hides what the capabilities don't
