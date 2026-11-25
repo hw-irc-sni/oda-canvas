@@ -334,6 +334,16 @@ def test_response_headers_are_filtered(upstream):
 
     assert response.headers["x-total-count"] == "7" and response.headers["etag"] == "W/1"
     assert "set-cookie" not in response.headers and "x-internal" not in response.headers
+    assert "x-search-mode" not in response.headers and "x-result-truncated" not in response.headers
+
+
+def test_the_search_mode_and_a_cut_result_are_passed_through(upstream):
+    upstream.default = httpx.Response(200, json={"hits": []}, headers={"x-search-mode": "sparse", "x-result-truncated": "true"})
+
+    response = client.post(f"/api/knowledge/{NAME}/knowledge/kb/search", json={"query": "x"})
+
+    assert response.headers["x-search-mode"] == "sparse"
+    assert response.headers["x-result-truncated"] == "true"
 
 
 @pytest.mark.parametrize("status", [400, 403, 404, 409, 413, 422])

@@ -39,7 +39,9 @@ PROXY_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
 BODY_METHODS = {"POST", "PUT", "PATCH"}
 FORWARDED_REQUEST_HEADERS = ("accept", "content-type", "if-match", "if-none-match")
 FORWARDED_RESPONSE_HEADERS = (
-    "content-type", "content-disposition", "etag", "last-modified", "x-total-count", "x-result-count")
+    "content-type", "content-disposition", "etag", "last-modified", "x-total-count", "x-result-count",
+    # How a search ran (hybrid, dense, or sparse without embeddings), and whether a query's rows were cut
+    "x-search-mode", "x-result-truncated")
 # Operations whose body may use KNOWLEDGE_MAX_UPLOAD_BYTES instead of KNOWLEDGE_MAX_BODY_BYTES.
 UPLOAD_OPERATIONS = {"createKnowledgeDocument"}
 # Document content is whatever a knowledge-editor uploaded, HTML included: served from the portal's origin it must
