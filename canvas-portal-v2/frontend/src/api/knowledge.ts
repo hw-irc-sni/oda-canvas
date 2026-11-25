@@ -150,9 +150,8 @@ export interface KnowledgeInput {
   validFor?: TimePeriod
 }
 
-/** A JSON merge patch: null removes a field. A lifecycleStatus change must be on its own. */
-export type MergePatch<T> = { [K in keyof T]?: T[K] | null }
-export type KnowledgePatch = MergePatch<Omit<KnowledgeInput, 'storeKind'>> | { lifecycleStatus: LifecycleStatus }
+/** A lifecycleStatus change must be on its own. The component accepts no null (a field can't be removed). */
+export type KnowledgePatch = Partial<Omit<KnowledgeInput, 'storeKind'>> | { lifecycleStatus: LifecycleStatus }
 
 export type RdfMediaType = 'text/turtle' | 'application/ld+json'
 
@@ -326,7 +325,7 @@ export interface KnowledgeSpecificationInput {
 }
 
 export type KnowledgeSpecificationPatch =
-  | MergePatch<Omit<KnowledgeSpecificationInput, 'iri'>>
+  | Partial<Omit<KnowledgeSpecificationInput, 'iri'>>
   | { lifecycleStatus: LifecycleStatus }
 
 export type MappingConfidence = 'high' | 'medium' | 'low'
@@ -352,7 +351,7 @@ export interface MappingInput {
   rationale?: string
 }
 
-export type MappingPatch = MergePatch<MappingInput> | { lifecycleStatus: LifecycleStatus }
+export type MappingPatch = Partial<MappingInput> | { lifecycleStatus: LifecycleStatus }
 
 export interface ReviewTarget {
   kind: 'module' | 'mapping'

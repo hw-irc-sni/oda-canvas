@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { Button, Input, Segmented, Select, Space, Spin, Table, Tooltip } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { ReloadOutlined } from '@ant-design/icons'
+import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
   useModules,
   type KnowledgeSpecification,
@@ -14,6 +14,7 @@ import { colors } from '@/theme'
 import { useKnowledge } from '../KnowledgeContext'
 import { LAYERS, LIFECYCLE_STATUSES, LayerTag, LinkStatusTag, QueryError, StatusTag, statusLabel } from '../shared'
 import ModuleDrawer from './ModuleDrawer'
+import ModuleUpload from './ModuleUpload'
 import { describeSource, isFederated, moduleGraph, moduleName } from './modules'
 
 const KINDS: SpecKind[] = ['ontology', 'vocabulary', 'shapes', 'bridge', 'remote']
@@ -60,7 +61,7 @@ const columns: ColumnsType<KnowledgeSpecification> = [
 
 /** The ontology modules, as a graph by layer or as a table. */
 export default function ModuleRegistry() {
-  const { instance } = useKnowledge()
+  const { instance, can } = useKnowledge()
   const query = useModules(instance)
   const [view, setView] = useState<'graph' | 'table'>('graph')
   const [text, setText] = useState('')
@@ -68,6 +69,7 @@ export default function ModuleRegistry() {
   const [kinds, setKinds] = useState<SpecKind[]>([])
   const [statuses, setStatuses] = useState<LifecycleStatus[]>([])
   const [selected, setSelected] = useState<string>()
+  const [registering, setRegistering] = useState(false)
 
   const modules = query.data ?? []
   const shown = useMemo(() => {
@@ -137,7 +139,12 @@ export default function ModuleRegistry() {
             maxTagCount="responsive"
           />
         </Space>
-        <Button icon={<ReloadOutlined />} loading={query.isFetching} onClick={() => query.refetch()}>Refresh</Button>
+        <Space size={8}>
+          <Button icon={<ReloadOutlined />} loading={query.isFetching} onClick={() => query.refetch()}>Refresh</Button>
+          {can('createKnowledgeSpecification') && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setRegistering(true)}>Register module</Button>
+          )}
+        </Space>
       </div>
 
       {query.isError && <div style={{ marginBottom: 12 }}><QueryError error={query.error} what="the latest modules" /></div>}
@@ -178,6 +185,15 @@ export default function ModuleRegistry() {
         modules={modules}
         onClose={() => setSelected(undefined)}
         onSelect={setSelected}
+      />
+      <ModuleUpload
+        open={registering}
+        modules={modules}
+        onClose={() => setRegistering(false)}
+        onOpenModule={(id) => {
+          setRegistering(false)
+          setSelected(id)
+        }}
       />
     </div>
   )

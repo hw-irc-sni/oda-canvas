@@ -3,6 +3,7 @@ import { Alert, Button, Descriptions, Drawer, Space, Spin, Tabs } from 'antd'
 import { useModuleContent, type KnowledgeSpecification } from '@/api/knowledge'
 import { useKnowledge } from '../KnowledgeContext'
 import { CodeBlock, LayerTag, LinkStatusTag, Muted, NeutralTag, QueryError, StatusTag, formatDate } from '../shared'
+import ModuleActions from './ModuleActions'
 import { describeSource, isFederated, moduleName, resolveRef } from './modules'
 
 interface ModuleDrawerProps {
@@ -26,6 +27,7 @@ export default function ModuleDrawer({ module, modules, onClose, onSelect }: Mod
           </Space>
         )
       }
+      extra={module && <ModuleActions key={module.id} module={module} modules={modules} onDeleted={onClose} />}
     >
       {/* Keyed, so that opening another module starts on its overview. */}
       {module && <ModuleDetails key={module.id} module={module} modules={modules} onSelect={onSelect} />}
