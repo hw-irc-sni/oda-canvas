@@ -43,8 +43,8 @@ info:
     | `knowledge-viewer` | Read knowledge-bases, search, query and recommend; read ontology modules |
     | `knowledge-editor` | Change knowledge-bases, upload documents and start ingestion |
     | `ontology-editor` | Create and propose ontology modules and mappings; revise rejected items |
-    | `ontology-reviewer` | Move proposals to review, comment on them and run validation |
-    | `ontology-approver` | Rule proposals agreed or rejected, publish and deprecate modules |
+    | `ontology-reviewer` | Move proposals to review, comment on them and run validation; list and retrieve knowledge-bases |
+    | `ontology-approver` | Rule proposals agreed or rejected, publish and deprecate modules and knowledge-bases; list and retrieve knowledge-bases |
     | `canvasSystemRole` | Canvas operators, for example the Data Resource Management operator |
 
 
@@ -161,6 +161,8 @@ paths:
       x-required-roles:
         - knowledge-viewer
         - knowledge-editor
+        - ontology-reviewer
+        - ontology-approver
         - canvasSystemRole
       parameters:
         - $ref: '#/components/parameters/Fields'
@@ -222,6 +224,8 @@ paths:
       x-required-roles:
         - knowledge-viewer
         - knowledge-editor
+        - ontology-reviewer
+        - ontology-approver
         - canvasSystemRole
       parameters:
         - $ref: '#/components/parameters/Id'

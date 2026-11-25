@@ -401,7 +401,8 @@ accepted issuer and contain `COMPONENT_NAME` in `aud`. The caller's roles are
 
 | Operations | Roles (any one) |
 |---|---|
-| Read knowledge-bases (list, get, graph GET, query, search, recommend and feedback, documents, `/hub`) | `knowledge-viewer`, `knowledge-editor`, `canvasSystemRole` |
+| List and get knowledge-bases (what reviewers and approvers govern) | `knowledge-viewer`, `knowledge-editor`, `ontology-reviewer`, `ontology-approver`, `canvasSystemRole` |
+| Read their content (graph GET, query, search, recommend and feedback, documents, proposals, `/hub`) | `knowledge-viewer`, `knowledge-editor`, `canvasSystemRole` |
 | Change knowledge-bases (create, graph PUT/POST/DELETE, document upload/delete, ingest) | `knowledge-editor`, `canvasSystemRole` |
 | Patch a knowledge-base (lifecycle transitions per `x-lifecycle` of `Knowledge`) | `knowledge-editor`, `ontology-reviewer`, `ontology-approver`, `canvasSystemRole` |
 | Read the ontology (modules, content, mappings, reviews, transitions, validation, `/knowledgeTerm`) | all five component roles, `canvasSystemRole` |

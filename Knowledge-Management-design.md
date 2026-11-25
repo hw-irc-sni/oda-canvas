@@ -332,7 +332,8 @@ Every operation of the API lists the roles allowed to call it in an `x-required-
 
 | Operations | Roles |
 |---|---|
-| Read knowledge-bases: list, get, graph GET, query, search, recommend and its feedback, documents, `/hub` | `knowledge-viewer`, `knowledge-editor`, `canvasSystemRole` |
+| List and get knowledge-bases (their metadata and statistics, which reviewers and approvers govern) | `knowledge-viewer`, `knowledge-editor`, `ontology-reviewer`, `ontology-approver`, `canvasSystemRole` |
+| Read their content: graph GET, query, search, recommend and its feedback, documents, `/hub` | `knowledge-viewer`, `knowledge-editor`, `canvasSystemRole` |
 | Change knowledge-bases: create, patch, delete, graph PUT/POST/DELETE, document upload and delete, ingest | `knowledge-editor`, `canvasSystemRole` |
 | Read the ontology: modules, content, mappings, review history, transition history, validation report, `/knowledgeTerm` | all five component roles and `canvasSystemRole` |
 | Author: create a module, change its fields or content, create or change mappings | `ontology-editor` |

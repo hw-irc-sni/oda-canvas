@@ -186,6 +186,20 @@ async def test_rbac_and_ownership(api):
     assert (await api.delete(url(api, "mine"), headers=auth(EDITOR))).status_code == 204
 
 
+@pytest.mark.parametrize("role", [REVIEWER, APPROVER])
+async def test_reviewers_and_approvers_read_what_they_govern_but_not_its_content(api, role):
+    await new_kb(api, storeKind="graph")
+    listed = await api.get(f"{api.base}/knowledge", headers=auth(role))
+    assert listed.status_code == 200 and [kb["id"] for kb in listed.json()] == ["incidents"]
+    assert (await api.get(url(api), headers=auth(role))).status_code == 200
+    for sub in ("/graph", "/document", "/proposal"):
+        assert (await api.get(url(api, sub=sub), headers=auth(role))).status_code == 403, sub
+    assert (await query(api, SELECT, role=role)).status_code == 403
+    assert (await api.post(url(api, sub="/search"), json={"query": "x"}, headers=auth(role))).status_code == 403
+    assert (await api.patch(url(api), json={"description": "x"}, headers=auth(role))).status_code == 403
+    assert (await api.get(f"{api.base}/knowledge", headers=auth(ONT_EDITOR))).status_code == 403
+
+
 async def test_lifecycle(api):
     await new_kb(api, storeKind="graph")
     steps = [("proposed", EDITOR), ("inReview", REVIEWER), ("rejected", APPROVER), ("draft", EDITOR),
