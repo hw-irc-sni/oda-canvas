@@ -27,6 +27,8 @@ export default function SectionTabs({
   const visible = tabs.filter((tab) => can(tab.operation))
 
   if (tabs.length > 0 && visible.length === 0) return <Alert type="info" showIcon message={denied} />
+  // A section with a single view needs no tab bar.
+  if (tabs.length === 1) return <>{visible[0].content}</>
   if (visible.length === 0) {
     return (
       <div
