@@ -3,6 +3,7 @@ import { Button, Select, Space, Tag, Tooltip } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import type { KnowledgeInstance } from '@/api/knowledge'
 import { colors } from '@/theme'
+import { NeutralTag } from './shared'
 
 const STORAGE_KEY = 'canvas-portal.knowledge.instance'
 
@@ -70,7 +71,7 @@ export default function InstancePicker({ instances, selected, onSelect, onRefres
               {instance.available ? (
                 <Tag color="green" style={{ marginInlineEnd: 0 }}>available</Tag>
               ) : (
-                <Tag style={{ marginInlineEnd: 0 }}>{instance.deploymentStatus || instance.resourceStatus || 'unavailable'}</Tag>
+                <NeutralTag>{instance.deploymentStatus || instance.resourceStatus || 'unavailable'}</NeutralTag>
               )}
             </div>
           )

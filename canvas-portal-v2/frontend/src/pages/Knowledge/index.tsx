@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Alert, Button, Empty, Space, Spin, Tag } from 'antd'
+import { Alert, Button, Empty, Space, Spin } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { knowledgeErrorMessage, useKnowledgeInstances, type KnowledgeInstance } from '@/api/knowledge'
 import BrainOutlined from '@/components/BrainOutlined'
@@ -9,6 +9,7 @@ import InstancePicker, { pickInstance, saveInstance, savedInstance } from './Ins
 import KnowledgeBaseSection from './KnowledgeBaseSection'
 import { KnowledgeProvider } from './KnowledgeContext'
 import OntologySection from './OntologySection'
+import { NeutralTag } from './shared'
 
 const KNOWLEDGE_BASE = {
   key: 'knowledge-base',
@@ -145,7 +146,7 @@ export default function KnowledgePage() {
       <div key="roles" style={{ fontSize: 12, color: colors.textMuted }}>
         <Space size={4} wrap>
           Your roles on this instance:
-          {selected.capabilities?.roles.map((role) => <Tag key={role} style={{ marginInlineEnd: 0 }}>{role}</Tag>)}
+          {selected.capabilities?.roles.map((role) => <NeutralTag key={role}>{role}</NeutralTag>)}
         </Space>
       </div>
     ),
