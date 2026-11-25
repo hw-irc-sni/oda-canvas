@@ -318,7 +318,7 @@ on the instance allow; the component checks every call again.
 | Section | Views |
 |---|---|
 | **Knowledge-Base** | The knowledge-bases (create, edit, delete). Each one's details: overview with statistics, active model route and lifecycle; documents; sources and ingestion; jobs (TMF701); pipeline proposals; search and recommendations; graph explorer with RDF import and export; SPARQL console |
-| **Federated Ontology** | Modules (graph by layer, table, register, edit), terms (search, describe, layer chain), mappings of bridge modules, reviews (propose, review, rule, history), validation (modules and documents), federation peers |
+| **Federated Ontology** | Modules (graph by layer, table, register, edit; the content of each one as a graph, whatever its status), terms (search, describe, layer chain), mappings of bridge modules, reviews (propose, review, rule, history, and the content under review as a graph with the findings of its last validation), validation (modules and documents), federation peers |
 
 Roles combine. A reviewer or an approver can list knowledge-bases and move them through their lifecycle, but reads
 their content only with `knowledge-viewer` as well.

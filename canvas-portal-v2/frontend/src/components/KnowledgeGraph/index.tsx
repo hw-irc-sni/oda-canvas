@@ -320,6 +320,7 @@ function NodeCard({
 }) {
   const { data, width, height } = node
   const color = graphColor(data.layer, data.type)
+  const flag = data.flag && { error: colors.statusDown, warning: colors.statusDeprecated }[data.flag]
   return (
     <g
       transform={`translate(${node.x - width / 2},${node.y - height / 2})`}
@@ -337,7 +338,7 @@ function NodeCard({
       }}
       role={onSelect ? 'button' : undefined}
       tabIndex={onSelect ? 0 : undefined}
-      aria-label={[data.type, data.label].filter(Boolean).join(' ')}
+      aria-label={[data.type, data.label, data.flag && `(${data.flag})`].filter(Boolean).join(' ')}
       style={{ cursor: onSelect ? 'pointer' : 'default' }}
     >
       <title>{data.iri}</title>
@@ -346,8 +347,8 @@ function NodeCard({
         height={height}
         rx={11}
         fill="#ffffff"
-        stroke={selected ? colors.primary : color.fill}
-        strokeWidth={selected ? 2.8 : 1.4}
+        stroke={selected ? colors.primary : flag ?? color.fill}
+        strokeWidth={selected || flag ? 2.8 : 1.4}
         strokeDasharray={data.tentative ? '6 4' : undefined}
       />
       <rect x={0} y={9} width={6} height={height - 18} rx={3} fill={color.fill} />
@@ -363,6 +364,12 @@ function NodeCard({
         <text x={15} y={data.type ? 54 : 50} fontSize="10" fill={colors.textMuted}>
           {truncate(data.caption, 34)}
         </text>
+      )}
+      {flag && (
+        <g transform={`translate(${width - 16},16)`}>
+          <circle r={8} fill={flag} />
+          <text y={4} textAnchor="middle" fontSize="11" fontWeight="700" fill="#ffffff">!</text>
+        </g>
       )}
     </g>
   )

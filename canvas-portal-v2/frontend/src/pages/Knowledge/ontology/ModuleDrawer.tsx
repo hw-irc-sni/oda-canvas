@@ -5,6 +5,7 @@ import { useModuleContent, type KnowledgeSpecification } from '@/api/knowledge'
 import { useKnowledge } from '../KnowledgeContext'
 import { CodeBlock, LayerTag, LinkStatusTag, Muted, NeutralTag, QueryError, StatusTag, formatDate } from '../shared'
 import ModuleActions from './ModuleActions'
+import ModuleGraph from './ModuleGraph'
 import { describeSource, isFederated, moduleName, resolveRef } from './modules'
 
 interface ModuleDrawerProps {
@@ -21,7 +22,7 @@ export default function ModuleDrawer({ module, modules, onClose, onSelect, onRev
     <Drawer
       open={!!module}
       onClose={onClose}
-      width={760}
+      width="min(1040px, 92vw)"
       title={
         module && (
           <Space size={8} wrap>
@@ -61,6 +62,10 @@ function ModuleDetails({ module, modules, onSelect }: Pick<ModuleDrawerProps, 'm
         onChange={setTab}
         items={[
           { key: 'overview', label: 'Overview', children: <Overview module={module} modules={modules} onSelect={onSelect} /> },
+          // The content of a remote module stays at its peer.
+          ...(can('retrieveKnowledgeSpecificationContent') && module.specKind !== 'remote'
+            ? [{ key: 'graph', label: 'Graph', children: tab === 'graph' && <ModuleGraph module={module} /> }]
+            : []),
           ...(can('retrieveKnowledgeSpecificationContent')
             ? [{ key: 'content', label: 'Content', children: tab === 'content' && <Content module={module} /> }]
             : []),

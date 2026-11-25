@@ -17,6 +17,7 @@ import {
 import { colors } from '@/theme'
 import { useKnowledge } from '../KnowledgeContext'
 import { LayerTag, LinkStatusTag, Muted, QueryError, StatusTag, formatDate, statusLabel } from '../shared'
+import ModuleGraph from './ModuleGraph'
 import { moduleName } from './modules'
 import { ACTION_LABELS, PATCH_ACTIONS, commentsOpen, reviewActions, type ReviewAction, type ReviewSubject } from './reviews'
 import ValidationReportView from './ValidationReportView'
@@ -26,7 +27,7 @@ export default function ReviewDrawer({ subject, onClose }: { subject: ReviewSubj
     <Drawer
       open={!!subject}
       onClose={onClose}
-      width={760}
+      width="min(1040px, 92vw)"
       title={
         subject && (
           <Space size={8} wrap>
@@ -89,6 +90,10 @@ function ReviewDetails({ subject }: { subject: ReviewSubject }) {
               </>
             ),
           },
+          // What is being reviewed; a tab's content is only made when it is first opened.
+          ...(!mapping && module.specKind !== 'remote' && access.can('retrieveKnowledgeSpecificationContent')
+            ? [{ key: 'graph', label: 'Graph', children: <ModuleGraph module={module} /> }]
+            : []),
           ...(access.can('listKnowledgeSpecificationTransition')
             ? [
                 {
